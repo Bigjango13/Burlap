@@ -6,7 +6,8 @@ enum class ErrType {
     note,
     hint,
     warn,
-    error
+    error,
+    comp_bug
 };
 
 struct stream_t {

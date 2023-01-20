@@ -52,15 +52,19 @@ void err(ErrType type, std::string msg, ErrInfo info) {
         start = "error";
         color = "\e[1;31m";
         break;
+    case ErrType::comp_bug:
+        start = "\e[1;43mburlap bug\e[0m";
+        color = "\e[1;31m";
+        break;
     }
-    printf("%s%s: \e[0m%s\n", color.c_str(), start.c_str(), msg.c_str());
+    printf("%s%s:\e[0m %s\n", color.c_str(), start.c_str(), msg.c_str());
     printf("    %li | %s\n", info.lineNo, info.line.c_str());
     // This part looks scary, but all it does is print enough
     // spaces to equal the line number size
     std::string line = std::string(std::to_string(info.lineNo).size(), ' ');
     printf("    %s |", line.c_str());
     size_t size = info.size <= 0 ? 1 : info.size;
-    line = std::string(info.offset, ' ');
+    line = std::string(info.offset - 1, ' ');
     // Underline
     line += color + "^";
     if (size - 1 > 0) {

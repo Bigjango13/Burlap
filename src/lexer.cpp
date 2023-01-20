@@ -13,12 +13,12 @@ static char getChar(stream_t &stream) {
 
 // Advance char
 static char getNextChar(stream_t &stream) {
-    stream.at++;
-    char ret = getChar(stream);
-    if (ret == '\n') {
-        stream.lastLinePos = stream.at;
+    if (getChar(stream) == '\n') {
+        stream.lastLinePos = stream.at + 1;
         stream.line++;
     }
+    stream.at++;
+    char ret = getChar(stream);
     return ret;
 }
 
@@ -29,6 +29,10 @@ static bool isNext(stream_t &stream, char c) {
         return true;
     }
     return false;
+}
+
+static void push_back(stream_t &stream) {
+    stream.at -= stream.at > 0;
 }
 
 // Read string
@@ -70,11 +74,13 @@ static Token lexNum(stream_t &stream) {
         // Add
         ret.numVal *= 10;
         ret.numVal += c - '0';
+        ret.str += std::string(1, c);
         c = getNextChar(stream);
     }
     // Decimals
     if (c == '.') {
         ret.tok = TokenType::Float;
+        ret.str += ".";
         c = getNextChar(stream);
         // Trailing period error
         if (!isdigit(c)) {
@@ -93,6 +99,7 @@ static Token lexNum(stream_t &stream) {
         int divisor = 1;
         while (isdigit(c)) {
             ret.floatVal += (c - '0') / (divisor * 10);
+            ret.str += std::string(1, c);
             divisor++;
             c = getNextChar(stream);
         }
@@ -118,56 +125,69 @@ static Token getTok(stream_t &stream) {
     getNextChar(stream);
     switch (c) {
         // Misc single chars toks, (, ), [, ], {, }, ;, ,, %
-        case '(': return Token(TokenType::Lparan, stream);
-        case ')': return Token(TokenType::Rparan, stream);
-        case '[': return Token(TokenType::Lbracket, stream);
-        case ']': return Token(TokenType::Rbracket, stream);
-        case '{': return Token(TokenType::Lbrance, stream);
-        case '}': return Token(TokenType::Rbrace, stream);
-        case ';': return Token(TokenType::Semicolon, stream);
-        case ',': return Token(TokenType::Comma, stream);
-        case '%': return Token(TokenType::Modulo, stream);
+        case '(': return Token(TokenType::Lparan, stream, "(");
+        case ')': return Token(TokenType::Rparan, stream, ")");
+        case '[': return Token(TokenType::Lbracket, stream, "[");
+        case ']': return Token(TokenType::Rbracket, stream, "]");
+        case '{': return Token(TokenType::Lbrance, stream, "{");
+        case '}': return Token(TokenType::Rbrace, stream, "}");
+        case ';': return Token(TokenType::Semicolon, stream, ";");
+        case ',': return Token(TokenType::Comma, stream, ",");
+        case '%': return Token(TokenType::Modulo, stream, "%");
 
         // Math, mathmath, and math= ops, +, ++, +=, -, --, -=, *, *=, /, /=
-        case '+': return Token((isNext(stream, '=') ?
-            TokenType::Plus_equals : isNext(stream, '+') ?
-                TokenType::Plus :
-                TokenType::Plus_plus), stream);
-        case '-': return Token((isNext(stream, '=') ?
-            TokenType::Minus_equals : isNext(stream, '-') ?
-                TokenType::Minus :
-                TokenType::Minus_minus), stream);
-        case '*': return Token((isNext(stream, '=') ?
-            TokenType::Times_equals :
-            TokenType::Times), stream);
-        case '/': return Token((isNext(stream, '=') ?
-            TokenType::Div_equals :
-            TokenType::Div), stream);
+        // +=, ++, +
+        case '+': return isNext(stream, '=') ?
+            Token(TokenType::Plus_equals, stream, "+=")
+                : isNext(stream, '+') ?
+                Token(TokenType::Plus_plus, stream, "++") :
+                Token(TokenType::Plus, stream, "+");
+        // -=, --, -
+        case '-': return isNext(stream, '=') ?
+            Token(TokenType::Minus_equals, stream, "-=")
+                : isNext(stream, '-') ?
+                Token(TokenType::Minus_minus, stream, "--") :
+                Token(TokenType::Minus, stream, "-");
+        // *=, *
+        case '*': return isNext(stream, '=') ?
+            Token(TokenType::Times_equals, stream, "*=") :
+            Token(TokenType::Times, stream, "*");
+        // *=, *
+        case '/': return isNext(stream, '=') ?
+            Token(TokenType::Div_equals, stream, "/=") :
+            Token(TokenType::Div, stream, "/");
 
         // Comparison ops, =, ==, !, !=, >, >=, <, <=
-        case '=': return Token((isNext(stream, '=') ?
-            TokenType::Equals_equals :
-            TokenType::Equals), stream);
-        case '!': return Token((isNext(stream, '=') ?
-            TokenType::Not_equals :
-            TokenType::Not), stream);
-        case '>': return Token((isNext(stream, '=') ?
-            TokenType::Gt_equals :
-            TokenType::Gt), stream);
-        case '<': return Token((isNext(stream, '=') ?
-            TokenType::Lt_equals :
-            TokenType::Lt), stream);
+        // ==, =
+        case '=': return isNext(stream, '=') ?
+            Token(TokenType::Equals_equals, stream, "==") :
+            Token(TokenType::Equals, stream, "=");
+        // !=, !
+        case '!': return isNext(stream, '=') ?
+            Token(TokenType::Not_equals, stream, "!=") :
+            Token(TokenType::Not, stream, "!");
+        // >=, >
+        case '>': return isNext(stream, '=') ?
+            Token(TokenType::Gt_equals, stream, ">=") :
+            Token(TokenType::Gt, stream, ">");
+        // <=, <
+        case '<': return isNext(stream, '=') ?
+            Token(TokenType::Lt_equals, stream, "<=") :
+            Token(TokenType::Lt, stream, "<");
 
         // Logical ops, &&, ||, ^^
-        case '&': return Token((isNext(stream, '&') ?
-            TokenType::And :
-            TokenType::Error), stream);
-        case '|': return Token((isNext(stream, '|') ?
-            TokenType::Or :
-            TokenType::Error), stream);
-        case '^': return Token((isNext(stream, '^') ?
-            TokenType::Xor :
-            TokenType::Error), stream);
+        // &&
+        case '&': return isNext(stream, '&') ?
+            Token(TokenType::And, stream, "&&") :
+            Token(TokenType::Error, stream, "<lexing error>");
+        // ||
+        case '|': return isNext(stream, '|') ?
+            Token(TokenType::Or, stream, "||") :
+            Token(TokenType::Error, stream, "<lexing error>");
+        // ^^
+        case '^': return isNext(stream, '^') ?
+            Token(TokenType::Xor, stream, "^^") :
+            Token(TokenType::Error, stream, "<lexing error>");
 
         // Comments
         case '#':
@@ -182,6 +202,7 @@ static Token getTok(stream_t &stream) {
             return lexStr(stream, '\'');
         // Numbers
         case '0' ... '9':
+            push_back(stream);
             return lexNum(stream);
 
         // Whitespace
@@ -197,7 +218,32 @@ static Token getTok(stream_t &stream) {
 
         // Identifiers and invalid tokens
         default:
-            return lexIdentifier(stream);
+            push_back(stream);
+            Token ret = lexIdentifier(stream);
+            #ifdef FUNCTI
+            if (ret.str == "functi") {
+            #else
+            if (ret.str == "func") {
+            #endif
+                ret.tok = TokenType::Func;
+            } else if (ret.str == "let") {
+                ret.tok = TokenType::Func;
+            } else if (ret.str == "return") {
+                ret.tok = TokenType::Return;
+            } else if (ret.str == "print") {
+                ret.tok = TokenType::Print;
+            } else if (ret.str == "if") {
+                ret.tok = TokenType::If;
+            } else if (ret.str == "elif") {
+                ret.tok = TokenType::Elif;
+            } else if (ret.str == "else") {
+                ret.tok = TokenType::Else;
+            } else if (ret.str == "loop") {
+                ret.tok = TokenType::Loop;
+            } else if (ret.str == "import") {
+                ret.tok = TokenType::Import;
+            }
+            return ret;
     }
 }
 
@@ -212,6 +258,8 @@ std::vector<Token> tokenize(stream_t &stream) {
                 err(ErrType::error, "illegal symbol while parsing", stream);
             return {};
         }
+        ret.push_back(token);
     }
+    ret.push_back(Token(TokenType::Eof, stream));
     return ret;
 }

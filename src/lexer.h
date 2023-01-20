@@ -1,8 +1,10 @@
+#pragma once
+
 #include <vector>
 
 #include "common.h"
 
-enum class TokenType {
+enum TokenType {
     // Special tokens
     Error, Eof,
 
@@ -40,15 +42,16 @@ struct Token {
     bool errHandled = false;
     ErrInfo err;
 
-    Token(TokenType token, stream_t &stream) {
+    Token(TokenType token, stream_t &stream, std::string strVal = "") {
         tok = token;
+        str = strVal;
         err.name = stream.name;
         err.line = getLine(stream);
         err.lineNo = stream.line + 1;
         err.offset = stream.at - stream.lastLinePos;
+        err.offset += stream.line == 0;
         err.size = 0;
     }
 };
 
 std::vector<Token> tokenize(stream_t &stream);
-

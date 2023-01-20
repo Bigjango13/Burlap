@@ -3,6 +3,7 @@
 #include <filesystem>
 
 #include "lexer.h"
+#include "parser.h"
 
 namespace fs = std::filesystem;
 using namespace std::string_literals;
@@ -52,4 +53,8 @@ int main(int argc, char *argv[]) {
     // The pipeline begins
     // Lexing
     std::vector<Token> tokens = tokenize(stream);
+    if (tokens.size() == 0)
+        return 1;
+    // Parsing
+    std::vector<std::unique_ptr<ExprAST>> ast = parse(tokens);
 }
