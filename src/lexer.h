@@ -8,16 +8,16 @@ enum TokenType {
     // Special tokens
     Error, Eof,
 
-    // Literal data types
+    // Literals/data types
     Identifier, String, Int, Float, Bool, None,
 
     // Misc
     Lparan, Rparan, Lbracket, Rbracket,
-    Lbrance, Rbrace, Semicolon, Comma, Equals,
+    Lbrace, Rbrace, Semicolon, Comma, Equals,
     Plus_plus, Minus_minus,
 
-    // Keywords (print is temporary)
-    Func, Let, Return, Print, If, Elif, Else, Loop, Import,
+    // Keywords
+    Func, Let, Return, In, If, Else, Loop, Import,
 
     // Basic operators
     Plus, Minus, Times, Div, Modulo,

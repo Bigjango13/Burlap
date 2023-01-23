@@ -5,4 +5,4 @@
 #include "lexer.h"
 #include "ast.h"
 
-std::vector<std::unique_ptr<ExprAST>> parse(std::vector<Token> &tokens);
+std::vector<std::unique_ptr<StmtAST>> parse(std::vector<Token> &tokens);

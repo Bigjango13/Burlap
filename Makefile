@@ -1,7 +1,7 @@
 CFILES = $(wildcard src/*.cpp)
 OFILES = $(patsubst src/%.cpp,build/%.o,${CFILES})
 
-FLAGS = -O3 -Wall -Wextra -std=c++20
+FLAGS = -O3 -Wall -Wextra -std=c++20 `pkg-config --cflags libedit`
 
 CPP = g++
 
@@ -11,10 +11,10 @@ debug: all
 
 build/%.o: src/%.cpp
 	@mkdir -p ./build
-	${CPP} ${FLAGS} -c $< -o $@
+	${CPP} -c $< -o $@ ${FLAGS}
 
 build/burlap: ${OFILES}
-	${CPP} ${OFILES} -o build/burlap
+	${CPP} ${OFILES} -ledit -o build/burlap
 
 clean:
 	rm -rf build

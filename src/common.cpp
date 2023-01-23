@@ -64,7 +64,7 @@ void err(ErrType type, std::string msg, ErrInfo info) {
     std::string line = std::string(std::to_string(info.lineNo).size(), ' ');
     printf("    %s |", line.c_str());
     size_t size = info.size <= 0 ? 1 : info.size;
-    line = std::string(info.offset - 1, ' ');
+    line = std::string(info.offset, ' ');
     // Underline
     line += color + "^";
     if (size - 1 > 0) {

@@ -129,7 +129,7 @@ static Token getTok(stream_t &stream) {
         case ')': return Token(TokenType::Rparan, stream, ")");
         case '[': return Token(TokenType::Lbracket, stream, "[");
         case ']': return Token(TokenType::Rbracket, stream, "]");
-        case '{': return Token(TokenType::Lbrance, stream, "{");
+        case '{': return Token(TokenType::Lbrace, stream, "{");
         case '}': return Token(TokenType::Rbrace, stream, "}");
         case ';': return Token(TokenType::Semicolon, stream, ";");
         case ',': return Token(TokenType::Comma, stream, ",");
@@ -227,15 +227,13 @@ static Token getTok(stream_t &stream) {
             #endif
                 ret.tok = TokenType::Func;
             } else if (ret.str == "let") {
-                ret.tok = TokenType::Func;
+                ret.tok = TokenType::Let;
             } else if (ret.str == "return") {
                 ret.tok = TokenType::Return;
-            } else if (ret.str == "print") {
-                ret.tok = TokenType::Print;
+            } else if (ret.str == "in") {
+                ret.tok = TokenType::In;
             } else if (ret.str == "if") {
                 ret.tok = TokenType::If;
-            } else if (ret.str == "elif") {
-                ret.tok = TokenType::Elif;
             } else if (ret.str == "else") {
                 ret.tok = TokenType::Else;
             } else if (ret.str == "loop") {
