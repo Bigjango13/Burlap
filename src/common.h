@@ -34,4 +34,3 @@ std::string getLine(stream_t &stream, size_t start);
 std::string getLine(stream_t &stream);
 void err(ErrType type, std::string msg, ErrInfo info);
 void err(ErrType type, std::string msg, stream_t &stream, short size = 0);
-

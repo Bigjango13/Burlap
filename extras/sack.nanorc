@@ -1,0 +1,23 @@
+## Syntax highlighting for sack, based off c.nanorc
+syntax sack "\.(sk|sack)$"
+comment "#"
+
+# Keywords
+color green "\<(func|functi|let|in|import)\>"
+
+# Flow control
+color brightyellow "\<(if|else|loop)\>"
+color magenta "\<(return)\>"
+
+# Comments
+color brightblue "(^|[[:blank:]])#.*"
+
+# Strings
+color brightyellow "'([^'])*'"
+color brightyellow "\"([^\"])*\""
+
+# Reminders
+color brightwhite,yellow "\<(FIXME|TODO|XXX)\>"
+
+# Trailing whitespace
+color ,green "[[:space:]]+$"

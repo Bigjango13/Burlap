@@ -1,3 +1,4 @@
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -98,7 +99,7 @@ static Token lexNum(stream_t &stream) {
         ret.floatVal = ret.numVal;
         int divisor = 1;
         while (isdigit(c)) {
-            ret.floatVal += (c - '0') / (divisor * 10);
+            ret.floatVal += (c - '0') / (float)pow(10, divisor);
             ret.str += std::string(1, c);
             divisor++;
             c = getNextChar(stream);
@@ -240,6 +241,10 @@ static Token getTok(stream_t &stream) {
                 ret.tok = TokenType::Loop;
             } else if (ret.str == "import") {
                 ret.tok = TokenType::Import;
+            } else if (ret.str == "none") {
+                ret.tok = TokenType::None;
+            } else if (ret.str == "true" || ret.str == "false") {
+                ret.tok = TokenType::Bool;
             }
             return ret;
     }

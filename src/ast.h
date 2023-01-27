@@ -9,9 +9,7 @@ public:
     virtual ~StmtAST() {};
 };
 
-class ExprAST : public StmtAST {
-public:
-};
+class ExprAST : public StmtAST {};
 
 // Sack atoms, String | Number | Bool | None;
 class StringAST : public ExprAST {
@@ -43,100 +41,94 @@ public:
     NoneAST() {};
 };
 
-class CallAST : public ExprAST {
-public:
-    std::unique_ptr<ExprAST> expr;
-    std::vector<std::unique_ptr<ExprAST>> args;
-    CallAST(std::unique_ptr<ExprAST> expr, std::vector<std::unique_ptr<ExprAST>> args) :
-        expr(std::move(expr)), args(std::move(args)) {};
-};
-
-class UnaryAST : public ExprAST {
-public:
-    Token op;
-    std::unique_ptr<ExprAST> expr;
-    UnaryAST(Token op, std::unique_ptr<ExprAST> expr) :
-        op(op), expr(std::move(expr)) {};
-};
-
-class BinopAST : public ExprAST {
-public:
-    std::unique_ptr<ExprAST> left;
-    Token op;
-    std::unique_ptr<ExprAST> right;
-    BinopAST(std::unique_ptr<ExprAST> left, Token op, std::unique_ptr<ExprAST> right) :
-        left(std::move(left)), op(op), right(std::move(right)) {};
-};
-
 class VarAST : public ExprAST {
 public:
     std::string name;
     VarAST(std::string name) : name(name) {}
 };
 
+class CallAST : public ExprAST {
+public:
+    std::shared_ptr<ExprAST> expr;
+    std::vector<std::shared_ptr<ExprAST>> args;
+    CallAST(std::shared_ptr<ExprAST> expr, std::vector<std::shared_ptr<ExprAST>> args) :
+        expr(std::move(expr)), args(std::move(args)) {};
+};
+
+class UnaryAST : public ExprAST {
+public:
+    std::string op;
+    std::shared_ptr<ExprAST> expr;
+    UnaryAST(std::string op, std::shared_ptr<ExprAST> expr) :
+        op(op), expr(std::move(expr)) {};
+};
+
+class BinopAST : public ExprAST {
+public:
+    std::shared_ptr<ExprAST> left;
+    std::string op;
+    std::shared_ptr<ExprAST> right;
+    BinopAST(std::shared_ptr<ExprAST> left, std::string op, std::shared_ptr<ExprAST> right) :
+        left(std::move(left)), op(op), right(std::move(right)) {};
+};
+
 class BodyAST : public StmtAST {
 public:
-    std::vector<std::unique_ptr<StmtAST>> exprs;
-    BodyAST(std::vector<std::unique_ptr<StmtAST>> exprs) : exprs(std::move(exprs)) {}
+    std::vector<std::shared_ptr<StmtAST>> exprs;
+    BodyAST(std::vector<std::shared_ptr<StmtAST>> exprs) : exprs(std::move(exprs)) {}
 };
 
 class FuncAST : public StmtAST {
 public:
     std::string name;
     std::vector<std::string> args;
-    std::unique_ptr<StmtAST> body;
+    std::shared_ptr<StmtAST> body;
     FuncAST(
         std::string name,
         std::vector<std::string> args,
-        std::unique_ptr<StmtAST> body
+        std::shared_ptr<StmtAST> body
     ) : name(name), args(args), body(std::move(body)) {}
 };
 
 class IfAST : public StmtAST {
 public:
-    std::unique_ptr<ExprAST> cond;
-    std::unique_ptr<StmtAST> body;
-    std::unique_ptr<StmtAST> elseStmt = nullptr;
+    std::shared_ptr<ExprAST> cond;
+    std::shared_ptr<StmtAST> body;
+    std::shared_ptr<StmtAST> elseStmt = nullptr;
     IfAST(
-        std::unique_ptr<ExprAST> cond,
-        std::unique_ptr<StmtAST> body
+        std::shared_ptr<ExprAST> cond,
+        std::shared_ptr<StmtAST> body
     ) : cond(std::move(cond)), body(std::move(body)) {}
-};
-
-class PrintAST : public StmtAST {
-public:
-    std::unique_ptr<ExprAST> expr;
-    PrintAST(std::unique_ptr<ExprAST> expr) : expr(std::move(expr)) {}
 };
 
 class LetAST : public StmtAST {
 public:
     std::string name;
-    std::unique_ptr<ExprAST> val;
-    LetAST(std::string name, std::unique_ptr<ExprAST> val) :
+    std::shared_ptr<ExprAST> val;
+    LetAST(std::string name, std::shared_ptr<ExprAST> val) :
         name(name), val(std::move(val)) {}
 };
 
 class ReturnAST : public StmtAST {
 public:
-    std::unique_ptr<ExprAST> expr;
-    ReturnAST(std::unique_ptr<ExprAST> expr) : expr(std::move(expr)) {}
+    std::shared_ptr<ExprAST> expr;
+    ReturnAST(std::shared_ptr<ExprAST> expr) : expr(std::move(expr)) {}
 };
 
 class LoopAST : public StmtAST {
 public:
     std::string var;
-    std::unique_ptr<ExprAST> iter;
-    std::unique_ptr<StmtAST> body;
+    std::shared_ptr<ExprAST> iter;
+    std::shared_ptr<StmtAST> body;
     LoopAST(
         std::string var,
-        std::unique_ptr<ExprAST> iter,
-        std::unique_ptr<StmtAST> body
+        std::shared_ptr<ExprAST> iter,
+        std::shared_ptr<StmtAST> body
     ) : var(var), iter(std::move(iter)), body(std::move(body)) {}
 };
 
 class ImportAST : public StmtAST {
 public:
-    std::unique_ptr<ExprAST> expr;
-    ImportAST(std::unique_ptr<ExprAST> expr) : expr(std::move(expr)) {}
+    std::shared_ptr<ExprAST> expr;
+    ImportAST(std::shared_ptr<ExprAST> expr) : expr(std::move(expr)) {}
 };

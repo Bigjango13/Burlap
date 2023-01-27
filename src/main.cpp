@@ -5,13 +5,15 @@
 
 #include <editline/readline.h>
 
+#include "main.h"
 #include "lexer.h"
 #include "parser.h"
+#include "interpreter.h"
 
 namespace fs = std::filesystem;
 using namespace std::string_literals;
 
-std::string read_input(char *name) {
+std::string read_input(std::string name) {
     // Read the input file
     std::ifstream file(name, std::ios::in | std::ios::binary);
     if (!file.good()) {
@@ -26,7 +28,7 @@ std::string read_input(char *name) {
     return ret;
 }
 
-bool run(stream_t &stream) {
+std::vector<std::shared_ptr<StmtAST>> genAST(stream_t &stream) {
     // Reset stream just in case
     stream.at = 0;
     stream.line = 0;
@@ -35,12 +37,10 @@ bool run(stream_t &stream) {
     // Lexing
     std::vector<Token> tokens = tokenize(stream);
     if (tokens.size() == 0)
-        return false;
+        return {};
     // Parsing
-    std::vector<std::unique_ptr<StmtAST>> ast = parse(tokens);
-    if (ast.size() == 0)
-        return false;
-    return true;
+    std::vector<std::shared_ptr<StmtAST>> ast = parse(tokens);
+    return ast;
 }
 
 static void repl_init(stream_t &stream) {
@@ -61,9 +61,10 @@ static std::string repl_get_input(int nestedNum = 0) {
         puts("");
         return "exit";
     }
-    add_history(line);
     std::string input = line;
     strip(input);
+    if (input == "") return repl_get_input(nestedNum);
+    add_history(input.c_str());
     // Empty line
     if (input.c_str()[0] == '\0') return repl_get_input(nestedNum);
     // Ends with '{'
@@ -73,30 +74,52 @@ static std::string repl_get_input(int nestedNum = 0) {
         // Loop until }
         while (1) {
             str = repl_get_input(nestedNum + 1);
-            input += str + "\n";
+            input += str;
             // Ends with '}'
             if (str.size() != 0)
                 if (str.at(str.size() - 1) == '}')
                     break;
+            input += "\n";
         }
     }
     return input;
 }
 
+bool runFile(std::string name) {
+    stream_t stream = {""};
+    stream.str = read_input(name);
+    stream.name = name;
+    // Lexing and parsing.
+    auto ast = genAST(stream);
+    // Executing
+    Runner runner;
+    return runner.exec(ast);
+}
+
 int main(int argc, char *argv[]) {
     // Args
-    stream_t stream = {""};
     if (argc < 2) {
         // REPL
+        state_t state = {};
+        stream_t stream = {""};
         repl_init(stream);
+        Runner runner;
+        runner.isRepl = true;
         while (1) {
             stream.str = repl_get_input();
             if (stream.str == "exit") return 0;
-            run(stream);
+            char last = stream.str.at(stream.str.size() - 1);
+            if (last != ';' && last != '{' && last != '}') {
+                // Implicit semicolons for REPL oneliners
+                stream.str += ";";
+            }
+            auto ast = genAST(stream);
+            runner.exec(ast);
         }
         return 0;
     }
     if (argc >= 3) {
+        stream_t stream = {""};
         if (argv[1] == "-c"s) {
             stream.str = argv[2];
             stream.name = "<commandline>";
@@ -104,9 +127,12 @@ int main(int argc, char *argv[]) {
             printf("Usage: %s input.sk\n", argv[0]);
             return 1;
         }
+        // Lexing and parsing.
+        auto ast = genAST(stream);
+        // Executing
+        Runner runner;
+        return !runner.exec(ast);
     } else {
-        stream.str = read_input(argv[1]);
-        stream.name = argv[1];
+        return !runFile(argv[1]);
     }
-    return !run(stream);
 }
