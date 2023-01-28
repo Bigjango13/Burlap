@@ -1,0 +1,13 @@
+[package]
+name = "burlap"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "lexer"
+path = "rust/main.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rustyline = "10.1.0"

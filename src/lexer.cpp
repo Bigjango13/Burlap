@@ -54,8 +54,8 @@ static Token lexStr(stream_t &stream, char end) {
         err(
             ErrType::error,
             (c == EOF ?
-                "unexpected EOF while parsing string (expected '"
-                : "unexpected newline while parsing string (expected '\\"
+                "unexpected EOF while lexing string (expected '"
+                : "unexpected newline while lexing string (expected '\\"
             ) + std::string(1, end) + "')",
             stream
         );
@@ -153,7 +153,7 @@ static Token getTok(stream_t &stream) {
         case '*': return isNext(stream, '=') ?
             Token(TokenType::Times_equals, stream, "*=") :
             Token(TokenType::Times, stream, "*");
-        // *=, *
+        // /=, /
         case '/': return isNext(stream, '=') ?
             Token(TokenType::Div_equals, stream, "/=") :
             Token(TokenType::Div, stream, "/");
@@ -258,7 +258,7 @@ std::vector<Token> tokenize(stream_t &stream) {
         // Syntax errors
         if (token.tok == TokenType::Error) {
             if (token.errHandled == false)
-                err(ErrType::error, "illegal symbol while parsing", stream);
+                err(ErrType::error, "illegal symbol while lexing", stream);
             return {};
         }
         ret.push_back(token);

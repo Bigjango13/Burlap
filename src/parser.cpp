@@ -390,24 +390,36 @@ static std::shared_ptr<StmtAST> parseLoop() {
 static std::shared_ptr<StmtAST> parseStatement() {
     // All statements end with this
     switch (curTok().tok) {
+        // Bodys
         case Lbrace:
             return parseBody();
+        // Functions
         case Func:
             return parseFunc();
+        // Return
         case Return:
             return parseReturn();
+        // Imports
         case Import:
             return parseImport();
+        // Vars
         case Let:
             return parseLet();
+        // Loops
         case Loop:
             return parseLoop();
+        // If/elses
         case If:
             return parseIf();
         case Else:
             ERR(ErrType::error, "missing previous if", curTok().err);
             nextTok();
             return nullptr;
+        // Semicolons
+        case Semicolon:
+            nextTok();
+            return parseStatement();
+        // EOF
         case Eof:
             return nullptr;
         default:
