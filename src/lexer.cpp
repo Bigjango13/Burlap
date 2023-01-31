@@ -221,11 +221,7 @@ static Token getTok(stream_t &stream) {
         default:
             push_back(stream);
             Token ret = lexIdentifier(stream);
-            #ifdef FUNCTI
-            if (ret.str == "functi") {
-            #else
-            if (ret.str == "func") {
-            #endif
+            if (ret.str == "func" || ret.str == "functi") {
                 ret.tok = TokenType::Func;
             } else if (ret.str == "let") {
                 ret.tok = TokenType::Let;

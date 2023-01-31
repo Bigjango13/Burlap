@@ -157,11 +157,9 @@ static std::shared_ptr<ExprAST> parseBinopHelper(
     // Use the lower precedence callback to get the left op
     std::shared_ptr<ExprAST> expr = callback();
     while (match(tokens)) {
-        ErrInfo errInfo;
         if (expr == nullptr || CAST_TO(expr.get(), LeftReq*) == nullptr) {
             // Invalid left op
-            ErrInfo errInfo = curTok().err;
-            ERR(ErrType::error, "missing or invalid left operand", errInfo);
+            ERR(ErrType::error, "missing or invalid left operand", curTok().err);
             return nullptr;
         }
         Token op = curTok();
@@ -178,6 +176,7 @@ static std::shared_ptr<ExprAST> parseBinopHelper(
 }
 
 static std::shared_ptr<ExprAST> parseBinopMath() {
+    // Math binops, +, -, *, /, %
     return parseBinopHelper({Plus, Minus, Times, Div, Modulo}, parseUnary);
 }
 static std::shared_ptr<ExprAST> parseBinopCmp() {
@@ -262,7 +261,7 @@ static std::shared_ptr<StmtAST> parseFunc() {
     return std::make_shared<FuncAST>(name, args, std::move(body));
 }
 
-// if 0 {} else if 1 {} else {}
+// If/else if/else
 static std::shared_ptr<StmtAST> parseIf() {
     // Check for if/else
     bool isIf = true;

@@ -1,17 +1,23 @@
+use crate::lexer::TokenType::*;
+use crate::lexer::TokenType;
+
 // Stream
 #[derive(Debug, Clone)]
 pub struct Stream {
-    pub str: String,
+    // File name
     pub name: String,
+    // Line contents
+    pub str: String,
+    // Line #
     pub line: usize,
-
+    // Char pos
     pub at: usize
 }
 
 // Errors
 #[allow(dead_code)]
-pub enum ErrType{Err, Warn, Note}
-pub fn err(stream: &Stream, msg: &str, errtype: ErrType) {
+pub enum ErrType{Err, Warn, Hint}
+pub fn err(stream: &Stream, msg: &str, size: u8, errtype: ErrType) {
     // Print file name and line/char info ("test.sk:1:3: ")
     print!("\x1b[1m{}:{}:{}:\x1b[0m ", stream.name, stream.line, stream.at);
     // Get the name and color code from errtype
@@ -21,7 +27,7 @@ pub fn err(stream: &Stream, msg: &str, errtype: ErrType) {
         // Yellow
         ErrType::Warn => ("\x1b[1;33m", "warning"),
         // Cyan
-        ErrType::Note => ("\x1b[1;36m", "note"),
+        ErrType::Hint => ("\x1b[1;36m", "hint"),
     };
     // Print the type ("error:")
     println!("{}{}:\x1b[0m {}", color, name, msg);
@@ -30,7 +36,36 @@ pub fn err(stream: &Stream, msg: &str, errtype: ErrType) {
     println!("{}{}", line, stream.str);
     // Print arrow ("      |   ^")
     println!(
-        "{}| {}{}^\x1b[0m",
-        " ".repeat(line.len() - 2), " ".repeat(stream.at - 1), color
+        "{}| {}{}{}\x1b[0m",
+        " ".repeat(line.len() - 2), " ".repeat(stream.at), color,
+        "^".repeat(size.into())
     );
+}
+
+// Token size finder
+pub fn get_len(token: &TokenType) -> u8 {
+    return match token {
+        Identifier(str) => str.len().try_into().unwrap_or(1),
+        Str(str) => str.len().try_into().unwrap_or(0) + 2,
+        Int(num) => num.to_string().len().try_into().unwrap_or(1),
+        Float(num) => num.to_string().len().try_into().unwrap_or(1),
+        Bool(val) => if *val { 4 } else { 5 },
+        None => 4,
+        // Keywords
+        Func => 4,
+        Let => 3,
+        Return => 6,
+        In => 2,
+        If => 2,
+        Else => 4,
+        Loop => 4,
+        Import => 6,
+        // Size two ops
+        PlusPlus | MinusMinus | PlusEquals | MinusEquals | TimesEquals |
+        DivEquals | EqualsEquals | NotEquals | LtEquals | GtEquals => {
+            2
+        }
+        // Anything else
+        _ => 1
+    }
 }

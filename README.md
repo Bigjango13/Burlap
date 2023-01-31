@@ -29,14 +29,22 @@ Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) progr
 - [x] Parsing errors
 - [x] Runtime errors
 
+## Extentions
+These are either sack ideas that aren't currently in the spec, or non-standard changes to the sack language. **They are not part of the sack language.** <br>
+Only the WIP rust interpreter supports them. They can be enabled by passing a specific flag or all enabled by `-use-all`.
+
+Here is the list of extentions:
+- String escapes (`-use-escape`), allows for `\n`, `\r`, `\t`, `\e`, `\'`, `\"` and `\\` escape codes in strings.
+- Automatic none (`-use-auto-none`), allows for using `return;` as syntactic sugar for `return none;`, and `let x;` for `let x = none;`.
+
 ## Known bugs
-- Imports aren't relative to file and are instead relative to the user.
+- (C++) Imports aren't relative to file and are instead relative to the user.
 
 ## Goals/roadmap
 - Sack formatter, so all code can be formatted to fit the current sack spec.
 - Sack debugger, so you can see what your program is doing and why it sets x to `none` instead of `26`.
 - Transpiling to Python, transpiling sack to any diffrent language will provide huge benefits such as calling python functions and using a wider range of tools (and not to forget performance! Generally huge languages with lots of funding have pretty fast interpreters).
-- Transpiling to JavaScript, see above for reasons, but this will also allow for using sack on the web.
+- Transpiling to JavaScript, see above for reasons, but this will also allow for using sack on the web. Running on the web will make it easier to create web-based sack playgrounds.
 - Transpiling to C, see above for reasons, but this will also allow for using sack as a compiled langauge which opens lots of doors.
 - Rewrite burlap in Rust, once this is done "blazingly" will be added in front of every "fast", other then that Rust will also allow for nicer abstractions such as using Rusts `enum`s instead of abusing C++ RTTI.
 
@@ -50,4 +58,3 @@ If you want to run a file just pass the file name as the argument.
 ## Alternatives
 
 - [Skcore](https://github.com/Luminoso-256/scriptinglang) a sack interpreteter in rust, most commonly used.
-- [Sack](https://github.com/StealthHydra179/sack) an old sack interpreter in python, possibly home to the original sack spec.
