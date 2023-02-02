@@ -32,7 +32,7 @@ public:
             case 'f': {
                 // Normal ftos stuff, also strip trailing zeros after one digit
                 // 35.0000000 -> 35.0
-                // 2453.464 -> 2453.464
+                // 2453.40640 -> 2453.4064
                 std::string ret = std::to_string(floatVal);
                 if (ret.at(ret.find_last_not_of('0')) == '.')
                     return ret.erase(ret.find_last_not_of('0') + 2, std::string::npos);

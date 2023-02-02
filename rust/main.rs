@@ -1,31 +1,39 @@
- mod lexer;
+mod lexer;
 mod parser;
 mod common;
+mod interpreter;
+mod value;
 
 use std::env;
 use std::fs;
 use std::process::exit;
 
+#[macro_use] extern crate impl_ops;
 use crate::lexer::lex;
 use crate::parser::parse;
+use crate::interpreter::{run, Interpreter};
 
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 fn repl(extentions: Vec<String>) {
+    println!("Burlap v{}", env!("CARGO_PKG_VERSION"));
     let mut rl = Editor::<()>::new().unwrap();
     loop {
         let readline = rl.readline(">> ");
         match readline {
             Ok(line) => {
                 rl.add_history_entry(line.as_str());
-                let tokens = lex(&line, "<stdin>".to_string(), &extentions);
+                let tokens = lex(&(line + ";"), "<stdin>".to_string(), &extentions);
                 if tokens.is_empty() {
                     continue;
                 }
-                println!("Tokens: {:?}", tokens);
+                //println!("Tokens: {:?}", tokens);
                 let ast = parse(tokens, extentions.clone());
-                println!("AST:    {:?}", ast);
+                //println!("AST:    {:?}", ast);
+                run(&mut Interpreter{
+                    is_repl: true, has_err: false, in_func: false
+                }, ast);
             },
             Err(ReadlineError::Eof) => {
                 break;
