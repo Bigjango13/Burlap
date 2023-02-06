@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 
 use crate::parser::ASTNode;
 use ASTNode::*;
@@ -8,6 +9,19 @@ use crate::value::Value;
 const IMPOSSIBLE_STATE: &str =
     "we've reached an impossible state, anything is possible, \
     the limits were in our heads all along, follow your dreams";
+
+// Functies are burlap functions in rust (like print)
+type Functie = fn(&mut Interpreter, Vec<Value>) -> Value;
+
+// Sub struct for extentions/functies
+pub struct Functies {
+    builtin: HashMap<String, Functie>
+}
+impl fmt::Debug for Functies {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{{...}}")
+    }
+}
 
 // Interpreter state
 #[derive(Debug)]
@@ -19,6 +33,7 @@ pub struct Interpreter {
     is_global: bool,
     globals: HashMap<String, Value>,
     functions: HashMap<String, ASTNode>,
+    functies: Functies,
     // Variables in the current scope
     // Each scope stacks
     var_names: Vec<String>,
@@ -31,12 +46,20 @@ pub struct Interpreter {
 impl Interpreter {
     // Init
     pub fn new(is_repl: bool, extentions: Vec<String>) -> Interpreter {
+        // Builtin functions
+        let functies = Functies{builtin: HashMap::from([
+            ("print".to_string(), sk_print as Functie),
+            // Casts
+            ("int".to_string(), sk_int as Functie),
+            ("float".to_string(), sk_float as Functie),
+            ("string".to_string(), sk_string as Functie),
+        ])};
         Interpreter {
             is_repl, has_err: false, in_func: false,
             is_global: true, globals: HashMap::new(),
-            functions: HashMap::new(), var_names:
-            Vec::new(), var_vals: Vec::new(), var_min: 0,
-            extentions
+            functions: HashMap::new(), functies,
+            var_names: Vec::new(), var_vals: Vec::new(),
+            var_min: 0, extentions
         }
     }
     // Getting vars
@@ -169,20 +192,9 @@ impl Interpreter {
     // Call a function
     pub fn call(&mut self, name: &String, args: &Vec<Value>) -> Value {
         // Builtin functions
-        if name == "print" {
-            // VA print extention
-            if self.extentions.contains(&"va-print".to_string()) {
-                for i in args {
-                    print!("{} ", i.to_string());
-                }
-                println!("");
-            } else if args.len() != 1 {
-                return self.bad_args(name, args.len(), 1);
-            } else {
-                // Normal printing
-                println!("{}", args[0].to_string());
-            }
-            return Value::None;
+        match (&self).functies.builtin.get(name) {
+            Some(functie) => { return functie(self, args.clone()); },
+            _ => ()
         }
         // Try to get the function from the name
         let function: &ASTNode;
@@ -232,6 +244,54 @@ impl Interpreter {
     }
 }
 
+// Builtin Functions (prefixed with 'sk_')
+// Print
+fn sk_print(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
+    if interpreter.extentions.contains(&"va-print".to_string()) {
+        // VA print extention
+        for i in args {
+            print!("{} ", i.to_string());
+        }
+        println!("");
+    } else if args.len() != 1 {
+        // Invalid args
+        return interpreter.bad_args(&"print".to_string(), args.len(), 1);
+    } else {
+        // Normal printing
+        println!("{}", args[0].to_string());
+    }
+    return Value::None;
+}
+
+// Casting
+// Int
+fn sk_int(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
+    if args.len() != 1 {
+        // Invalid args
+        return interpreter.bad_args(&"int".to_string(), args.len(), 1);
+    }
+    return Value::Int(args[0].to_int());
+}
+
+// Float
+fn sk_float(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
+    if args.len() != 1 {
+        // Invalid args
+        return interpreter.bad_args(&"float".to_string(), args.len(), 1);
+    }
+    return Value::Float(args[0].to_float());
+}
+
+// String
+fn sk_string(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
+    if args.len() != 1 {
+        // Invalid args
+        return interpreter.bad_args(&"string".to_string(), args.len(), 1);
+    }
+    return Value::Str(args[0].to_string());
+}
+
+// Eval (for expressions)
 fn eval(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
     return match node {
         // Normal boring values

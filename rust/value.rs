@@ -51,12 +51,13 @@ macro_rules! do_op {
         }
     }
 }
+
 // Methods
 impl Value {
     // To int conversion
     pub fn to_int(&self) -> i32 {
         return match self {
-            Value::Str(_) => /* TODO: Errors */ 0,
+            Value::Str(s) => s.parse::<i32>().unwrap_or(0),
             Value::Int(i) => *i,
             Value::Float(f) => *f as i32,
             Value::Bool(b) => if *b { 1 } else { 0 },
@@ -66,7 +67,7 @@ impl Value {
     // To float conversion
     pub fn to_float(&self) -> f32 {
         return match self {
-            Value::Str(_) => /* TODO: Errors */ 0.0,
+            Value::Str(s) => s.parse::<f32>().unwrap_or(0.0),
             Value::Int(i) => *i as f32,
             Value::Float(f) => *f,
             Value::Bool(b) => if *b { 1.0 } else { 0.0 },
@@ -163,7 +164,8 @@ impl_op_ex!(+ |left: Value, right: Value| -> Value {
                     Value::Int(b as i32) * right
             }
         },
-        _ => do_op!(left, right, +, Value::None),
+        Value::None => Value::None,
+        _ => do_op!(left, right, +, Value::Error("addition failed".to_string())),
     }
 });
 
@@ -183,6 +185,7 @@ impl_op_ex!(- |left: Value, right: Value| -> Value {
                 Value::Int(b as i32) - right
             }
         },
+        Value::None => Value::None,
         _ => do_op!(left, right, -, Value::None),
     }
 });
@@ -211,7 +214,8 @@ impl_op_ex!(* |left: Value, right: Value| -> Value {
                 Value::Int(b as i32) * right
             }
         },
-        _ => do_op!(left, right, *, Value::None),
+        Value::None => Value::None,
+        _ => do_op!(left, right, *, Value::Error("multiplication failed".to_string())),
     }
 });
 
@@ -227,7 +231,8 @@ impl_op_ex!(/ |left: Value, right: Value| -> Value {
             // bool is converted to an int
             Value::Int(b as i32) / right
         },
-        _ => do_op!(left, right, /, Value::None),
+        Value::None => Value::None,
+        _ => do_op!(left, right, /, Value::Error("division failed".to_string())),
     }
 });
 
@@ -242,6 +247,7 @@ impl_op_ex!(% |left: Value, right: Value| -> Value {
             // bool is converted to an int
             Value::Int(b as i32) % right
         },
-        _ => do_op!(left, right, %, Value::None),
+        Value::None => Value::None,
+        _ => do_op!(left, right, %, Value::Error("modulo failed".to_string())),
     }
 });

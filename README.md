@@ -25,9 +25,9 @@ Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) progr
   - [x] Return
   - [x] Functions
   - [ ] Loops
-    - [ ] Range loops
+    - [x] Range loops
     - [ ] While loops (New)
-  - [ ] Casting
+  - [x] Casting
   - [ ] Import
 - [x] REPL
 - [x] Lexing errors
