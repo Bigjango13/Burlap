@@ -5,7 +5,7 @@
 Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) programming language. It is written in C++ (but may be rewritten in Rust). It is designed for a high level of spec compliance, any sack program should be able to be run using burlap and if not then it's a bug.
 
 ## Features
-- [x] Complete sack v0.0.5 support (C++)
+- [x] Complete sack v0.0.5 support (C++/Rust)
 - [x] Complete sack v1.0.0 support (Rust)
   - [ ] Varibles
     - [x] Strings
@@ -28,7 +28,7 @@ Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) progr
     - [x] Range loops
     - [ ] While loops (New)
   - [x] Casting
-  - [ ] Import
+  - [x] Import
 - [x] REPL
 - [x] Lexing errors
 - [x] Parsing errors

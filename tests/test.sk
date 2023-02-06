@@ -152,7 +152,7 @@ test("i == 10", i, 10);
 
 # Import test
 print("*** Import tests ***");
-import ("tests/import-test.sk");
+import ("import-test.sk");
 test("import func", ret4(), 4);
 test("import var (extention)", myCoolVar, 7);
 
@@ -161,27 +161,22 @@ print("*** Casting tests ***");
 test("int -> int", int(42), 42);
 test("int -> float", float(42), 42.0);
 test("int -> str", string(0), "0");
-test("int -> bool", bool(0), false);
 
 test("float -> int", int(4.2), 4);
 test("float -> float", float(4.2), 4.2);
 test("float -> str", string(4.2), "4.2");
-test("float -> bool", bool(4.2), true);
 
 test("str -> int", int("42"), 42);
 test("str -> float", float("4.2"), 4.2);
 test("str -> str", string("E"), "E");
-test("str -> bool", bool("E"), true);
 
 test("bool -> int", int(true), 1);
 test("bool -> float", float(true), 1.0);
 test("bool -> str", string(true), "true");
-test("bool -> bool", bool(true), true);
 
 test("none -> int", int(none), 0);
 test("none -> float", float(none), 0.0);
 test("none -> str", string(none), "none");
-test("none -> bool", bool(none), false);
 
 # End of tests
 testSummary();

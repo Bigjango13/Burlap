@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use std::ops;
 
 // Value enum for varibles

@@ -1,8 +1,10 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::fmt;
 
 use crate::parser::ASTNode;
 use ASTNode::*;
+use crate::import_file;
 use crate::lexer::TokenType;
 use crate::value::Value;
 
@@ -40,12 +42,16 @@ pub struct Interpreter {
     var_vals: Vec<Value>,
     var_min: usize,
     // Extentions
-    extentions: Vec<String>,
+    pub extentions: Vec<String>,
+    // Used for importing
+    pub import_path: PathBuf,
 }
 
 impl Interpreter {
     // Init
-    pub fn new(is_repl: bool, extentions: Vec<String>) -> Interpreter {
+    pub fn new(
+        is_repl: bool, import_path: PathBuf, extentions: Vec<String>
+    ) -> Interpreter {
         // Builtin functions
         let functies = Functies{builtin: HashMap::from([
             ("print".to_string(), sk_print as Functie),
@@ -59,7 +65,7 @@ impl Interpreter {
             is_global: true, globals: HashMap::new(),
             functions: HashMap::new(), functies,
             var_names: Vec::new(), var_vals: Vec::new(),
-            var_min: 0, extentions
+            var_min: 0, extentions, import_path
         }
     }
     // Getting vars
@@ -306,7 +312,11 @@ fn eval(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
             // Eval args
             let mut vals: Vec<Value> = vec![];
             for arg in args {
-                vals.push(eval(interpreter, arg));
+                let new_arg = eval(interpreter, arg);
+                if let Value::Error(_) = new_arg {
+                    return new_arg;
+                }
+                vals.push(new_arg);
             }
             // Call
             interpreter.call(name, &vals)
@@ -524,6 +534,21 @@ fn exec(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
             }
             Value::Null
         },
+        // Import
+        ImportStmt(name) => {
+            // Get file name
+            let fname = eval(interpreter, &**name);
+            let name = fname.to_string();
+            // Get the file path
+            let mut path = interpreter.import_path.clone();
+            path.push(name.clone());
+            // Import
+            if import_file(interpreter, &mut path) {
+                Value::Null
+            } else {
+                Value::Error(format!("failed to import {}", name))
+            }
+        },
         _ => {
             // Expression, not statement
             let val = eval(interpreter, node);
@@ -538,12 +563,13 @@ fn exec(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
     }
 }
 
-pub fn run(interpreter: &mut Interpreter, ast: Vec<ASTNode>) {
+pub fn run(interpreter: &mut Interpreter, ast: Vec<ASTNode>) -> bool {
     for node in ast {
         let val = exec(interpreter, &node);
         if let Value::Error(msg) = val {
             println!("RuntimeError: {}", msg);
-            return;
+            return false;
         }
     }
+    return true;
 }

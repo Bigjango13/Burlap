@@ -1,18 +1,19 @@
-mod lexer;
-mod parser;
-mod common;
-mod interpreter;
-mod value;
-
 use std::env;
 use std::fs;
+use std::path::PathBuf;
 use std::process::exit;
 
-#[macro_use] extern crate impl_ops;
+mod common;
+mod interpreter;
+mod lexer;
+mod parser;
+mod value;
+
 use crate::lexer::lex;
 use crate::parser::parse;
 use crate::interpreter::{run, Interpreter};
 
+#[macro_use] extern crate impl_ops;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use home::home_dir;
@@ -30,7 +31,7 @@ fn repl(extentions: Vec<String>) {
     if hist_file != "" && rl.load_history(&hist_file).is_err() {
         println!("Failed to open history file, make `~/.burlap_history` if you want histroy to save.");
     };
-    let mut interpreter = Interpreter::new(true, extentions.clone());
+    let mut interpreter = Interpreter::new(true, PathBuf::from("."), extentions.clone());
     loop {
         // Get input
         let readline = rl.readline(">> ");
@@ -90,6 +91,35 @@ fn get_args() -> (String, Vec<String>) {
     return (file, extentions);
 }
 
+fn import_file(interpreter: &mut Interpreter, path: &mut PathBuf) -> bool {
+    // Open file
+    let file_name = path.to_str().unwrap().to_string();
+    let file = fs::read_to_string(path.clone());
+    if file.is_err() {
+         return false;
+    }
+    let contents = file.unwrap();
+    // Set interpreter import path
+    path.pop();
+    let cur_path = interpreter.import_path.clone();
+    interpreter.import_path = path.to_path_buf();
+    // Run
+    let tokens = lex(&contents, file_name, &interpreter.extentions);
+    if tokens.is_empty() {
+        return false;
+    }
+    let ast = parse(tokens, interpreter.extentions.clone());
+    if ast.is_empty() {
+        return false;
+    }
+    if !run(interpreter, ast) {
+        return false;
+    }
+    // Reset import path
+    interpreter.import_path = cur_path;
+    return true;
+}
+
 fn main() {
     let (file_name, extentions) = get_args();
     // Repl
@@ -97,22 +127,12 @@ fn main() {
         repl(extentions);
         exit(0);
     }
-    // Open file
-    let file = fs::read_to_string(file_name.clone());
-    if file.is_err() {
-        println!("Failed to open file '{}': {}", file_name.clone(), file.err().unwrap());
+    // Run the file
+    let mut path = PathBuf::from(file_name.clone());
+    let mut import_path = path.clone();
+    import_path.pop();
+    let mut interpreter = Interpreter::new(false, import_path, extentions);
+    if !import_file(&mut interpreter, &mut path) {
         exit(1);
     }
-    let contents = file.unwrap();
-    // Run
-    let tokens = lex(&contents, file_name, &extentions);
-    if tokens.is_empty() {
-        exit(1);
-    }
-    let ast = parse(tokens, extentions.clone());
-    if ast.is_empty() {
-        exit(1);
-    }
-    let mut interpreter = Interpreter::new(false, extentions);
-    run(&mut interpreter, ast);
 }
