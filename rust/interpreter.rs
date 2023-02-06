@@ -116,11 +116,19 @@ impl Interpreter {
         return true;
     }
     pub fn set_var(&mut self, name: &String, val: Value, global: bool) -> bool {
+        // Sets a varible, returns true if it was successful
         return if global {
             self.set_global(name, val)
         } else {
             self.set_local(name, val)
         };
+    }
+    pub fn change_var(&mut self, name: &String, val: Value) -> bool {
+        // Changes a varible to a diffrent value
+        if !self.set_local(name, val.clone()) {
+            return self.set_global(name, val)
+        }
+        return true;
     }
     // Raise/lower scope
     pub fn lower_scope(&mut self, call: bool) -> (bool, usize, usize) {
@@ -195,7 +203,7 @@ impl Interpreter {
         // Lower scope
         let old_func = self.in_func;
         self.in_func = true;
-        let scope_data = self.lower_scope(false);
+        let scope_data = self.lower_scope(true);
         // Push the args
         let mut index = 0;
         for arg_name in &arg_names {
@@ -272,11 +280,11 @@ fn eval(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
             if let TokenType::PlusPlus = unary {
                 // Increment
                 val = value + Value::Int(1);
-                interpreter.set_var(&name, val.clone(), interpreter.is_global);
+                interpreter.change_var(&name, val.clone());
             } else {
                 // Decrement
                 val = value - Value::Int(1);
-                interpreter.set_var(&name, val.clone(), interpreter.is_global);
+                interpreter.change_var(&name, val.clone());
             }
             // Return
             return val;
@@ -329,7 +337,7 @@ fn eval(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
                     if let Value::Error(_) = val {
                         return val;
                     }
-                    interpreter.set_var(&name, val + right, interpreter.is_global);
+                    interpreter.change_var(&name, val + right);
                     Value::None
                 },
                 TokenType::MinusEquals => {
@@ -337,7 +345,7 @@ fn eval(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
                     if let Value::Error(_) = val {
                         return val;
                     }
-                    interpreter.set_var(&name, val - right, interpreter.is_global);
+                    interpreter.change_var(&name, val - right);
                     Value::None
                 },
                 TokenType::TimesEquals => {
@@ -345,7 +353,7 @@ fn eval(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
                     if let Value::Error(_) = val {
                         return val;
                     }
-                    interpreter.set_var(&name, val * right, interpreter.is_global);
+                    interpreter.change_var(&name, val * right);
                     Value::None
                 },
                 TokenType::DivEquals => {
@@ -353,7 +361,7 @@ fn eval(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
                     if let Value::Error(_) = val {
                         return val;
                     }
-                    interpreter.set_var(&name, val / right, interpreter.is_global);
+                    interpreter.change_var(&name, val / right);
                     Value::None
                 },
                 // Unknown
