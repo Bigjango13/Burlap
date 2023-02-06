@@ -240,7 +240,7 @@ fn eval(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
         DecimalExpr(val) => Value::Float(val.clone()),
         BoolExpr(val) => Value::Bool(val.clone()),
         NoneExpr => Value::None,
-        // TODO: Vars/functions
+        // Vars/function
         VarExpr(val) => interpreter.get_var(val),
         CallExpr(name, args) => {
             // Eval args
@@ -412,6 +412,7 @@ fn exec(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
                 exec(interpreter, &**elsestmt)
             }
         },
+        // Declaring vars
         LetStmt(name, val) => {
             let val = eval(interpreter, &**val);
             if let Value::Error(_) = val {
@@ -423,9 +424,44 @@ fn exec(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
                 Value::Error(format!("cannot redefine variable \"{}\"", name))
             }
         },
-        // TODO: Functions
+        // Declaring functions
         FunctiStmt(name, _args, _body) => {
             interpreter.functions.insert(name.clone(), node.clone());
+            Value::Null
+        },
+        // Loops
+        LoopStmt(var, iter, body) => {
+            // Make the var if it doesn't exist
+            if let Value::Error(_) = interpreter.get_var(var) {
+                interpreter.make_var(var, Value::Int(0), interpreter.is_global, false);
+            }
+            // Check iter
+            let (mut min, max): (i32, i32);
+            if let CallExpr(name, args) = &**iter {
+                // Check name
+                if name != "range" {
+                    return Value::Error(
+                        "only range is currently supported for iterative loops"
+                    .to_string());
+                }
+                // Check args
+                if args.len() != 2 {
+                    return interpreter.bad_args(&name, args.len(), 2);
+                }
+                // Get args
+                min = eval(interpreter, &args[0]).to_int();
+                max = eval(interpreter, &args[1]).to_int();
+            } else {
+                return Value::Error(
+                    "only range is currently supported for iterative loops".to_string()
+                );
+            }
+            // To the loop
+            while min <= max {
+                interpreter.set_var(var, Value::Int(min), interpreter.is_global);
+                exec(interpreter, &*body.clone());
+                min += 1;
+            }
             Value::Null
         },
         _ => {
