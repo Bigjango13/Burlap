@@ -15,36 +15,54 @@ use crate::interpreter::{run, Interpreter};
 
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
+use home::home_dir;
 
 fn repl(extentions: Vec<String>) {
+    // Print welcome msg
     println!("Burlap v{}", env!("CARGO_PKG_VERSION"));
     let mut rl = Editor::<()>::new().unwrap();
+    // Try to get the home dir
+    let hist_file = match home_dir() {
+        Some(path) => path.into_os_string().into_string().unwrap() + "/.burlap_history",
+        None => "".to_string(),
+    };
+    // Load history
+    if hist_file != "" && rl.load_history(&hist_file).is_err() {
+        println!("Failed to open history file, make `~/.burlap_history` if you want histroy to save.");
+    };
+    let mut interpreter = Interpreter::new(true, extentions.clone());
     loop {
+        // Get input
         let readline = rl.readline(">> ");
         match readline {
+            // Execute line
             Ok(line) => {
                 rl.add_history_entry(line.as_str());
                 let tokens = lex(&(line + ";"), "<stdin>".to_string(), &extentions);
                 if tokens.is_empty() {
                     continue;
                 }
-                //println!("Tokens: {:?}", tokens);
                 let ast = parse(tokens, extentions.clone());
-                //println!("AST:    {:?}", ast);
-                run(&mut Interpreter{
-                    is_repl: true, has_err: false, in_func: false
-                }, ast);
+                if ast.is_empty() {
+                    continue;
+                }
+                run(&mut interpreter, ast);
             },
+            // Exit on EOF
             Err(ReadlineError::Eof) => {
                 break;
             },
             _ => {}
         }
     }
+    // Save history
+    if hist_file != "" {
+        if rl.save_history(&hist_file).is_err() {};
+    }
 }
 
 fn get_args() -> (String, Vec<String>) {
-    let possible_extentions = vec!["escape", "auto-none"];
+    let possible_extentions = vec!["escape", "auto-none", "va-print"];
     let mut extentions: Vec<String> = vec![];
     let mut file: String = "".to_string();
     let args: Vec<String> = env::args().collect();
@@ -91,7 +109,10 @@ fn main() {
     if tokens.is_empty() {
         exit(1);
     }
-    println!("Tokens: {:?}", tokens);
     let ast = parse(tokens, extentions.clone());
-    println!("AST:    {:?}", ast);
+    if ast.is_empty() {
+        exit(1);
+    }
+    let mut interpreter = Interpreter::new(false, extentions);
+    run(&mut interpreter, ast);
 }

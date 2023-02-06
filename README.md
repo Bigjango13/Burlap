@@ -5,25 +5,30 @@
 Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) programming language. It is written in C++ (but may be rewritten in Rust). It is designed for a high level of spec compliance, any sack program should be able to be run using burlap and if not then it's a bug.
 
 ## Features
-- [x] Complete sack v0.0.5 support
-  - [x] Varibles
+- [x] Complete sack v0.0.5 support (C++)
+- [x] Complete sack v1.0.0 support (Rust)
+  - [ ] Varibles
     - [x] Strings
     - [x] Number
     - [x] Decimal
     - [x] Bool
     - [x] None
+    - [ ] Lists (New)
   - [x] Operators
     - [x] Logical operators (`&&`, `||`, `^^`, `!`)
     - [x] Comparison operators (`>`, `<`, `>=`, `<=`, `==`, `!=`)
     - [x] Mathmatical operators (`+`, `-`, `*`, `/`, `%`)
     - [x] Variable operators (`=`, `+=`, `-=`, `*=`, `/=`)
   - [x] Print
+  - [ ] Input (New)
   - [x] If/if else/else
   - [x] Return
   - [x] Functions
-  - [x] Loop and range
-  - [x] Casting
-  - [x] Import
+  - [ ] Loops
+    - [ ] Range loops
+    - [ ] While loops (New)
+  - [ ] Casting
+  - [ ] Import
 - [x] REPL
 - [x] Lexing errors
 - [x] Parsing errors
@@ -36,6 +41,7 @@ Only the WIP rust interpreter supports them. They can be enabled by passing a sp
 Here is the list of extentions:
 - String escapes (`-use-escape`), allows for `\n`, `\r`, `\t`, `\e`, `\'`, `\"` and `\\` escape codes in strings.
 - Automatic none (`-use-auto-none`), allows for using `return;` as syntactic sugar for `return none;`, and `let x;` for `let x = none;`.
+- Varible argument print (`-use-va-print`), allows for passing any number of args to print instead of just one.
 
 ## Known bugs
 - (C++) Imports aren't relative to file and are instead relative to the user.

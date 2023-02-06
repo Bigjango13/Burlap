@@ -2,7 +2,7 @@
 use std::ops;
 
 // Value enum for varibles
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     // Errors
     Error(String),
@@ -12,6 +12,8 @@ pub enum Value {
     Float(f32),
     Bool(bool),
     None,
+    // Null (the diffrence between, no return and returning none)
+    Null
 }
 // Helper for ops
 macro_rules! do_op {
@@ -79,15 +81,15 @@ impl Value {
             Value::Float(f) => format!("{}", f),
             Value::Bool(b) => format!("{}", b),
             Value::None => "none".to_string(),
-            _ => "".to_string(),
+            _ => format!("{:?}", self),
         };
     }
     // Truthy converstion
     pub fn is_truthy(&self) -> bool {
         return match self {
-            Value::Str(s) => s == "",
-            Value::Int(i) => *i == 0,
-            Value::Float(f) => *f == 0.0,
+            Value::Str(s) => s != "",
+            Value::Int(i) => *i != 0,
+            Value::Float(f) => *f != 0.0,
             Value::Bool(b) => *b,
             _ => false,
         };

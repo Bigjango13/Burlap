@@ -11,12 +11,12 @@ func test(msg, val, goodVal) {
         testBad += 1;
     }
     str += msg + ": ";
-    print(str, goodVal, "==", val);
+    print(str + goodVal + " == " + val);
 }
 
 func testSummary() {
     print();
-    print("SUMMARY: ", testTotal-testBad, "out of", testTotal, "tests passed");
+    print("SUMMARY: " + (testTotal-testBad) + " out of " + testTotal + " tests passed");
     if testBad == 0 {
         print("ALL TESTS PASSED!");
     }

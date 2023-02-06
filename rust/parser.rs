@@ -20,8 +20,8 @@ pub enum ASTNode {
     NoneExpr,
     // Var, (x)
     VarExpr(String),
-    // Call, (Var(print), [Number(7)])
-    CallExpr(Box<ASTNode>, Vec<ASTNode>),
+    // Call, (print, [Number(7)])
+    CallExpr(String, Vec<ASTNode>),
     // Unary, (Minus, Number(1))
     UnaryExpr(TokenType, Box<ASTNode>),
     // Binop, (Number(2), "+", Number(2))
@@ -105,9 +105,16 @@ fn parse_call(parser: &mut PaserState) -> ASTNode {
         // Can't call anything but identifiers
         return parse_expr(parser);
     }
+    // Eat
     let mut ret = parse_expr(parser);
     if let ASTNode::None = ret {
         return ASTNode::None;
+    }
+    let name: String;
+    if let ASTNode::VarExpr(n) = &ret {
+        name = n.clone();
+    } else {
+        return ret;
     }
     // Parse call
     let mut args: Vec<ASTNode> = vec![];
@@ -126,7 +133,7 @@ fn parse_call(parser: &mut PaserState) -> ASTNode {
             }
         }
         next_tok(parser);
-        ret = ASTNode::CallExpr(Box::new(ret), args);
+        ret = ASTNode::CallExpr(name, args);
     }
     return ret;
 }

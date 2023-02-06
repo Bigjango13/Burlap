@@ -300,10 +300,6 @@ static std::shared_ptr<StmtAST> parseReturn() {
     // Eat "return"
     eat(Return, IMPOSSIBLE);
     // Value
-    if (curTok().tok == Semicolon) {
-        nextTok();
-        return nullptr;
-    }
     std::shared_ptr<ExprAST> expr = parseBinopLogic();
     if (expr == nullptr) return nullptr;
     EAT_SEMICOLON();
