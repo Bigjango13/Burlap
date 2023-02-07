@@ -20,7 +20,7 @@ Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) progr
     - [x] Mathmatical operators (`+`, `-`, `*`, `/`, `%`)
     - [x] Variable operators (`=`, `+=`, `-=`, `*=`, `/=`)
   - [x] Print
-  - [ ] Input (New)
+  - [x] Input (New)
   - [x] If/if else/else
   - [x] Return
   - [x] Functions

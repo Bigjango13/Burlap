@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::fmt;
+use std::io::Write;
+use std::io;
 
 use crate::parser::ASTNode;
 use ASTNode::*;
@@ -55,6 +57,7 @@ impl Interpreter {
         // Builtin functions
         let functies = Functies{builtin: HashMap::from([
             ("print".to_string(), sk_print as Functie),
+            ("input".to_string(), sk_input as Functie),
             // Casts
             ("int".to_string(), sk_int as Functie),
             ("float".to_string(), sk_float as Functie),
@@ -267,6 +270,23 @@ fn sk_print(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
         println!("{}", args[0].to_string());
     }
     return Value::None;
+}
+
+// Input
+fn sk_input(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
+    if args.len() != 1 {
+        // Invalid args
+        return interpreter.bad_args(&"input".to_string(), args.len(), 1);
+    }
+    // Print the prompt
+    print!("{}", args[0].to_string());
+    let _ = std::io::stdout().flush();
+    // Get input
+    let mut buffer = String::new();
+    return match io::stdin().read_line(&mut buffer) {
+        Err(_) => Value::Str("".to_string()),
+        _ => Value::Str(buffer.trim_end().to_string())
+    };
 }
 
 // Casting
