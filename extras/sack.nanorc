@@ -3,10 +3,10 @@ syntax sack "\.(sk|sack)$"
 comment "#"
 
 # Keywords
-color green "\<(func|functi|let|in|import)\>"
+color green "\<(func|functi|let|import|true|false|none)\>"
 
 # Flow control
-color brightyellow "\<(if|else|loop)\>"
+color brightyellow "\<(if|else|loop|in|while)\>"
 color magenta "\<(return)\>"
 
 # Comments

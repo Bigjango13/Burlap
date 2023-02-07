@@ -13,7 +13,7 @@ pub enum TokenType {
     Lbrace, Rbrace, Semicolon, Comma, Equals,
     PlusPlus, MinusMinus,
     // Keywords
-    Func, Let, Return, In, If, Else, Loop, Import,
+    Func, Let, Return, In, If, Else, Loop, While, Import,
     // Basic operators
     Plus, Minus, Times, Div, Modulo,
     // Basic Operators =
@@ -80,6 +80,7 @@ fn lex_identifier(stream: &mut Stream, _extentions: &[String]) -> TokenType {
         "if" => TokenType::If,
         "else" => TokenType::Else,
         "loop" => TokenType::Loop,
+        "while" => TokenType::While,
         "import" => TokenType::Import,
         "none" => TokenType::None,
         "true" => TokenType::Bool(true),

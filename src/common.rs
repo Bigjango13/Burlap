@@ -14,6 +14,10 @@ pub struct Stream {
     pub at: usize
 }
 
+pub const IMPOSSIBLE_STATE: &str =
+    "we've reached an impossible state, anything is possible, \
+    the limits were in our heads all along, follow your dreams";
+
 // Errors
 #[allow(dead_code)]
 pub enum ErrType{Err, Warn, Hint}

@@ -1,4 +1,4 @@
-use crate::common::{err, ErrType, get_len};
+use crate::common::{err, ErrType, get_len, IMPOSSIBLE_STATE};
 use crate::lexer::{Token, TokenType};
 use TokenType::*;
 
@@ -37,8 +37,10 @@ pub enum ASTNode {
     LetStmt(String, Box<ASTNode>),
     // Return, ("Return Val")
     ReturnStmt(Box<ASTNode>),
-    // Loop, (i, range(5, 6), Body(...))
+    // Iter loop, (i, range(5, 6), Body(...))
     LoopStmt(String, Box<ASTNode>, Box<ASTNode>),
+    // While loop, (6 > i, Body(...))
+    WhileStmt(Box<ASTNode>, Box<ASTNode>),
     // Import, ("math")
     ImportStmt(Box<ASTNode>)
 }
@@ -271,6 +273,14 @@ fn parse_statement(parser: &mut PaserState) -> ASTNode {
         Let => parse_let(parser),
         // Loop
         Loop => parse_loop(parser),
+        While => {
+            error!(parser, "invalid while loop syntax");
+            error!(
+                parser, "try changing it to `loop (while ...) { ... }`", ErrType::Hint
+            );
+            next_tok(parser);
+            ASTNode::None
+        },
         // Import
         Import => parse_import(parser),
         // Return
@@ -357,13 +367,7 @@ fn parse_if(parser: &mut PaserState) -> ASTNode {
 }
 
 // Loops
-fn parse_loop(parser: &mut PaserState) -> ASTNode {
-    // Eat loop
-    next_tok(parser);
-    // The parens part 1
-    if !eat!(parser, Lparan, "missing '(' in loop") {
-        return ASTNode::None;
-    }
+fn parse_loop_iter(parser: &mut PaserState) -> ASTNode {
     // Name
     let name: String;
     if let Identifier(n) = cur_tok(parser) {
@@ -382,7 +386,7 @@ fn parse_loop(parser: &mut PaserState) -> ASTNode {
     if iter == ASTNode::None {
         return ASTNode::None;
     }
-    // The parens part 2: electric boogaloo
+    // End parens
     if !eat!(parser, Rparan, "missing ')' in loop") {
         return ASTNode::None;
     }
@@ -393,6 +397,44 @@ fn parse_loop(parser: &mut PaserState) -> ASTNode {
     }
     // Return
     return ASTNode::LoopStmt(name, Box::new(iter), Box::new(body));
+}
+
+fn parse_loop_while(parser: &mut PaserState) -> ASTNode {
+    // Eat 'while'
+    if !eat!(parser, While, IMPOSSIBLE_STATE) {
+        return ASTNode::None;
+    }
+    // Condition
+    let cond = parse_binop_logic(parser);
+    if cond == ASTNode::None {
+        return ASTNode::None;
+    }
+    // End parens
+    if !eat!(parser, Rparan, "missing ')' in loop") {
+        return ASTNode::None;
+    }
+    // Body
+    let body = parse_body(parser);
+    if body == ASTNode::None {
+        return ASTNode::None;
+    }
+    // Return
+    return ASTNode::WhileStmt(Box::new(cond), Box::new(body));
+}
+
+fn parse_loop(parser: &mut PaserState) -> ASTNode {
+    // Eat loop
+    next_tok(parser);
+    // Start parens
+    if !eat!(parser, Lparan, "missing '(' in loop") {
+        return ASTNode::None;
+    }
+    // Get the loop type and call the helper
+    return if cur_tok(parser) == While {
+        parse_loop_while(parser)
+    } else {
+        parse_loop_iter(parser)
+    };
 }
 
 // Imports

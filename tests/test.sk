@@ -15,7 +15,7 @@ func test(msg, val, goodVal) {
 }
 
 func testSummary() {
-    print();
+    print("");
     print("SUMMARY: " + (testTotal-testBad) + " out of " + testTotal + " tests passed");
     if testBad == 0 {
         print("ALL TESTS PASSED!");
@@ -141,14 +141,22 @@ test("str=", str, "E");
 str *= 3;
 test("str*", str, "EEE");
 
-# Loops tests
-print("*** Loop tests ***");
+# Iter loop tests
+print("*** Iter loop tests ***");
 let i = 0;
 loop (j in range(1, 10)) {
     ++i;
     test("i == j", i, j);
 }
 test("i == 10", i, 10);
+
+# While loop test
+print("*** While loop tests ***");
+i = 1;
+loop (while i < 6) {
+    test("i < 6", i < 6, true);
+    ++i;
+}
 
 # Import test
 print("*** Import tests ***");

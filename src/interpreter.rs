@@ -4,15 +4,12 @@ use std::fmt;
 use std::io::Write;
 use std::io;
 
+use crate::common::IMPOSSIBLE_STATE;
 use crate::parser::ASTNode;
 use ASTNode::*;
 use crate::import_file;
 use crate::lexer::TokenType;
 use crate::value::Value;
-
-const IMPOSSIBLE_STATE: &str =
-    "we've reached an impossible state, anything is possible, \
-    the limits were in our heads all along, follow your dreams";
 
 // Functies are burlap functions in rust (like print)
 type Functie = fn(&mut Interpreter, Vec<Value>) -> Value;
@@ -546,11 +543,19 @@ fn exec(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
                     "only range is currently supported for iterative loops".to_string()
                 );
             }
-            // To the loop
+            // Do the loop
             while min <= max {
                 interpreter.set_var(var, Value::Int(min), interpreter.is_global);
                 exec(interpreter, &*body.clone());
                 min += 1;
+            }
+            Value::Null
+        },
+        // While loop
+        WhileStmt(cond, body) => {
+            // It's really easy, just check cond and loop
+            while eval(interpreter, &**cond).is_truthy() {
+                exec(interpreter, &*body.clone());
             }
             Value::Null
         },
