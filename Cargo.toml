@@ -3,12 +3,6 @@ name = "burlap"
 version = "1.0.0"
 edition = "2021"
 
-[[bin]]
-name = "burlap"
-path = "rust/main.rs"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 home = "0.5.4"
 impl_ops = "0.1.1"
