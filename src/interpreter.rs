@@ -53,8 +53,10 @@ impl Interpreter {
     ) -> Interpreter {
         // Builtin functions
         let functies = Functies{builtin: HashMap::from([
+            // Builtins
             ("print".to_string(), sk_print as Functie),
             ("input".to_string(), sk_input as Functie),
+            ("type".to_string(), sk_type as Functie),
             // Casts
             ("int".to_string(), sk_int as Functie),
             ("float".to_string(), sk_float as Functie),
@@ -284,6 +286,15 @@ fn sk_input(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
         Err(_) => Value::Str("".to_string()),
         _ => Value::Str(buffer.trim_end().to_string())
     };
+}
+
+// Type
+fn sk_type(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
+    if args.len() != 1 {
+        // Invalid args
+        return interpreter.bad_args(&"type".to_string(), args.len(), 1);
+    }
+    return Value::Str(args[0].get_type());
 }
 
 // Casting

@@ -114,6 +114,14 @@ test("*=", x, 6);
 x = 1 - 1 - 1;
 test("associativity", x, -1);
 
+# Type tests
+print("*** Type tests ***");
+test("String", type("Hello"), "String");
+test("Number", type(0), "Number");
+test("Decimal", type(0.0), "Decimal");
+test("Bool", type(false), "Bool");
+test("None", type(none), "None");
+
 # Factoral
 print("*** Factoral tests ***");
 func factorial(n) {

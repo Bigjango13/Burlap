@@ -94,6 +94,21 @@ impl Value {
             _ => false,
         };
     }
+    // Type
+    pub fn get_type(&self) -> String {
+        return match self {
+            // Normal types
+            Value::Str(_) => "String",
+            Value::Int(_) => "Number",
+            Value::Float(_) => "Decimal",
+            Value::Bool(_) => "Bool",
+            Value::None => "None",
+            // Internal types
+            Value::Error(_) => "_Error",
+            Value::Null => "_Null",
+        }.to_string();
+    }
+    // ==
     pub fn eq(&self, right: Value) -> bool {
         return match self {
             // str == ?
