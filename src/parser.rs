@@ -26,6 +26,8 @@ pub enum ASTNode {
     UnaryExpr(TokenType, Box<ASTNode>),
     // Binop, (Number(2), "+", Number(2))
     BinopExpr(Box<ASTNode>, TokenType, Box<ASTNode>),
+    // List (keys["1", "e"], values[node, node])
+    ListExpr(Vec<String>, Vec<ASTNode>),
     // Statements
     // Body, ([Call(Var(print), [String("Hello Worls")])])
     BodyStmt(Vec<ASTNode>),
@@ -210,6 +212,68 @@ fn parse_binop_set(parser: &mut PaserState) -> ASTNode {
         parse_binop_logic(parser)
     }
 }
+// Lists
+fn parse_list_item(parser: &mut PaserState, at: i32) -> (String, ASTNode) {
+    // Parses a single item in a list
+    let name: String;
+    // Get the key name
+    if let Identifier(n) = cur_tok(parser) {
+        // Use identifier name
+        name = n;
+        next_tok(parser);
+        if let Colon = cur_tok(parser) {
+            next_tok(parser);
+        } else {
+            // Named indexes don't need values
+            return (name.clone(), ASTNode::VarExpr(name));
+        }
+    } else {
+        // Use number index
+        name = at.to_string();
+    }
+    // Parse value
+    let val: ASTNode = parse_binop_logic(parser);
+    return (name, val);
+}
+fn parse_list(parser: &mut PaserState) -> ASTNode {
+    // Parses a list
+    if !eat!(parser, Lbracket, "expecting [") {
+        return ASTNode::None;
+    }
+    // Parse elements
+    let mut at: i32 = 0;
+    let mut names: Vec<String> = vec![];
+    let mut vals: Vec<ASTNode> = vec![];
+    while cur_tok(parser) != Rbracket {
+        let (name, val) = parse_list_item(parser, at);
+        // Invalid element
+        if val == ASTNode::None {
+            // Parse until the end of the list so there aren't trailing errors
+            while next_tok(parser) != Semicolon {}
+            return ASTNode::None;
+        }
+        // Valid element
+        names.push(name);
+        vals.push(val);
+        // Eat comma
+        if cur_tok(parser) == Comma {
+            if next_tok(parser) == Rbracket {
+                error!(parser, "trailing comma", ErrType::Warn);
+            }
+        } else if cur_tok(parser) == Rbracket {
+        } else {
+            error!(parser, "expected comma or ']'");
+            while next_tok(parser) != Semicolon {}
+            return ASTNode::None;
+        }
+        // Increment index
+        at += 1;
+    }
+    if !eat!(parser, Rbracket, "expecting ]") {
+        return ASTNode::None;
+    }
+    return ASTNode::ListExpr(names, vals);
+}
 
 // Normal expressions
 fn parse_expr(parser: &mut PaserState) -> ASTNode {
@@ -221,6 +285,8 @@ fn parse_expr(parser: &mut PaserState) -> ASTNode {
         Float(f)      => { next_tok(parser); ASTNode::DecimalExpr(f) },
         Bool(b)       => { next_tok(parser); ASTNode::BoolExpr(b)    },
         None          => { next_tok(parser); ASTNode::NoneExpr       },
+        // Lists
+        Lbracket => parse_list(parser),
         // Nested expressions
         Lparan => {
             next_tok(parser);

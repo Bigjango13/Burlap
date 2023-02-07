@@ -1,4 +1,5 @@
 use std::ops;
+use linked_hash_map::LinkedHashMap;
 
 // Value enum for varibles
 #[derive(Debug, Clone, PartialEq)]
@@ -10,6 +11,7 @@ pub enum Value {
     Int(i32),
     Float(f32),
     Bool(bool),
+    List(LinkedHashMap<String, Value>),
     None,
     // Null (the diffrence between, no return and returning none)
     Null
@@ -80,6 +82,25 @@ impl Value {
             Value::Int(i) => format!("{}", i),
             Value::Float(f) => format!("{}", f),
             Value::Bool(b) => format!("{}", b),
+            Value::List(l) => {
+                let mut ret = "[".to_string();
+                // Add each element
+                for val in l.iter() {
+                    // The the index isn't a number, print the index
+                    if !val.0.as_bytes()[0].is_ascii_digit() {
+                        ret += val.0;
+                        ret += ": ";
+                    }
+                    ret += &val.1.to_string();
+                    ret += ", ";
+                }
+                // Remove trailing ", "
+                if ret.len() != 1 {
+                    ret.truncate(ret.len() - 2);
+                }
+                ret += "]";
+                ret
+            }
             Value::None => "none".to_string(),
             _ => format!("{:?}", self),
         };
@@ -91,6 +112,7 @@ impl Value {
             Value::Int(i) => *i != 0,
             Value::Float(f) => *f != 0.0,
             Value::Bool(b) => *b,
+            Value::List(l) => !l.is_empty(),
             _ => false,
         };
     }
@@ -103,6 +125,7 @@ impl Value {
             Value::Float(_) => "Decimal",
             Value::Bool(_) => "Bool",
             Value::None => "None",
+            Value::List(_) => "List",
             // Internal types
             Value::Error(_) => "_Error",
             Value::Null => "_Null",

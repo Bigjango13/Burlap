@@ -10,8 +10,8 @@ pub enum TokenType {
     Float(f32), Bool(bool), None,
     // Misc
     Lparan, Rparan, Lbracket, Rbracket,
-    Lbrace, Rbrace, Semicolon, Comma, Equals,
-    PlusPlus, MinusMinus,
+    Lbrace, Rbrace, Semicolon, Colon,
+    Comma, Equals, PlusPlus, MinusMinus,
     // Keywords
     Func, Let, Return, In, If, Else, Loop, While, Import,
     // Basic operators
@@ -165,6 +165,7 @@ fn get_tok(stream: &mut Stream, extentions: &[String]) -> TokenType {
         '{' => TokenType::Lbrace,
         '}' => TokenType::Rbrace,
         ';' => TokenType::Semicolon,
+        ':' => TokenType::Colon,
         ',' => TokenType::Comma,
         '%' => TokenType::Modulo,
         // Math, mathmath, and math= ops

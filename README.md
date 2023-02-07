@@ -22,6 +22,7 @@ Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) progr
     - [x] Variable operators (`=`, `+=`, `-=`, `*=`, `/=`)
   - [x] Print
   - [x] Input (New)
+  - [x] Len (New)
   - [x] If/if else/else
   - [x] Return
   - [x] Functions
@@ -65,9 +66,9 @@ Here is the list of extentions:
 It's a normal rust project, so `cargo run` to run, `cargo build` to build, and `cargo build --release` to build in release mode.
 
 ## Running
-If you don't use any arguments burlap will enter repl mode, to exit use Ctrl-D.
+If you don't use any arguments burlap will enter REPL mode, to exit use Ctrl-D.
 If you want to run a file just pass the file name as the argument.
 
 ## Alternatives
 
-- [Skcore](https://github.com/Luminoso-256/scriptinglang) a sack interpreteter (also in rust), most commonly used.
+- [Skcore](https://github.com/Luminoso-256/scriptinglang) a sack interpreteter (also in rust)

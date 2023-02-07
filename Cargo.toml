@@ -4,6 +4,11 @@ version = "1.0.0"
 edition = "2021"
 
 [dependencies]
+# For history file
 home = "0.5.4"
+# For values
 impl_ops = "0.1.1"
+# For lists
+linked-hash-map = "0.5.6"
+# For REPL
 rustyline = "10.1.0"

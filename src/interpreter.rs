@@ -11,6 +11,8 @@ use crate::import_file;
 use crate::lexer::TokenType;
 use crate::value::Value;
 
+use linked_hash_map::LinkedHashMap;
+
 // Functies are burlap functions in rust (like print)
 type Functie = fn(&mut Interpreter, Vec<Value>) -> Value;
 
@@ -57,6 +59,7 @@ impl Interpreter {
             ("print".to_string(), sk_print as Functie),
             ("input".to_string(), sk_input as Functie),
             ("type".to_string(), sk_type as Functie),
+            ("len".to_string(), sk_len as Functie),
             // Casts
             ("int".to_string(), sk_int as Functie),
             ("float".to_string(), sk_float as Functie),
@@ -297,6 +300,19 @@ fn sk_type(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
     return Value::Str(args[0].get_type());
 }
 
+// Len
+fn sk_len(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
+    if args.len() != 1 {
+        // Invalid args
+        return interpreter.bad_args(&"type".to_string(), args.len(), 1);
+    }
+    // Check that the type is a list
+    if let Value::List(l) = &args[0] {
+        return Value::Int(l.len() as i32);
+    }
+    return Value::Error("len() argument 1 must be a list".to_string());
+}
+
 // Casting
 // Int
 fn sk_int(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
@@ -334,6 +350,20 @@ fn eval(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
         DecimalExpr(val) => Value::Float(val.clone()),
         BoolExpr(val) => Value::Bool(val.clone()),
         NoneExpr => Value::None,
+        // List
+        ListExpr(names, vals) => {
+            let mut at = 0;
+            let mut ret = LinkedHashMap::new();
+            for name in names {
+                let val = eval(interpreter, &vals[at]);
+                if let Value::Error(_) = val {
+                    return val;
+                }
+                ret.insert(name.clone(), val);
+                at += 1;
+            }
+            Value::List(ret)
+        }
         // Vars/function
         VarExpr(val) => interpreter.get_var(val),
         CallExpr(name, args) => {
