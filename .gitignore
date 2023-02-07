@@ -1,7 +1,4 @@
 # Binaries
-build/
-burlap
-# Rust binaries
 target/
 # Dev stuff (spec is a copy if the spec)
 spec.md
