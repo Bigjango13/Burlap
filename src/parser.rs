@@ -22,6 +22,8 @@ pub enum ASTNode {
     VarExpr(String),
     // Call, (print, [Number(7)])
     CallExpr(String, Vec<ASTNode>),
+    // Index, (mylist, Number(7))
+    IndexExpr(Box<ASTNode>, Box<ASTNode>),
     // Unary, (Minus, Number(1))
     UnaryExpr(TokenType, Box<ASTNode>),
     // Binop, (Number(2), "+", Number(2))
@@ -141,6 +143,25 @@ fn parse_call(parser: &mut PaserState) -> ASTNode {
     }
     return ret;
 }
+// Index
+fn parse_index(parser: &mut PaserState) -> ASTNode {
+    // Get expr
+    let mut ret = parse_call(parser);
+    if let ASTNode::None = ret {
+        return ASTNode::None;
+    }
+    // Parse index
+    while let Lbracket = cur_tok(parser) {
+        next_tok(parser);
+        let index = parse_binop_logic(parser);
+        ret = ASTNode::IndexExpr(Box::new(ret), Box::new(index));
+        // Eat ']'
+        if !eat!(parser, Rbracket, "expected ']' at end of index") {
+            return ASTNode::None;
+        }
+    }
+    return ret;
+}
 // Unary
 fn parse_unary(parser: &mut PaserState) -> ASTNode {
     if vec![Minus, Not, PlusPlus, MinusMinus].contains(&cur_tok(parser)) {
@@ -148,7 +169,7 @@ fn parse_unary(parser: &mut PaserState) -> ASTNode {
         next_tok(parser);
         return ASTNode::UnaryExpr(op, Box::new(parse_unary(parser)));
     }
-    return parse_call(parser);
+    return parse_index(parser);
 }
 // Binops
 // Helper for binops so I don't write the same code more than once
@@ -215,7 +236,7 @@ fn parse_binop_set(parser: &mut PaserState) -> ASTNode {
 // Lists
 fn parse_list_item(parser: &mut PaserState, at: i32) -> (String, ASTNode) {
     // Parses a single item in a list
-    let name: String;
+    let mut name: String;
     // Get the key name
     if let Identifier(n) = cur_tok(parser) {
         // Use identifier name
@@ -223,9 +244,13 @@ fn parse_list_item(parser: &mut PaserState, at: i32) -> (String, ASTNode) {
         next_tok(parser);
         if let Colon = cur_tok(parser) {
             next_tok(parser);
-        } else {
+        } else if let Comma | Rbracket = cur_tok(parser) {
             // Named indexes don't need values
             return (name.clone(), ASTNode::VarExpr(name));
+        } else {
+            // It's not a named index (`[myvar + 1]`)
+            name = at.to_string();
+            parser.at -= 1;
         }
     } else {
         // Use number index
@@ -263,6 +288,9 @@ fn parse_list(parser: &mut PaserState) -> ASTNode {
         } else if cur_tok(parser) == Rbracket {
         } else {
             error!(parser, "expected comma or ']'");
+            if cur_tok(parser) == Colon {
+                error!(parser, "identifiers are used as keys", ErrType::Hint);
+            }
             while next_tok(parser) != Semicolon {}
             return ASTNode::None;
         }

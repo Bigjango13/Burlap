@@ -194,5 +194,15 @@ test("none -> int", int(none), 0);
 test("none -> float", float(none), 0.0);
 test("none -> str", string(none), "none");
 
+# List tests
+print("*** List tests ***");
+let elm = 4;
+let list = [1, "E>h", elm, x: 42, elm * 2];
+test("list -> str", string(list), '[1, E>h, elm: 4, x: 42, 8]');
+test("len()", len(list), 5);
+test("number indexing", list[2], 4);
+test("key indexing", list['elm'], 4);
+test("var indexing", list[elm], 8);
+
 # End of tests
 testSummary();

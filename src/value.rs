@@ -1,5 +1,5 @@
 use std::ops;
-use linked_hash_map::LinkedHashMap;
+use indexmap::map::IndexMap;
 
 // Value enum for varibles
 #[derive(Debug, Clone, PartialEq)]
@@ -11,7 +11,7 @@ pub enum Value {
     Int(i32),
     Float(f32),
     Bool(bool),
-    List(LinkedHashMap<String, Value>),
+    List(IndexMap<String, Value>),
     None,
     // Null (the diffrence between, no return and returning none)
     Null
@@ -130,6 +130,23 @@ impl Value {
             Value::Error(_) => "_Error",
             Value::Null => "_Null",
         }.to_string();
+    }
+    // Indexing
+    pub fn index(&self, index: Value) -> Option<&Value> {
+        if let Value::List(l) = self {
+            // String indexing (keys)
+            if let Value::Str(s) = index {
+              return l.get(&s);
+            }
+            // Number indexing
+            return match l.get_index(index.to_int() as usize) {
+                // Remove the key
+                Some((_, v)) => Some(v),
+                None => None
+            };
+        }
+        // Not a list
+        return None;
     }
     // ==
     pub fn eq(&self, right: Value) -> bool {

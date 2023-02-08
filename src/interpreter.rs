@@ -11,7 +11,7 @@ use crate::import_file;
 use crate::lexer::TokenType;
 use crate::value::Value;
 
-use linked_hash_map::LinkedHashMap;
+use indexmap::map::IndexMap;
 
 // Functies are burlap functions in rust (like print)
 type Functie = fn(&mut Interpreter, Vec<Value>) -> Value;
@@ -353,7 +353,7 @@ fn eval(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
         // List
         ListExpr(names, vals) => {
             let mut at = 0;
-            let mut ret = LinkedHashMap::new();
+            let mut ret = IndexMap::new();
             for name in names {
                 let val = eval(interpreter, &vals[at]);
                 if let Value::Error(_) = val {
@@ -378,10 +378,24 @@ fn eval(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
             }
             // Call
             interpreter.call(name, &vals)
-        }
+        },
+        IndexExpr(list, index) => {
+            // "&**" is a tad cursed, but this is rust after all.
+            let list = eval(interpreter, &**list);
+            if let Value::Error(_) = list {
+                return list;
+            }
+            let index = eval(interpreter, &**index);
+            if let Value::Error(_) = index {
+                return index;
+            }
+            return match list.index(index) {
+                Some(x) => x.clone(),
+                _ => Value::Error(format!("failed to index '{}'", list.get_type()))
+            };
+        },
         // Unary
         UnaryExpr(unary, val) => {
-            // "&**" is a tad cursed, but this is rust after all.
             let value = eval(interpreter, &**val);
             if let Value::Error(_) = value {
                 return value;
