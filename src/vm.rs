@@ -1,12 +1,10 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::fmt;
 use std::io::Write;
 use std::io;
 
 use crate::common::IMPOSSIBLE_STATE;
-use crate::parser::ASTNode;
-use ASTNode::*;
+use crate::parser::{ASTNode, ASTNode::*};
 use crate::import_file;
 use crate::lexer::TokenType;
 use crate::value::Value;
@@ -14,45 +12,97 @@ use crate::value::Value;
 use indexmap::map::IndexMap;
 
 // Functies are burlap functions in rust (like print)
-type Functie = fn(&mut Interpreter, Vec<Value>) -> Value;
+type Functie = fn(&mut Vm, Vec<Value>) -> Value;
 
 // Sub struct for extentions/functies
 pub struct Functies {
     builtin: HashMap<String, Functie>
 }
-impl fmt::Debug for Functies {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{{...}}")
-    }
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug)]
+pub enum Opcode {
+    // Register instructions
+    // PUSH value ([const u8 index] -> value)
+    PUSH,
+    // PUSH value ([const u24 index] -> value)
+    PUSH3,
+    // Push Variable ("name" -> value)
+    PV,
+    // Declare Variable ("name", value)
+    DV,
+    // Set Variable ("name", value)
+    SV,
+    // Math instructions
+    // ADD (value, value -> value)
+    ADD,
+    // SUBtract (value, value -> value)
+    SUB,
+    // MULtiply (value, value -> value)
+    MUL,
+    // DIVide (value, value -> value)
+    DIV,
+    // MODulo (value, value -> value)
+    MOD,
+    // Boolean instructions
+    // AND
+    AND,
+    // OR
+    OR,
+    // XOR
+    XOR,
+    // NOT
+    NOT,
+    // Comparison
+    // EQuals
+    EQ,
+    // Greator Than
+    GT,
+    // Less Than
+    LT,
+    // Misc
+    // CALL a function (CALL "print")
+    CALL
 }
 
-// Interpreter state
-#[derive(Debug)]
-pub struct Interpreter {
+// VM state
+pub struct Vm {
+    // Some config for the VM
     pub is_repl: bool,
     pub has_err: bool,
     pub in_func: bool,
+
     // Global vars and functions (which are always global)
     is_global: bool,
     globals: HashMap<String, Value>,
     functions: HashMap<String, ASTNode>,
     functies: Functies,
+
     // Variables in the current scope
     // Each scope stacks
     var_names: Vec<String>,
     var_vals: Vec<Value>,
     var_min: usize,
+
     // Extentions
     pub extentions: Vec<String>,
+
     // Used for importing
     pub import_path: PathBuf,
+
+    // Sacks stack
+    stack: Vec<Value>,
+    // Ops and constants
+    ops: Vec<u8>,
+    at: usize,
+    consts: Vec<Value>,
 }
 
-impl Interpreter {
+impl Vm {
     // Init
     pub fn new(
         is_repl: bool, import_path: PathBuf, extentions: Vec<String>
-    ) -> Interpreter {
+    ) -> Vm {
         // Builtin functions
         let functies = Functies{builtin: HashMap::from([
             // Builtins
@@ -65,12 +115,14 @@ impl Interpreter {
             ("float".to_string(), sk_float as Functie),
             ("string".to_string(), sk_string as Functie),
         ])};
-        Interpreter {
+        // This is one of those times I really really wish Rust had defaults
+        Vm {
             is_repl, has_err: false, in_func: false,
             is_global: true, globals: HashMap::new(),
             functions: HashMap::new(), functies,
             var_names: Vec::new(), var_vals: Vec::new(),
-            var_min: 0, extentions, import_path
+            var_min: 0, extentions, import_path, stack: Vec::new(),
+            ops: Vec::new(), at: 0, consts: Vec::new(),
         }
     }
     // Getting vars
@@ -216,7 +268,7 @@ impl Interpreter {
         // Get the args and body
         let arg_names: Vec<String>;
         let body: ASTNode;
-        if let ASTNode::FunctiStmt(_name, named_args, fbody) = function {
+        if let FunctiStmt(_name, named_args, fbody) = function {
             arg_names = named_args.clone();
             body = (**fbody).clone();
         } else {
@@ -247,18 +299,51 @@ impl Interpreter {
             return self.bad_args(name, args.len(), arg_names.len());
         }
         // Run body
-        let ret = exec(self, &body);
+        let ret = exec(self);
         // Raise scope
         self.in_func = old_func;
         self.raise_scope(scope_data);
+        // TODO
+        return Value::None;
+    }
+
+    pub fn cur_op(&mut self) -> u8 {
+        self.ops[self.at]
+    }
+    pub fn next_op(&mut self) -> u8 {
+        self.at += 1;
+        if self.at > self.ops.len() {
+            panic!("Read too many ops!");
+        }
+        self.ops[self.at]
+    }
+
+    // Push/pop
+    pub fn push(&mut self, value: Value) {
+        self.stack.push(value)
+    }
+    pub fn pop(&mut self) -> Value {
+        match self.stack.pop() {
+            Some(v) => v,
+            _ => panic!("Overpopped stack!")
+        }
+    }
+
+    pub fn read(&mut self, size: u8) -> i32 {
+        // Reads multiple bytes into a single number
+        let mut ret: i32 = 0;
+        for _ in 0..size {
+            ret <<= 8;
+            ret += self.next_op() as i32;
+        }
         return ret;
     }
 }
 
 // Builtin Functions (prefixed with 'sk_')
 // Print
-fn sk_print(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
-    if interpreter.extentions.contains(&"va-print".to_string()) {
+fn sk_print(vm: &mut Vm, args: Vec<Value>) -> Value {
+    if vm.extentions.contains(&"va-print".to_string()) {
         // VA print extention
         for i in args {
             print!("{} ", i.to_string());
@@ -266,7 +351,7 @@ fn sk_print(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
         println!("");
     } else if args.len() != 1 {
         // Invalid args
-        return interpreter.bad_args(&"print".to_string(), args.len(), 1);
+        return vm.bad_args(&"print".to_string(), args.len(), 1);
     } else {
         // Normal printing
         println!("{}", args[0].to_string());
@@ -275,10 +360,10 @@ fn sk_print(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
 }
 
 // Input
-fn sk_input(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
+fn sk_input(vm: &mut Vm, args: Vec<Value>) -> Value {
     if args.len() != 1 {
         // Invalid args
-        return interpreter.bad_args(&"input".to_string(), args.len(), 1);
+        return vm.bad_args(&"input".to_string(), args.len(), 1);
     }
     // Print the prompt
     print!("{}", args[0].to_string());
@@ -292,19 +377,19 @@ fn sk_input(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
 }
 
 // Type
-fn sk_type(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
+fn sk_type(vm: &mut Vm, args: Vec<Value>) -> Value {
     if args.len() != 1 {
         // Invalid args
-        return interpreter.bad_args(&"type".to_string(), args.len(), 1);
+        return vm.bad_args(&"type".to_string(), args.len(), 1);
     }
     return Value::Str(args[0].get_type());
 }
 
 // Len
-fn sk_len(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
+fn sk_len(vm: &mut Vm, args: Vec<Value>) -> Value {
     if args.len() != 1 {
         // Invalid args
-        return interpreter.bad_args(&"type".to_string(), args.len(), 1);
+        return vm.bad_args(&"type".to_string(), args.len(), 1);
     }
     // Check that the type is a list
     if let Value::List(l) = &args[0] {
@@ -315,252 +400,188 @@ fn sk_len(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
 
 // Casting
 // Int
-fn sk_int(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
+fn sk_int(vm: &mut Vm, args: Vec<Value>) -> Value {
     if args.len() != 1 {
         // Invalid args
-        return interpreter.bad_args(&"int".to_string(), args.len(), 1);
+        return vm.bad_args(&"int".to_string(), args.len(), 1);
     }
     return Value::Int(args[0].to_int());
 }
 
 // Float
-fn sk_float(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
+fn sk_float(vm: &mut Vm, args: Vec<Value>) -> Value {
     if args.len() != 1 {
         // Invalid args
-        return interpreter.bad_args(&"float".to_string(), args.len(), 1);
+        return vm.bad_args(&"float".to_string(), args.len(), 1);
     }
     return Value::Float(args[0].to_float());
 }
 
 // String
-fn sk_string(interpreter: &mut Interpreter, args: Vec<Value>) -> Value {
+fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Value {
     if args.len() != 1 {
         // Invalid args
-        return interpreter.bad_args(&"string".to_string(), args.len(), 1);
+        return vm.bad_args(&"string".to_string(), args.len(), 1);
     }
     return Value::Str(args[0].to_string());
 }
 
 // Eval (for expressions)
-fn eval(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
-    return match node {
-        // Normal boring values
-        StringExpr(val) => Value::Str(val.clone()),
-        NumberExpr(val) => Value::Int(val.clone()),
-        DecimalExpr(val) => Value::Float(val.clone()),
-        BoolExpr(val) => Value::Bool(val.clone()),
-        NoneExpr => Value::None,
-        // List
-        ListExpr(names, vals) => {
-            let mut at = 0;
-            let mut ret = IndexMap::new();
-            for name in names {
-                let val = eval(interpreter, &vals[at]);
-                if let Value::Error(_) = val {
-                    return val;
-                }
-                ret.insert(name.clone(), val);
-                at += 1;
-            }
-            Value::List(ret)
-        }
-        // Vars/function
-        VarExpr(val) => interpreter.get_var(val),
-        CallExpr(name, args) => {
-            // Eval args
-            let mut vals: Vec<Value> = vec![];
-            for arg in args {
-                let new_arg = eval(interpreter, arg);
-                if let Value::Error(_) = new_arg {
-                    return new_arg;
-                }
-                vals.push(new_arg);
-            }
-            // Call
-            interpreter.call(name, &vals)
+fn eval(vm: &mut Vm) -> Result<Value, String> {
+    // Unsafe because casting an int to enum might not be valid
+    match unsafe {std::mem::transmute(vm.cur_op())} {
+        // Push
+        Opcode::PUSH => {
+            let index = vm.read(1);
+            vm.push(vm.consts[index as usize].clone());
         },
-        IndexExpr(list, index) => {
-            // "&**" is a tad cursed, but this is rust after all.
-            let list = eval(interpreter, &**list);
-            if let Value::Error(_) = list {
-                return list;
-            }
-            let index = eval(interpreter, &**index);
-            if let Value::Error(_) = index {
-                return index;
-            }
-            return match list.index(index) {
-                Some(x) => x.clone(),
-                _ => Value::Error(format!("failed to index '{}'", list.get_type()))
-            };
+        Opcode::PUSH3 => {
+            let index = vm.read(3);
+            vm.push(vm.consts[index as usize].clone());
         },
-        // Unary
-        UnaryExpr(unary, val) => {
-            let value = eval(interpreter, &**val);
-            if let Value::Error(_) = value {
-                return value;
-            }
-            // Do the op
-            let ret = match unary {
-                TokenType::Not => Value::Bool(!value.is_truthy()),
-                TokenType::Minus => Value::Int(0) - value.clone(),
-                // These ones are done separately
-                TokenType::PlusPlus | TokenType::MinusMinus => Value::Null,
-                _ => Value::Error(format!("unknown unary op ({:?})", unary))
-            };
-            if let TokenType::PlusPlus | TokenType::MinusMinus = unary {} else {
-                return ret;
-            }
-            // Do ++/--
-            let name: String;
-            if let ASTNode::VarExpr(n) = &**val {
-                name = n.clone();
-            } else {
-                return Value::Error("++/-- can only be used on variable".to_string());
-            }
-            let val: Value;
-            if let TokenType::PlusPlus = unary {
-                // Increment
-                val = value + Value::Int(1);
-                interpreter.change_var(&name, val.clone());
-            } else {
-                // Decrement
-                val = value - Value::Int(1);
-                interpreter.change_var(&name, val.clone());
-            }
-            // Return
-            return val;
+        Opcode::ADD => {
+            let lhs = vm.pop();
+            let rhs = vm.pop();
+            vm.push(lhs + rhs);
         },
         // Binops
-        BinopExpr(lhs, op, rhs) => {
-            // Var name for variable ops
-            let name = if let ASTNode::VarExpr(n) = &**lhs {
-                n.clone()
-            } else { "".to_string() };
-            // Get values
-            let left = eval(interpreter, &**lhs);
-            let right = eval(interpreter, &**rhs);
-            if let Value::Error(_) = left {
-                return left;
+        Opcode::SUB => {
+            let lhs = vm.pop();
+            let rhs = vm.pop();
+            vm.push(lhs - rhs);
+        },
+        Opcode::MUL => {
+            let lhs = vm.pop();
+            let rhs = vm.pop();
+            vm.push(lhs * rhs);
+        },
+        Opcode::DIV => {
+            let lhs = vm.pop();
+            let rhs = vm.pop();
+            vm.push(lhs / rhs);
+        },
+        Opcode::MOD => {
+            let lhs = vm.pop();
+            let rhs = vm.pop();
+            vm.push(lhs % rhs);
+        },
+        Opcode::EQ => {
+            let lhs = vm.pop();
+            let rhs = vm.pop();
+            vm.push(Value::Bool(lhs == rhs));
+        },
+        Opcode::LT => {
+            let lhs = vm.pop();
+            let rhs = vm.pop();
+            vm.push(Value::Bool(lhs.to_float() < rhs.to_float()));
+        },
+        Opcode::GT => {
+            let lhs = vm.pop();
+            let rhs = vm.pop();
+            vm.push(Value::Bool(lhs.to_float() > rhs.to_float()));
+        },
+        Opcode::AND => {
+            let lhs = vm.pop();
+            let rhs = vm.pop();
+            vm.push(Value::Bool(lhs.is_truthy() && rhs.is_truthy()));
+        },
+        Opcode::OR => {
+            let lhs = vm.pop();
+            let rhs = vm.pop();
+            vm.push(Value::Bool(lhs.is_truthy() || rhs.is_truthy()));
+        },
+        Opcode::XOR => {
+            let lhs = vm.pop();
+            let rhs = vm.pop();
+            vm.push(Value::Bool(lhs.is_truthy() != rhs.is_truthy()));
+        },
+        Opcode::NOT => {
+            let v = vm.pop();
+            vm.push(Value::Bool(!v.is_truthy()));
+        },
+        // Variables
+        Opcode::PV => {
+            // Get varname
+            let Value::Str(varname) = vm.pop() else {
+                return Err(IMPOSSIBLE_STATE.to_string());
+            };
+            // Get var
+            let var = vm.get_var(&varname);
+            if let Value::Error(s) = var {
+                return Err(s);
             }
-            if let Value::Error(_) = right {
-                return right;
-            }
-            // Do the binop
-            match op {
-                // Math
-                TokenType::Plus => left + right,
-                TokenType::Minus => left - right,
-                TokenType::Times => left * right,
-                TokenType::Div => left / right,
-                TokenType::Modulo => left % right,
-                // Eq/neq
-                TokenType::EqualsEquals => Value::Bool(left.eq(right)),
-                TokenType::NotEquals => Value::Bool(!left.eq(right)),
-                // Gt/lt
-                TokenType::Lt => Value::Bool(left.to_float() < right.to_float()),
-                TokenType::Gt => Value::Bool(left.to_float() > right.to_float()),
-                TokenType::LtEquals => Value::Bool(left.to_float() <= right.to_float()),
-                TokenType::GtEquals => Value::Bool(left.to_float() >= right.to_float()),
-                // Logical
-                TokenType::And =>
-                    Value::Bool(left.is_truthy() && right.is_truthy()),
-                TokenType::Or =>
-                    Value::Bool(left.is_truthy() || right.is_truthy()),
-                TokenType::Xor =>
-                    Value::Bool(left.is_truthy() != right.is_truthy()),
-                // Variable
-                TokenType::Equals => {
-                    interpreter.set_var(&name, right, interpreter.is_global);
-                    Value::None
-                },
-                TokenType::PlusEquals => {
-                    let val = interpreter.get_var(&name);
-                    if let Value::Error(_) = val {
-                        return val;
-                    }
-                    interpreter.change_var(&name, val + right);
-                    Value::None
-                },
-                TokenType::MinusEquals => {
-                    let val = interpreter.get_var(&name);
-                    if let Value::Error(_) = val {
-                        return val;
-                    }
-                    interpreter.change_var(&name, val - right);
-                    Value::None
-                },
-                TokenType::TimesEquals => {
-                    let val = interpreter.get_var(&name);
-                    if let Value::Error(_) = val {
-                        return val;
-                    }
-                    interpreter.change_var(&name, val * right);
-                    Value::None
-                },
-                TokenType::DivEquals => {
-                    let val = interpreter.get_var(&name);
-                    if let Value::Error(_) = val {
-                        return val;
-                    }
-                    interpreter.change_var(&name, val / right);
-                    Value::None
-                },
-                // Unknown
-                _ => Value::Error(format!("unknown binop op ({:?})", op))
+            // Push
+            vm.push(var);
+        },
+        Opcode::SV => {
+            // Get varname
+            let Value::Str(varname) = vm.pop() else {
+                return Err(IMPOSSIBLE_STATE.to_string());
+            };
+            // Set
+            let val = vm.pop();
+            if !vm.set_var(&varname, val, vm.is_global) {
+                return Err(format!("no variable called \"{}\"", varname));
             }
         },
-        // Default to none
-        _ => Value::Error(format!("eval error (failed to evaluate {:?})", node)),
+        Opcode::DV => {
+            let Value::Str(varname) = vm.pop() else {
+                return Err(IMPOSSIBLE_STATE.to_string());
+            };
+            let val = vm.pop();
+            vm.make_var(&varname, val, vm.is_global, true);
+        },
+        Opcode::CALL => todo!()
     };
+    return Ok(Value::None);
 }
 
-fn exec(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
-    return match node {
+fn exec(vm: &mut Vm) -> Result<Value, String> {
+    /*return match node {
         BodyStmt(body) => {
             // Lower scope
-            let scope_data = interpreter.lower_scope(false);
+            let scope_data = vm.lower_scope(false);
             // Run each statement
             let mut ret: Value;
             for i in body {
-                ret = exec(interpreter, i);
+                ret = exec(vm, i);
                 if let Value::Error(_) = ret {
                     return ret;
                 }
                 if ret != Value::Null {
                     // Raise scope
-                    interpreter.raise_scope(scope_data);
+                    vm.raise_scope(scope_data);
                     return ret;
                 }
             }
             // Raise scope
-            interpreter.raise_scope(scope_data);
+            vm.raise_scope(scope_data);
             Value::Null
         },
         ReturnStmt(ret) => {
             // Return
-            eval(interpreter, &**ret)
+            eval(vm, &**ret)
         },
         IfStmt(cond, body, elsestmt) => {
             // Execute either body or else body
-            let condition = eval(interpreter, &**cond);
+            let condition = eval(vm, &**cond);
             if let Value::Error(_) = condition {
                 return condition;
             }
             if condition.is_truthy() {
-                exec(interpreter, &**body)
+                exec(vm, &**body)
             } else {
                 // If there isn't a else cond, this will run an empty body
-                exec(interpreter, &**elsestmt)
+                exec(vm, &**elsestmt)
             }
         },
         // Declaring vars
         LetStmt(name, val) => {
-            let val = eval(interpreter, &**val);
+            let val = eval(vm, &**val);
             if let Value::Error(_) = val {
                 return val;
             }
-            if interpreter.make_var(name, val, interpreter.is_global, false) {
+            if vm.make_var(name, val, vm.is_global, false) {
                 Value::Null
             } else {
                 Value::Error(format!("cannot redefine variable \"{}\"", name))
@@ -568,14 +589,14 @@ fn exec(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
         },
         // Declaring functions
         FunctiStmt(name, _args, _body) => {
-            interpreter.functions.insert(name.clone(), node.clone());
+            vm.functions.insert(name.clone(), node.clone());
             Value::Null
         },
         // Loops
         LoopStmt(var, iter, body) => {
             // Make the var if it doesn't exist
-            if let Value::Error(_) = interpreter.get_var(var) {
-                interpreter.make_var(var, Value::Int(0), interpreter.is_global, false);
+            if let Value::Error(_) = vm.get_var(var) {
+                vm.make_var(var, Value::Int(0), vm.is_global, false);
             }
             // Check iter
             let (mut min, max): (i32, i32);
@@ -588,11 +609,11 @@ fn exec(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
                 }
                 // Check args
                 if args.len() != 2 {
-                    return interpreter.bad_args(&name, args.len(), 2);
+                    return vm.bad_args(&name, args.len(), 2);
                 }
                 // Get args
-                min = eval(interpreter, &args[0]).to_int();
-                max = eval(interpreter, &args[1]).to_int();
+                min = eval(vm, &args[0]).to_int();
+                max = eval(vm, &args[1]).to_int();
             } else {
                 return Value::Error(
                     "only range is currently supported for iterative loops".to_string()
@@ -600,8 +621,8 @@ fn exec(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
             }
             // Do the loop
             while min <= max {
-                interpreter.set_var(var, Value::Int(min), interpreter.is_global);
-                exec(interpreter, &*body.clone());
+                vm.set_var(var, Value::Int(min), vm.is_global);
+                exec(vm, &*body.clone());
                 min += 1;
             }
             Value::Null
@@ -609,46 +630,48 @@ fn exec(interpreter: &mut Interpreter, node: &ASTNode) -> Value {
         // While loop
         WhileStmt(cond, body) => {
             // It's really easy, just check cond and loop
-            while eval(interpreter, &**cond).is_truthy() {
-                exec(interpreter, &*body.clone());
+            while eval(vm, &**cond).is_truthy() {
+                exec(vm, &*body.clone());
             }
             Value::Null
         },
         // Import
         ImportStmt(name) => {
             // Get file name
-            let fname = eval(interpreter, &**name);
+            let fname = eval(vm, &**name);
             let name = fname.to_string();
             // Get the file path
-            let mut path = interpreter.import_path.clone();
+            let mut path = vm.import_path.clone();
             path.push(name.clone());
             // Import
-            if import_file(interpreter, &mut path) {
+            if import_file(vm, &mut path) {
                 Value::Null
             } else {
                 Value::Error(format!("failed to import {}", name))
             }
-        },
-        _ => {
-            // Expression, not statement
-            let val = eval(interpreter, node);
-            if let Value::Error(_) = val {
-                return val;
-            }
-            if interpreter.is_repl && val != Value::Null && val != Value::None {
-                println!("{}", val.to_string());
-            }
-            Value::Null
-        }
+        },*/
+    let val = eval(vm)?;
+    if vm.is_repl && val != Value::Null && val != Value::None {
+        println!("{}", val.to_string());
     }
+    Ok(Value::None)
 }
 
-pub fn run(interpreter: &mut Interpreter, ast: Vec<ASTNode>) -> bool {
-    for node in ast {
-        let val = exec(interpreter, &node);
-        if let Value::Error(msg) = val {
-            println!("RuntimeError: {}", msg);
+pub fn run(vm: &mut Vm, ops: Vec<u8>, consts: Vec<Value>) -> bool {
+    vm.ops = ops;
+    vm.at = 0;
+    vm.consts = consts;
+    vm.stack = Vec::new();
+    loop {
+        if let Err(s) = exec(vm) {
+            println!("{}", s);
             return false;
+        }
+        println!("{:?}", vm.stack);
+        if vm.at + 1 != vm.ops.len() {
+            vm.next_op();
+        } else {
+            break;
         }
     }
     return true;

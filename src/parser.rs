@@ -49,8 +49,8 @@ pub enum ASTNode {
     ImportStmt(Box<ASTNode>)
 }
 
-// Paser state
-struct PaserState {
+// Parser state
+struct ParserState {
     tokens: Vec<Token>,
     extentions: Vec<String>,
     at: usize,
@@ -59,11 +59,11 @@ struct PaserState {
 }
 // Token helpers
 // Current token
-fn cur_tok(parser: &PaserState) -> TokenType {
+fn cur_tok(parser: &ParserState) -> TokenType {
     parser.tokens[parser.at].token.clone()
 }
 // Advance and return token
-fn next_tok(parser: &mut PaserState) -> TokenType {
+fn next_tok(parser: &mut ParserState) -> TokenType {
     parser.at += 1;
     cur_tok(parser)
 }
@@ -105,7 +105,7 @@ macro_rules! eat_semicolon {
 
 // Expressions
 // Call
-fn parse_call(parser: &mut PaserState) -> ASTNode {
+fn parse_call(parser: &mut ParserState) -> ASTNode {
     // A function can't return a function so no need for a loop
     if let Identifier(_) = cur_tok(parser) {} else {
         // Can't call anything but identifiers
@@ -144,7 +144,7 @@ fn parse_call(parser: &mut PaserState) -> ASTNode {
     return ret;
 }
 // Index
-fn parse_index(parser: &mut PaserState) -> ASTNode {
+fn parse_index(parser: &mut ParserState) -> ASTNode {
     // Get expr
     let mut ret = parse_call(parser);
     if let ASTNode::None = ret {
@@ -163,7 +163,7 @@ fn parse_index(parser: &mut PaserState) -> ASTNode {
     return ret;
 }
 // Unary
-fn parse_unary(parser: &mut PaserState) -> ASTNode {
+fn parse_unary(parser: &mut ParserState) -> ASTNode {
     if vec![Minus, Not, PlusPlus, MinusMinus].contains(&cur_tok(parser)) {
         let op = cur_tok(parser);
         next_tok(parser);
@@ -174,9 +174,9 @@ fn parse_unary(parser: &mut PaserState) -> ASTNode {
 // Binops
 // Helper for binops so I don't write the same code more than once
 fn parse_binop_helper(
-    parser: &mut PaserState,
+    parser: &mut ParserState,
     tokens: Vec<TokenType>,
-    callback: &dyn Fn(&mut PaserState) -> ASTNode,
+    callback: &dyn Fn(&mut ParserState) -> ASTNode,
     can_repeat: bool
 ) -> ASTNode {
     // Lower precedence op
@@ -204,25 +204,25 @@ fn parse_binop_helper(
     }
     return expr;
 }
-fn parse_binop_math(parser: &mut PaserState) -> ASTNode {
+fn parse_binop_math(parser: &mut ParserState) -> ASTNode {
     // Math binops, +, -, *, /, %
     parse_binop_helper(parser, vec![
         Plus, Minus, Times, Div, Modulo
     ], &parse_unary, true)
 }
-fn parse_binop_cmp(parser: &mut PaserState) -> ASTNode {
+fn parse_binop_cmp(parser: &mut ParserState) -> ASTNode {
     // Compare binops, ==, !=, <, >, <=, >=
     parse_binop_helper(parser, vec![
         EqualsEquals, NotEquals, Lt, Gt, LtEquals, GtEquals
     ], &parse_binop_math, true)
 }
-fn parse_binop_logic(parser: &mut PaserState) -> ASTNode {
+fn parse_binop_logic(parser: &mut ParserState) -> ASTNode {
     // Logic binops, &&, ||, ^^
     parse_binop_helper(parser, vec![
         And, Or, Xor
     ], &parse_binop_cmp, true)
 }
-fn parse_binop_set(parser: &mut PaserState) -> ASTNode {
+fn parse_binop_set(parser: &mut ParserState) -> ASTNode {
     // Setter binops, =, +=, -=, *=, /=
     // Left must be identifier
     if let Identifier(_) = cur_tok(parser) {
@@ -234,7 +234,7 @@ fn parse_binop_set(parser: &mut PaserState) -> ASTNode {
     }
 }
 // Lists
-fn parse_list_item(parser: &mut PaserState, at: i32) -> (String, ASTNode) {
+fn parse_list_item(parser: &mut ParserState, at: i32) -> (String, ASTNode) {
     // Parses a single item in a list
     let mut name: String;
     // Get the key name
@@ -260,7 +260,7 @@ fn parse_list_item(parser: &mut PaserState, at: i32) -> (String, ASTNode) {
     let val: ASTNode = parse_binop_logic(parser);
     return (name, val);
 }
-fn parse_list(parser: &mut PaserState) -> ASTNode {
+fn parse_list(parser: &mut ParserState) -> ASTNode {
     // Parses a list
     if !eat!(parser, Lbracket, "expecting [") {
         return ASTNode::None;
@@ -304,7 +304,7 @@ fn parse_list(parser: &mut PaserState) -> ASTNode {
 }
 
 // Normal expressions
-fn parse_expr(parser: &mut PaserState) -> ASTNode {
+fn parse_expr(parser: &mut ParserState) -> ASTNode {
     return match cur_tok(parser) {
         // Inbuilt type
         Identifier(v) => { next_tok(parser); ASTNode::VarExpr(v)     },
@@ -352,7 +352,7 @@ fn parse_expr(parser: &mut PaserState) -> ASTNode {
 }
 
 // Statements
-fn parse_statement(parser: &mut PaserState) -> ASTNode {
+fn parse_statement(parser: &mut ParserState) -> ASTNode {
     return match cur_tok(parser) {
         // Bodies
         Lbrace => parse_body(parser),
@@ -408,7 +408,7 @@ fn parse_statement(parser: &mut PaserState) -> ASTNode {
 }
 
 // Bodies
-fn parse_body(parser: &mut PaserState) -> ASTNode {
+fn parse_body(parser: &mut ParserState) -> ASTNode {
     // Start
     if !eat!(parser, Lbrace, "expected { to start body") {
         return ASTNode::None;
@@ -432,7 +432,7 @@ fn parse_body(parser: &mut PaserState) -> ASTNode {
 }
 
 // If/else if/else
-fn parse_if(parser: &mut PaserState) -> ASTNode {
+fn parse_if(parser: &mut ParserState) -> ASTNode {
     // Eat if
     next_tok(parser);
     // Condition
@@ -461,7 +461,7 @@ fn parse_if(parser: &mut PaserState) -> ASTNode {
 }
 
 // Loops
-fn parse_loop_iter(parser: &mut PaserState) -> ASTNode {
+fn parse_loop_iter(parser: &mut ParserState) -> ASTNode {
     // Name
     let name: String;
     if let Identifier(n) = cur_tok(parser) {
@@ -493,7 +493,7 @@ fn parse_loop_iter(parser: &mut PaserState) -> ASTNode {
     return ASTNode::LoopStmt(name, Box::new(iter), Box::new(body));
 }
 
-fn parse_loop_while(parser: &mut PaserState) -> ASTNode {
+fn parse_loop_while(parser: &mut ParserState) -> ASTNode {
     // Eat 'while'
     if !eat!(parser, While, IMPOSSIBLE_STATE) {
         return ASTNode::None;
@@ -516,7 +516,7 @@ fn parse_loop_while(parser: &mut PaserState) -> ASTNode {
     return ASTNode::WhileStmt(Box::new(cond), Box::new(body));
 }
 
-fn parse_loop(parser: &mut PaserState) -> ASTNode {
+fn parse_loop(parser: &mut ParserState) -> ASTNode {
     // Eat loop
     next_tok(parser);
     // Start parens
@@ -532,7 +532,7 @@ fn parse_loop(parser: &mut PaserState) -> ASTNode {
 }
 
 // Imports
-fn parse_import(parser: &mut PaserState) -> ASTNode {
+fn parse_import(parser: &mut ParserState) -> ASTNode {
     // Eat import
     next_tok(parser);
     // The parens part 1
@@ -557,7 +557,7 @@ fn parse_import(parser: &mut PaserState) -> ASTNode {
 }
 
 // Varible definition
-fn parse_let(parser: &mut PaserState) -> ASTNode {
+fn parse_let(parser: &mut ParserState) -> ASTNode {
     // Eat let
     next_tok(parser);
     // Get var nane
@@ -602,7 +602,7 @@ fn parse_let(parser: &mut PaserState) -> ASTNode {
 }
 
 // Returning
-fn parse_return(parser: &mut PaserState) -> ASTNode {
+fn parse_return(parser: &mut ParserState) -> ASTNode {
     // Function check
     if !parser.in_func {
         error!(parser, "return outside of functions");
@@ -640,7 +640,7 @@ fn parse_return(parser: &mut PaserState) -> ASTNode {
 }
 
 // Functions
-fn parse_functi(parser: &mut PaserState) -> ASTNode {
+fn parse_functi(parser: &mut ParserState) -> ASTNode {
     // Disallow functions in functions
     if parser.in_func {
         next_tok(parser);
@@ -709,7 +709,7 @@ fn parse_functi(parser: &mut PaserState) -> ASTNode {
 // Main parsing
 pub fn parse(tokens: Vec<Token>, extentions: Vec<String>) -> Vec<ASTNode> {
     // Set up
-    let mut parser = PaserState{
+    let mut parser = ParserState{
         tokens, extentions, at: 0,
         has_err: false, in_func: false
     };

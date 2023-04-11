@@ -19,7 +19,6 @@ pub const IMPOSSIBLE_STATE: &str =
     the limits were in our heads all along, follow your dreams";
 
 // Errors
-#[allow(dead_code)]
 pub enum ErrType{Err, Warn, Hint}
 pub fn err(stream: &Stream, msg: &str, size: u8, errtype: ErrType) {
     // Print file name and line/char info ("test.sk:1:3: ")

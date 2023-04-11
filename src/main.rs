@@ -1,17 +1,20 @@
+#![allow(dead_code, unused_imports, unreachable_code)]
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::process::exit;
 
 mod common;
-mod interpreter;
 mod lexer;
 mod parser;
 mod value;
+mod compiler;
+mod vm;
 
 use crate::lexer::lex;
 use crate::parser::parse;
-use crate::interpreter::{run, Interpreter};
+use crate::compiler::compile;
+use crate::vm::{run, Vm};
 
 #[macro_use] extern crate impl_ops;
 use rustyline::error::ReadlineError;
@@ -31,7 +34,7 @@ fn repl(extentions: Vec<String>) {
     if hist_file != "" && rl.load_history(&hist_file).is_err() {
         println!("Failed to open history file, make `~/.burlap_history` if you want histroy to save.");
     };
-    let mut interpreter = Interpreter::new(true, PathBuf::from("."), extentions.clone());
+    let mut vm = Vm::new(true, PathBuf::from("."), extentions.clone());
     loop {
         // Get input
         let readline = rl.readline(">> ");
@@ -47,7 +50,9 @@ fn repl(extentions: Vec<String>) {
                 if ast.is_empty() {
                     continue;
                 }
-                run(&mut interpreter, ast);
+                println!("Ast: {:?}", ast);
+                let Some((ops, consts)) = compile(ast) else { todo!() };
+                run(&mut vm, ops, consts);
             },
             // Exit on EOF
             Err(ReadlineError::Eof) => {
@@ -91,7 +96,7 @@ fn get_args() -> (String, Vec<String>) {
     return (file, extentions);
 }
 
-fn import_file(interpreter: &mut Interpreter, path: &mut PathBuf) -> bool {
+fn import_file(vm: &mut Vm, path: &mut PathBuf) -> bool {
     // Open file
     let file_name = path.to_str().unwrap().to_string();
     let file = fs::read_to_string(path.clone());
@@ -99,24 +104,22 @@ fn import_file(interpreter: &mut Interpreter, path: &mut PathBuf) -> bool {
          return false;
     }
     let contents = file.unwrap();
-    // Set interpreter import path
+    // Set vm import path
     path.pop();
-    let cur_path = interpreter.import_path.clone();
-    interpreter.import_path = path.to_path_buf();
+    let cur_path = vm.import_path.clone();
+    vm.import_path = path.to_path_buf();
     // Run
-    let tokens = lex(&contents, file_name, &interpreter.extentions);
+    let tokens = lex(&contents, file_name, &vm.extentions);
     if tokens.is_empty() {
         return false;
     }
-    let ast = parse(tokens, interpreter.extentions.clone());
+    let ast = parse(tokens, vm.extentions.clone());
     if ast.is_empty() {
         return false;
     }
-    if !run(interpreter, ast) {
-        return false;
-    }
+    //if !run(vm, ast) {
     // Reset import path
-    interpreter.import_path = cur_path;
+    vm.import_path = cur_path;
     return true;
 }
 
@@ -129,10 +132,9 @@ fn main() {
     }
     // Run the file
     let mut path = PathBuf::from(file_name.clone());
-    let mut import_path = path.clone();
-    import_path.pop();
-    let mut interpreter = Interpreter::new(false, import_path, extentions);
-    if !import_file(&mut interpreter, &mut path) {
+    // The path passed to the vm doesn't matter, import_file will fill it
+    let mut vm = Vm::new(false, path.clone(), extentions);
+    if !import_file(&mut vm, &mut path) {
         exit(1);
     }
 }
