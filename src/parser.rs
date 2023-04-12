@@ -30,13 +30,14 @@ pub enum ASTNode {
     BinopExpr(Box<ASTNode>, TokenType, Box<ASTNode>),
     // List (keys["1", "e"], values[node, node])
     ListExpr(Vec<String>, Vec<ASTNode>),
+
     // Statements
     // Body, ([Call(Var(print), [String("Hello Worls")])])
     BodyStmt(Vec<ASTNode>),
     // Function, (foobar, [a, b, c], Body(...))
     FunctiStmt(String, Vec<String>, Box<ASTNode>),
     // If/else if, (Binop(x == 1), Body(trueBody), Body(falseBody or none))
-    IfStmt(Box<ASTNode>, Box<ASTNode>, Box<ASTNode>),
+    IfStmt(Box<ASTNode>, Box<ASTNode>, Option<Box<ASTNode>>),
     // Let, (a, 42)
     LetStmt(String, Box<ASTNode>),
     // Return, ("Return Val")
@@ -143,6 +144,7 @@ fn parse_call(parser: &mut ParserState) -> ASTNode {
     }
     return ret;
 }
+
 // Index
 fn parse_index(parser: &mut ParserState) -> ASTNode {
     // Get expr
@@ -162,15 +164,27 @@ fn parse_index(parser: &mut ParserState) -> ASTNode {
     }
     return ret;
 }
+
 // Unary
 fn parse_unary(parser: &mut ParserState) -> ASTNode {
-    if vec![Minus, Not, PlusPlus, MinusMinus].contains(&cur_tok(parser)) {
+    if vec![Minus, Not].contains(&cur_tok(parser)) {
         let op = cur_tok(parser);
         next_tok(parser);
         return ASTNode::UnaryExpr(op, Box::new(parse_unary(parser)));
     }
+    if vec![PlusPlus, MinusMinus].contains(&cur_tok(parser)) {
+        let op = cur_tok(parser);
+        if let Identifier(v) = next_tok(parser) {
+            next_tok(parser);
+            return ASTNode::UnaryExpr(op, Box::new(ASTNode::VarExpr(v)));
+        } else {
+            error!(parser, "++/-- require identifiers", ErrType::Err);
+            return ASTNode::None;
+        }
+    }
     return parse_index(parser);
 }
+
 // Binops
 // Helper for binops so I don't write the same code more than once
 fn parse_binop_helper(
@@ -204,6 +218,7 @@ fn parse_binop_helper(
     }
     return expr;
 }
+
 fn parse_binop_math(parser: &mut ParserState) -> ASTNode {
     // Math binops, +, -, *, /, %
     parse_binop_helper(parser, vec![
@@ -233,6 +248,7 @@ fn parse_binop_set(parser: &mut ParserState) -> ASTNode {
         parse_binop_logic(parser)
     }
 }
+
 // Lists
 fn parse_list_item(parser: &mut ParserState, at: i32) -> (String, ASTNode) {
     // Parses a single item in a list
@@ -453,11 +469,20 @@ fn parse_if(parser: &mut ParserState) -> ASTNode {
             _ => parse_body(parser)
         };
     }
+    // Invalid else
     if let ASTNode::None = else_stmt {
         return ASTNode::None;
     }
+    // No else
+    if let ASTNode::BodyStmt(ref nodes) = else_stmt {
+        if nodes.len() == 0 {
+            return ASTNode::IfStmt(Box::new(cond), Box::new(body), Option::None);
+        }
+    }
     // Return
-    return ASTNode::IfStmt(Box::new(cond), Box::new(body), Box::new(else_stmt));
+    return ASTNode::IfStmt(
+        Box::new(cond), Box::new(body), Some(Box::new(else_stmt))
+    );
 }
 
 // Loops

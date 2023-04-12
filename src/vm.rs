@@ -27,6 +27,8 @@ pub enum Opcode {
     PUSH,
     // PUSH value ([const u24 index] -> value)
     PUSH3,
+    // DUPlicate head (value -> value, value)
+    DUP,
     // Push Variable ("name" -> value)
     PV,
     // Declare Variable ("name", value)
@@ -45,24 +47,27 @@ pub enum Opcode {
     // MODulo (value, value -> value)
     MOD,
     // Boolean instructions
-    // AND
+    // AND (value, value -> value)
     AND,
-    // OR
+    // OR (value, value -> value)
     OR,
-    // XOR
+    // XOR (value, value -> value)
     XOR,
-    // NOT
+    // NOT (value, value -> value)
     NOT,
     // Comparison
-    // EQuals
+    // EQuals (value, value -> value)
     EQ,
-    // Greator Than
+    // Greator Than (value, value -> value)
     GT,
-    // Less Than
+    // Less Than (value, value -> value)
     LT,
-    // Misc
-    // CALL a function (CALL "print")
-    CALL
+
+    // Statments
+    // JuMP Unconditionally ([u8])
+    JMPU,
+    // JuMP NoT ([u8], value)
+    JMPNT,
 }
 
 // VM state
@@ -310,6 +315,9 @@ impl Vm {
     pub fn cur_op(&mut self) -> u8 {
         self.ops[self.at]
     }
+    pub fn cur_opcode(&mut self) -> Opcode {
+        return unsafe {std::mem::transmute(self.ops[self.at])};
+    }
     pub fn next_op(&mut self) -> u8 {
         self.at += 1;
         if self.at > self.ops.len() {
@@ -337,6 +345,21 @@ impl Vm {
             ret += self.next_op() as i32;
         }
         return ret;
+    }
+
+    pub fn jump(&mut self, offset: i32) {
+        if offset < 0 && -offset as usize > self.at{
+            panic!("Negative jump out of bounds!");
+        } else if offset < 0 {
+            // Backward jump
+            self.at -= -offset as usize;
+        } else {
+            // Forward jump
+            self.at += offset as usize;
+            if self.at >= self.ops.len() {
+                panic!("Positive jump out of bounds!");
+            }
+        }
     }
 }
 
@@ -429,7 +452,7 @@ fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Value {
 // Eval (for expressions)
 fn eval(vm: &mut Vm) -> Result<Value, String> {
     // Unsafe because casting an int to enum might not be valid
-    match unsafe {std::mem::transmute(vm.cur_op())} {
+    match vm.cur_opcode() {
         // Push
         Opcode::PUSH => {
             let index = vm.read(1);
@@ -439,60 +462,64 @@ fn eval(vm: &mut Vm) -> Result<Value, String> {
             let index = vm.read(3);
             vm.push(vm.consts[index as usize].clone());
         },
+        Opcode::DUP => {
+            let val = vm.stack.last();
+            vm.push(val.expect("Overpopped stack!").clone());
+        },
         Opcode::ADD => {
-            let lhs = vm.pop();
             let rhs = vm.pop();
+            let lhs = vm.pop();
             vm.push(lhs + rhs);
         },
         // Binops
         Opcode::SUB => {
-            let lhs = vm.pop();
             let rhs = vm.pop();
+            let lhs = vm.pop();
             vm.push(lhs - rhs);
         },
         Opcode::MUL => {
-            let lhs = vm.pop();
             let rhs = vm.pop();
+            let lhs = vm.pop();
             vm.push(lhs * rhs);
         },
         Opcode::DIV => {
-            let lhs = vm.pop();
             let rhs = vm.pop();
+            let lhs = vm.pop();
             vm.push(lhs / rhs);
         },
         Opcode::MOD => {
-            let lhs = vm.pop();
             let rhs = vm.pop();
+            let lhs = vm.pop();
             vm.push(lhs % rhs);
         },
         Opcode::EQ => {
-            let lhs = vm.pop();
             let rhs = vm.pop();
+            let lhs = vm.pop();
             vm.push(Value::Bool(lhs == rhs));
         },
         Opcode::LT => {
-            let lhs = vm.pop();
             let rhs = vm.pop();
+            let lhs = vm.pop();
             vm.push(Value::Bool(lhs.to_float() < rhs.to_float()));
         },
         Opcode::GT => {
-            let lhs = vm.pop();
             let rhs = vm.pop();
+            let lhs = vm.pop();
             vm.push(Value::Bool(lhs.to_float() > rhs.to_float()));
         },
         Opcode::AND => {
-            let lhs = vm.pop();
             let rhs = vm.pop();
+            let lhs = vm.pop();
             vm.push(Value::Bool(lhs.is_truthy() && rhs.is_truthy()));
         },
         Opcode::OR => {
-            let lhs = vm.pop();
             let rhs = vm.pop();
+            let lhs = vm.pop();
             vm.push(Value::Bool(lhs.is_truthy() || rhs.is_truthy()));
         },
         Opcode::XOR => {
-            let lhs = vm.pop();
             let rhs = vm.pop();
+            let lhs = vm.pop();
             vm.push(Value::Bool(lhs.is_truthy() != rhs.is_truthy()));
         },
         Opcode::NOT => {
@@ -531,7 +558,19 @@ fn eval(vm: &mut Vm) -> Result<Value, String> {
             let val = vm.pop();
             vm.make_var(&varname, val, vm.is_global, true);
         },
-        Opcode::CALL => todo!()
+        // Jumps
+        Opcode::JMPU => {
+            let offset = vm.read(1);
+            vm.jump(offset);
+        },
+        Opcode::JMPNT => {
+            let offset = vm.read(1);
+            let cond = vm.pop();
+            // Check if it should jump
+            if !cond.is_truthy() {
+                vm.jump(offset);
+            }
+        },
     };
     return Ok(Value::None);
 }
@@ -651,9 +690,9 @@ fn exec(vm: &mut Vm) -> Result<Value, String> {
             }
         },*/
     let val = eval(vm)?;
-    if vm.is_repl && val != Value::Null && val != Value::None {
+    /*if vm.is_repl && val != Value::Null && val != Value::None {
         println!("{}", val.to_string());
-    }
+    }*/
     Ok(Value::None)
 }
 
@@ -663,14 +702,21 @@ pub fn run(vm: &mut Vm, ops: Vec<u8>, consts: Vec<Value>) -> bool {
     vm.consts = consts;
     vm.stack = Vec::new();
     loop {
+        // Print debugging info
+        let opcode = vm.cur_opcode();
+        let op = vm.cur_op();
+        println!("{}: {:?}({}) {:?}", vm.at, opcode, op, vm.stack);
+        // Run
         if let Err(s) = exec(vm) {
             println!("{}", s);
             return false;
         }
-        println!("{:?}", vm.stack);
+        // Move forward
         if vm.at + 1 != vm.ops.len() {
             vm.next_op();
         } else {
+            // At the end
+            println!("FINAL: {:?}", vm.stack);
             break;
         }
     }

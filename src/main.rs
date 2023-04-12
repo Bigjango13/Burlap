@@ -117,7 +117,9 @@ fn import_file(vm: &mut Vm, path: &mut PathBuf) -> bool {
     if ast.is_empty() {
         return false;
     }
-    //if !run(vm, ast) {
+    println!("Ast: {:?}", ast);
+    let Some((ops, consts)) = compile(ast) else { todo!() };
+    run(vm, ops, consts);
     // Reset import path
     vm.import_path = cur_path;
     return true;
