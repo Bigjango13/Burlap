@@ -22,20 +22,32 @@ pub struct Functies {
 #[repr(u8)]
 #[derive(Copy, Clone, Debug)]
 pub enum Opcode {
-    // Register instructions
+    // The almightly NOP
+    NOP,
+
+    // Stack
     // PUSH value ([const u8 index] -> value)
     PUSH,
     // PUSH value ([const u24 index] -> value)
     PUSH3,
     // DUPlicate head (value -> value, value)
     DUP,
+
+    // Variable
     // Push Variable ("name" -> value)
     PV,
     // Declare Variable ("name", value)
     DV,
     // Set Variable ("name", value)
     SV,
-    // Math instructions
+
+    // Scope
+    // Raise Scope
+    RS,
+    // Lower Scope
+    LS,
+
+    // Math
     // ADD (value, value -> value)
     ADD,
     // SUBtract (value, value -> value)
@@ -46,7 +58,8 @@ pub enum Opcode {
     DIV,
     // MODulo (value, value -> value)
     MOD,
-    // Boolean instructions
+
+    // Boolean
     // AND (value, value -> value)
     AND,
     // OR (value, value -> value)
@@ -55,6 +68,7 @@ pub enum Opcode {
     XOR,
     // NOT (value, value -> value)
     NOT,
+
     // Comparison
     // EQuals (value, value -> value)
     EQ,
@@ -63,11 +77,19 @@ pub enum Opcode {
     // Less Than (value, value -> value)
     LT,
 
-    // Statments
+    // Jumps
     // JuMP Unconditionally ([u8])
     JMPU,
-    // JuMP NoT ([u8], value)
+    // JuMP Backward, unconditionally ([u8])
+    JMPB,
+    // JuMP if NoT ([u8], offset)
     JMPNT,
+
+    // Calls
+    // CALL function ([u8], name, args...)
+    CALL,
+    // RETurn (ret)
+    RET,
 }
 
 // VM state
@@ -99,6 +121,7 @@ pub struct Vm {
     stack: Vec<Value>,
     // Ops and constants
     ops: Vec<u8>,
+    pub jump: bool,
     at: usize,
     consts: Vec<Value>,
 }
@@ -127,7 +150,7 @@ impl Vm {
             functions: HashMap::new(), functies,
             var_names: Vec::new(), var_vals: Vec::new(),
             var_min: 0, extentions, import_path, stack: Vec::new(),
-            ops: Vec::new(), at: 0, consts: Vec::new(),
+            ops: Vec::new(), jump: false, at: 0, consts: Vec::new(),
         }
     }
     // Getting vars
@@ -207,7 +230,7 @@ impl Vm {
         return true;
     }
     pub fn set_var(&mut self, name: &String, val: Value, global: bool) -> bool {
-        // Sets a varible, returns true if it was successful
+        // Sets a variable, returns true if it was successful
         return if global {
             self.set_global(name, val)
         } else {
@@ -215,7 +238,7 @@ impl Vm {
         };
     }
     pub fn change_var(&mut self, name: &String, val: Value) -> bool {
-        // Changes a varible to a diffrent value
+        // Changes a variable to a diffrent value
         if !self.set_local(name, val.clone()) {
             return self.set_global(name, val)
         }
@@ -259,7 +282,7 @@ impl Vm {
     }
     // Call a function
     pub fn call(&mut self, name: &String, args: &Vec<Value>) -> Value {
-        // Builtin functions
+        /*/ Builtin functions
         match (&self).functies.builtin.get(name) {
             Some(functie) => { return functie(self, args.clone()); },
             _ => ()
@@ -308,7 +331,7 @@ impl Vm {
         // Raise scope
         self.in_func = old_func;
         self.raise_scope(scope_data);
-        // TODO
+        // TODO*/
         return Value::None;
     }
 
@@ -360,6 +383,7 @@ impl Vm {
                 panic!("Positive jump out of bounds!");
             }
         }
+        self.jump = true;
     }
 }
 
@@ -449,10 +473,12 @@ fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Value {
     return Value::Str(args[0].to_string());
 }
 
-// Eval (for expressions)
-fn eval(vm: &mut Vm) -> Result<Value, String> {
+// The big switch, runs every instruction
+fn exec_next(vm: &mut Vm) -> Result<Value, String> {
     // Unsafe because casting an int to enum might not be valid
     match vm.cur_opcode() {
+        Opcode::NOP => {},
+
         // Push
         Opcode::PUSH => {
             let index = vm.read(1);
@@ -466,12 +492,13 @@ fn eval(vm: &mut Vm) -> Result<Value, String> {
             let val = vm.stack.last();
             vm.push(val.expect("Overpopped stack!").clone());
         },
+
+        // Binops
         Opcode::ADD => {
             let rhs = vm.pop();
             let lhs = vm.pop();
             vm.push(lhs + rhs);
         },
-        // Binops
         Opcode::SUB => {
             let rhs = vm.pop();
             let lhs = vm.pop();
@@ -526,6 +553,7 @@ fn eval(vm: &mut Vm) -> Result<Value, String> {
             let v = vm.pop();
             vm.push(Value::Bool(!v.is_truthy()));
         },
+
         // Variables
         Opcode::PV => {
             // Get varname
@@ -558,10 +586,23 @@ fn eval(vm: &mut Vm) -> Result<Value, String> {
             let val = vm.pop();
             vm.make_var(&varname, val, vm.is_global, true);
         },
+
+        // Scope
+        Opcode::LS => {
+            //vm.scope = vm.lower_scope(false);
+        }
+        Opcode::RS => {
+            //vm.raise_scope(vm.scope);
+        }
+
         // Jumps
         Opcode::JMPU => {
             let offset = vm.read(1);
             vm.jump(offset);
+        },
+        Opcode::JMPB => {
+            let offset = vm.read(1);
+            vm.jump(-offset);
         },
         Opcode::JMPNT => {
             let offset = vm.read(1);
@@ -571,129 +612,26 @@ fn eval(vm: &mut Vm) -> Result<Value, String> {
                 vm.jump(offset);
             }
         },
+
+        // Functions
+        Opcode::CALL => {
+            // Get args
+            let mut arg_num = vm.read(1);
+            let Value::Str(name) = vm.pop() else {
+                panic!("Non-string function name");
+            };
+            let mut args = Vec::<Value>::with_capacity(arg_num as usize);
+            while arg_num != 0 {
+                args.push(vm.pop());
+                arg_num -= 1;
+            }
+            // Call
+            vm.call(&name, &args);
+        },
+
+        Opcode::RET => {},
     };
     return Ok(Value::None);
-}
-
-fn exec(vm: &mut Vm) -> Result<Value, String> {
-    /*return match node {
-        BodyStmt(body) => {
-            // Lower scope
-            let scope_data = vm.lower_scope(false);
-            // Run each statement
-            let mut ret: Value;
-            for i in body {
-                ret = exec(vm, i);
-                if let Value::Error(_) = ret {
-                    return ret;
-                }
-                if ret != Value::Null {
-                    // Raise scope
-                    vm.raise_scope(scope_data);
-                    return ret;
-                }
-            }
-            // Raise scope
-            vm.raise_scope(scope_data);
-            Value::Null
-        },
-        ReturnStmt(ret) => {
-            // Return
-            eval(vm, &**ret)
-        },
-        IfStmt(cond, body, elsestmt) => {
-            // Execute either body or else body
-            let condition = eval(vm, &**cond);
-            if let Value::Error(_) = condition {
-                return condition;
-            }
-            if condition.is_truthy() {
-                exec(vm, &**body)
-            } else {
-                // If there isn't a else cond, this will run an empty body
-                exec(vm, &**elsestmt)
-            }
-        },
-        // Declaring vars
-        LetStmt(name, val) => {
-            let val = eval(vm, &**val);
-            if let Value::Error(_) = val {
-                return val;
-            }
-            if vm.make_var(name, val, vm.is_global, false) {
-                Value::Null
-            } else {
-                Value::Error(format!("cannot redefine variable \"{}\"", name))
-            }
-        },
-        // Declaring functions
-        FunctiStmt(name, _args, _body) => {
-            vm.functions.insert(name.clone(), node.clone());
-            Value::Null
-        },
-        // Loops
-        LoopStmt(var, iter, body) => {
-            // Make the var if it doesn't exist
-            if let Value::Error(_) = vm.get_var(var) {
-                vm.make_var(var, Value::Int(0), vm.is_global, false);
-            }
-            // Check iter
-            let (mut min, max): (i32, i32);
-            if let CallExpr(name, args) = &**iter {
-                // Check name
-                if name != "range" {
-                    return Value::Error(
-                        "only range is currently supported for iterative loops"
-                    .to_string());
-                }
-                // Check args
-                if args.len() != 2 {
-                    return vm.bad_args(&name, args.len(), 2);
-                }
-                // Get args
-                min = eval(vm, &args[0]).to_int();
-                max = eval(vm, &args[1]).to_int();
-            } else {
-                return Value::Error(
-                    "only range is currently supported for iterative loops".to_string()
-                );
-            }
-            // Do the loop
-            while min <= max {
-                vm.set_var(var, Value::Int(min), vm.is_global);
-                exec(vm, &*body.clone());
-                min += 1;
-            }
-            Value::Null
-        },
-        // While loop
-        WhileStmt(cond, body) => {
-            // It's really easy, just check cond and loop
-            while eval(vm, &**cond).is_truthy() {
-                exec(vm, &*body.clone());
-            }
-            Value::Null
-        },
-        // Import
-        ImportStmt(name) => {
-            // Get file name
-            let fname = eval(vm, &**name);
-            let name = fname.to_string();
-            // Get the file path
-            let mut path = vm.import_path.clone();
-            path.push(name.clone());
-            // Import
-            if import_file(vm, &mut path) {
-                Value::Null
-            } else {
-                Value::Error(format!("failed to import {}", name))
-            }
-        },*/
-    let val = eval(vm)?;
-    /*if vm.is_repl && val != Value::Null && val != Value::None {
-        println!("{}", val.to_string());
-    }*/
-    Ok(Value::None)
 }
 
 pub fn run(vm: &mut Vm, ops: Vec<u8>, consts: Vec<Value>) -> bool {
@@ -707,11 +645,16 @@ pub fn run(vm: &mut Vm, ops: Vec<u8>, consts: Vec<Value>) -> bool {
         let op = vm.cur_op();
         println!("{}: {:?}({}) {:?}", vm.at, opcode, op, vm.stack);
         // Run
-        if let Err(s) = exec(vm) {
+        if let Err(s) = exec_next(vm) {
             println!("{}", s);
             return false;
         }
+
         // Move forward
+        if vm.jump {
+            vm.jump = false;
+            continue;
+        }
         if vm.at + 1 != vm.ops.len() {
             vm.next_op();
         } else {

@@ -4,13 +4,10 @@ use TokenType::*;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ASTNode {
-    // None is the result of a parser error
-    // not to be confused with NoneExpr, which is the none type
-    None,
     // Expressions
     // String, ("Example")
     StringExpr(String),
-    // Number, (42)
+    // Number, (47)
     NumberExpr(i32),
     // Float, (3.14)
     DecimalExpr(f32),
@@ -37,37 +34,43 @@ pub enum ASTNode {
     // Function, (foobar, [a, b, c], Body(...))
     FunctiStmt(String, Vec<String>, Box<ASTNode>),
     // If/else if, (Binop(x == 1), Body(trueBody), Body(falseBody or none))
-    IfStmt(Box<ASTNode>, Box<ASTNode>, Option<Box<ASTNode>>),
-    // Let, (a, 42)
+    IfStmt(Box<ASTNode>, Box<ASTNode>, Box<ASTNode>),
+    // Let, (x, 47)
     LetStmt(String, Box<ASTNode>),
     // Return, ("Return Val")
     ReturnStmt(Box<ASTNode>),
-    // Iter loop, (i, range(5, 6), Body(...))
+    // Iter loop, (i, range(0, 100), Body(...))
     LoopStmt(String, Box<ASTNode>, Box<ASTNode>),
     // While loop, (6 > i, Body(...))
     WhileStmt(Box<ASTNode>, Box<ASTNode>),
     // Import, ("math")
-    ImportStmt(Box<ASTNode>)
+    ImportStmt(Box<ASTNode>),
+    // Nop
+    Nop
 }
 
 // Parser state
-struct ParserState {
+struct Parser {
     tokens: Vec<Token>,
     extentions: Vec<String>,
     at: usize,
     has_err: bool,
     in_func: bool,
 }
-// Token helpers
-// Current token
-fn cur_tok(parser: &ParserState) -> TokenType {
-    parser.tokens[parser.at].token.clone()
+
+impl Parser {
+    // Current token
+    fn current(&self) -> TokenType {
+        self.tokens[self.at].token.clone()
+    }
+
+    // Advance and return token
+    fn next(&mut self) -> TokenType {
+        self.at += 1;
+        self.current()
+    }
 }
-// Advance and return token
-fn next_tok(parser: &mut ParserState) -> TokenType {
-    parser.at += 1;
-    cur_tok(parser)
-}
+
 // Error macro
 macro_rules! error {
     ($parser:expr, $msg:expr) => (
@@ -77,7 +80,7 @@ macro_rules! error {
             get_len(&$parser.tokens[$parser.at].token), ErrType::Err
         );
     );
-    // DO NOT USE WITH ErrType::Err!!!
+    // DO NOT USE WITH ErrType::Err
     ($parser:expr, $msg:expr, $err_type:expr) => (
         err(
             &$parser.tokens[$parser.at].stream, $msg,
@@ -85,15 +88,15 @@ macro_rules! error {
         );
     )
 }
-// Gobble up the yummy token and spit out an error if it tastes bad
+// Eat the token or error
 macro_rules! eat {
     ($parser:expr, $tok:pat, $msg:expr) => (
-        if let $tok = cur_tok(&$parser) {
-            next_tok($parser);
-            true
+        if let $tok = $parser.current() {
+            $parser.next();
+            Some(())
          } else {
             error!($parser, $msg);
-            false
+            Option::None
          }
     );
 }
@@ -106,80 +109,70 @@ macro_rules! eat_semicolon {
 
 // Expressions
 // Call
-fn parse_call(parser: &mut ParserState) -> ASTNode {
+fn parse_call(parser: &mut Parser) -> Option<ASTNode> {
     // A function can't return a function so no need for a loop
-    if let Identifier(_) = cur_tok(parser) {} else {
+    if let Identifier(_) = parser.current() {} else {
         // Can't call anything but identifiers
-        return parse_expr(parser);
+        return parse_base_expr(parser);
     }
     // Eat
-    let mut ret = parse_expr(parser);
-    if let ASTNode::None = ret {
-        return ASTNode::None;
-    }
+    let mut ret = parse_base_expr(parser)?;
     let name: String;
     if let ASTNode::VarExpr(n) = &ret {
         name = n.clone();
     } else {
-        return ret;
+        return Some(ret);
     }
     // Parse call
     let mut args: Vec<ASTNode> = vec![];
-    if let Lparan = cur_tok(parser) {
-        next_tok(parser);
+    if let Lparan = parser.current() {
+        parser.next();
         loop {
-            if let Rparan = cur_tok(parser) {
+            if let Rparan = parser.current() {
                 break;
             }
-            args.push(parse_binop_logic(parser));
-            if let Rparan = cur_tok(parser) {
+            args.push(parse_expr(parser)?);
+            if let Rparan = parser.current() {
                 break;
             }
-            if !eat!(parser, Comma, "expected ')' or ',' in argument list") {
-                return ASTNode::None;
-            }
+            eat!(parser, Comma, "expected ')' or ',' in argument list")?;
         }
-        next_tok(parser);
+        parser.next();
         ret = ASTNode::CallExpr(name, args);
     }
-    return ret;
+    return Some(ret);
 }
 
 // Index
-fn parse_index(parser: &mut ParserState) -> ASTNode {
+fn parse_index(parser: &mut Parser) -> Option<ASTNode> {
     // Get expr
-    let mut ret = parse_call(parser);
-    if let ASTNode::None = ret {
-        return ASTNode::None;
-    }
+    let mut ret = parse_call(parser)?;
     // Parse index
-    while let Lbracket = cur_tok(parser) {
-        next_tok(parser);
-        let index = parse_binop_logic(parser);
-        ret = ASTNode::IndexExpr(Box::new(ret), Box::new(index));
+    while let Lbracket = parser.current() {
+        parser.next();
+        let index = parse_expr(parser);
+        ret = ASTNode::IndexExpr(Box::new(ret), Box::new(index?));
         // Eat ']'
-        if !eat!(parser, Rbracket, "expected ']' at end of index") {
-            return ASTNode::None;
-        }
+        eat!(parser, Rbracket, "expected ']' at end of index")?;
     }
-    return ret;
+    return Some(ret);
 }
 
 // Unary
-fn parse_unary(parser: &mut ParserState) -> ASTNode {
-    if vec![Minus, Not].contains(&cur_tok(parser)) {
-        let op = cur_tok(parser);
-        next_tok(parser);
-        return ASTNode::UnaryExpr(op, Box::new(parse_unary(parser)));
+fn parse_unary(parser: &mut Parser) -> Option<ASTNode> {
+    if vec![Minus, Not].contains(&parser.current()) {
+        let op = parser.current();
+        parser.next();
+        return Some(ASTNode::UnaryExpr(op, Box::new(parse_unary(parser)?)));
     }
-    if vec![PlusPlus, MinusMinus].contains(&cur_tok(parser)) {
-        let op = cur_tok(parser);
-        if let Identifier(v) = next_tok(parser) {
-            next_tok(parser);
-            return ASTNode::UnaryExpr(op, Box::new(ASTNode::VarExpr(v)));
+    if vec![PlusPlus, MinusMinus].contains(&parser.current()) {
+        let op = parser.current();
+        if let Identifier(v) = parser.next() {
+            parser.next();
+            return Some(ASTNode::UnaryExpr(op, Box::new(ASTNode::VarExpr(v))));
         } else {
             error!(parser, "++/-- require identifiers", ErrType::Err);
-            return ASTNode::None;
+            return Option::None;
         }
     }
     return parse_index(parser);
@@ -188,59 +181,58 @@ fn parse_unary(parser: &mut ParserState) -> ASTNode {
 // Binops
 // Helper for binops so I don't write the same code more than once
 fn parse_binop_helper(
-    parser: &mut ParserState,
+    parser: &mut Parser,
     tokens: Vec<TokenType>,
-    callback: &dyn Fn(&mut ParserState) -> ASTNode,
+    callback: &dyn Fn(&mut Parser) -> Option<ASTNode>,
     can_repeat: bool
-) -> ASTNode {
+) -> Option<ASTNode> {
     // Lower precedence op
-    let mut expr = callback(parser);
-    while tokens.contains(&cur_tok(parser)) {
+    let mut expr = callback(parser)?;
+    while tokens.contains(&parser.current()) {
         // Left arg
-        if let ASTNode::None = expr {
-            parser.has_err = true;
-            return ASTNode::None;
-        }
         // Op in the middle
-        let op = cur_tok(parser);
-        next_tok(parser);
+        let op = parser.current();
+        parser.next();
         // Right arg
-        let right = callback(parser);
-        if let ASTNode::None = right {
-            parser.has_err = true;
-            return ASTNode::None;
-        }
+        let right = callback(parser)?;
         // Make binop
         expr = ASTNode::BinopExpr(Box::new(expr), op, Box::new(right));
         if !can_repeat {
-            return expr;
+            return Some(expr);
         }
     }
-    return expr;
+    return Some(expr);
 }
 
-fn parse_binop_math(parser: &mut ParserState) -> ASTNode {
+fn parse_binop_math(parser: &mut Parser) -> Option<ASTNode> {
     // Math binops, +, -, *, /, %
     parse_binop_helper(parser, vec![
         Plus, Minus, Times, Div, Modulo
     ], &parse_unary, true)
 }
-fn parse_binop_cmp(parser: &mut ParserState) -> ASTNode {
+fn parse_binop_cmp(parser: &mut Parser) -> Option<ASTNode> {
     // Compare binops, ==, !=, <, >, <=, >=
     parse_binop_helper(parser, vec![
         EqualsEquals, NotEquals, Lt, Gt, LtEquals, GtEquals
     ], &parse_binop_math, true)
 }
-fn parse_binop_logic(parser: &mut ParserState) -> ASTNode {
+fn parse_binop_logic(parser: &mut Parser) -> Option<ASTNode> {
     // Logic binops, &&, ||, ^^
     parse_binop_helper(parser, vec![
         And, Or, Xor
     ], &parse_binop_cmp, true)
 }
-fn parse_binop_set(parser: &mut ParserState) -> ASTNode {
+
+// Simply a wrapper to the highest expression parser
+fn parse_expr(parser: &mut Parser) -> Option<ASTNode> {
+    parse_binop_logic(parser)
+}
+
+// Special non-nesting binop
+fn parse_binop_set(parser: &mut Parser) -> Option<ASTNode> {
     // Setter binops, =, +=, -=, *=, /=
     // Left must be identifier
-    if let Identifier(_) = cur_tok(parser) {
+    if let Identifier(_) = parser.current() {
         parse_binop_helper(parser, vec![
             Equals, PlusEquals, MinusEquals, TimesEquals, DivEquals
         ], &parse_binop_logic, false)
@@ -250,19 +242,19 @@ fn parse_binop_set(parser: &mut ParserState) -> ASTNode {
 }
 
 // Lists
-fn parse_list_item(parser: &mut ParserState, at: i32) -> (String, ASTNode) {
+fn parse_list_item(parser: &mut Parser, at: i32) -> (String, Option<ASTNode>) {
     // Parses a single item in a list
     let mut name: String;
     // Get the key name
-    if let Identifier(n) = cur_tok(parser) {
+    if let Identifier(n) = parser.current() {
         // Use identifier name
         name = n;
-        next_tok(parser);
-        if let Colon = cur_tok(parser) {
-            next_tok(parser);
-        } else if let Comma | Rbracket = cur_tok(parser) {
+        parser.next();
+        if let Colon = parser.current() {
+            parser.next();
+        } else if let Comma | Rbracket = parser.current() {
             // Named indexes don't need values
-            return (name.clone(), ASTNode::VarExpr(name));
+            return (name.clone(), Some(ASTNode::VarExpr(name)));
         } else {
             // It's not a named index (`[myvar + 1]`)
             name = at.to_string();
@@ -273,76 +265,66 @@ fn parse_list_item(parser: &mut ParserState, at: i32) -> (String, ASTNode) {
         name = at.to_string();
     }
     // Parse value
-    let val: ASTNode = parse_binop_logic(parser);
+    let val = parse_expr(parser);
     return (name, val);
 }
-fn parse_list(parser: &mut ParserState) -> ASTNode {
+fn parse_list(parser: &mut Parser) -> Option<ASTNode> {
     // Parses a list
-    if !eat!(parser, Lbracket, "expecting [") {
-        return ASTNode::None;
-    }
+    eat!(parser, Lbracket, "expecting [")?;
     // Parse elements
     let mut at: i32 = 0;
     let mut names: Vec<String> = vec![];
     let mut vals: Vec<ASTNode> = vec![];
-    while cur_tok(parser) != Rbracket {
+    while parser.current() != Rbracket {
         let (name, val) = parse_list_item(parser, at);
         // Invalid element
-        if val == ASTNode::None {
+        if val == Option::None {
             // Parse until the end of the list so there aren't trailing errors
-            while next_tok(parser) != Semicolon {}
-            return ASTNode::None;
+            while parser.next() != Semicolon {}
+            return Option::None;
         }
         // Valid element
         names.push(name);
-        vals.push(val);
+        vals.push(val?);
         // Eat comma
-        if cur_tok(parser) == Comma {
-            if next_tok(parser) == Rbracket {
+        if parser.current() == Comma {
+            if parser.next() == Rbracket {
                 error!(parser, "trailing comma", ErrType::Warn);
             }
-        } else if cur_tok(parser) == Rbracket {
+        } else if parser.current() == Rbracket {
         } else {
             error!(parser, "expected comma or ']'");
-            if cur_tok(parser) == Colon {
+            if parser.current() == Colon {
                 error!(parser, "identifiers are used as keys", ErrType::Hint);
             }
-            while next_tok(parser) != Semicolon {}
-            return ASTNode::None;
+            while parser.next() != Semicolon {}
+            return Option::None;
         }
         // Increment index
         at += 1;
     }
-    if !eat!(parser, Rbracket, "expecting ]") {
-        return ASTNode::None;
-    }
-    return ASTNode::ListExpr(names, vals);
+    eat!(parser, Rbracket, "expecting ]")?;
+    return Some(ASTNode::ListExpr(names, vals));
 }
 
 // Normal expressions
-fn parse_expr(parser: &mut ParserState) -> ASTNode {
-    return match cur_tok(parser) {
+fn parse_base_expr(parser: &mut Parser) -> Option<ASTNode> {
+    return match parser.current() {
         // Inbuilt type
-        Identifier(v) => { next_tok(parser); ASTNode::VarExpr(v)     },
-        Str(s)        => { next_tok(parser); ASTNode::StringExpr(s)  },
-        Int(i)        => { next_tok(parser); ASTNode::NumberExpr(i)  },
-        Float(f)      => { next_tok(parser); ASTNode::DecimalExpr(f) },
-        Bool(b)       => { next_tok(parser); ASTNode::BoolExpr(b)    },
-        None          => { next_tok(parser); ASTNode::NoneExpr       },
+        Identifier(v) => { parser.next(); Some(ASTNode::VarExpr(v))     },
+        Str(s)        => { parser.next(); Some(ASTNode::StringExpr(s))  },
+        Int(i)        => { parser.next(); Some(ASTNode::NumberExpr(i))  },
+        Float(f)      => { parser.next(); Some(ASTNode::DecimalExpr(f)) },
+        Bool(b)       => { parser.next(); Some(ASTNode::BoolExpr(b))    },
+        None          => { parser.next(); Some(ASTNode::NoneExpr)       },
         // Lists
         Lbracket => parse_list(parser),
         // Nested expressions
         Lparan => {
-            next_tok(parser);
-            let ret = parse_binop_logic(parser);
-            if let ASTNode::None = ret {
-                return ASTNode::None;
-            }
-            if eat!(parser, Rparan, "expecting )") {
-                ret
-            } else {
-                ASTNode::None
-            }
+            parser.next();
+            let ret = parse_expr(parser)?;
+            eat!(parser, Rparan, "expecting )")?;
+            Some(ret)
         },
         // Operators in the wrong spot
         EqualsEquals | NotEquals | Lt | Gt | LtEquals | GtEquals |
@@ -353,29 +335,29 @@ fn parse_expr(parser: &mut ParserState) -> ASTNode {
                 parser,
                 "invalid use of operator, did you forgot something before/after?"
             );
-            next_tok(parser);
-            ASTNode::None
+            parser.next();
+            Option::None
         },
         // Unknown
         _ => {
             error!(parser, "expected expression");
-            if let Eof = cur_tok(parser) {} else {
-                next_tok(parser);
+            if let Eof = parser.current() {} else {
+                parser.next();
             }
-            ASTNode::None
+            Option::None
         }
     };
 }
 
 // Statements
-fn parse_statement(parser: &mut ParserState) -> ASTNode {
-    return match cur_tok(parser) {
+fn parse_statement(parser: &mut Parser) -> Option<ASTNode> {
+    return match parser.current() {
         // Bodies
         Lbrace => parse_body(parser),
         Rbrace => {
             error!(parser, "unmatched '}'");
-            next_tok(parser);
-            ASTNode::None
+            parser.next();
+            Option::None
         },
         // Functions (functi forever!)
         Func => parse_functi(parser),
@@ -388,8 +370,8 @@ fn parse_statement(parser: &mut ParserState) -> ASTNode {
             error!(
                 parser, "try changing it to `loop (while ...) { ... }`", ErrType::Hint
             );
-            next_tok(parser);
-            ASTNode::None
+            parser.next();
+            Option::None
         },
         // Import
         Import => parse_import(parser),
@@ -399,157 +381,119 @@ fn parse_statement(parser: &mut ParserState) -> ASTNode {
         If => parse_if(parser),
         Else => {
             error!(parser, "missing previous if statement");
-            next_tok(parser);
-            ASTNode::None
+            parser.next();
+            Option::None
         },
         // Semicolons
         Semicolon => {
-            next_tok(parser);
+            parser.next();
             parse_statement(parser)
         }
         // EOF
-        Eof => ASTNode::None,
+        Eof =>Option::None,
         // Expressions
         _ => {
-            let ret = parse_binop_set(parser);
-            if let ASTNode::None = ret {
-                return ASTNode::None;
-            }
-            if !eat_semicolon!(parser) {
-                return ASTNode::None;
-            }
-            ret
+            let ret = parse_binop_set(parser)?;
+            eat_semicolon!(parser)?;
+            Some(ret)
         }
     }
 }
 
 // Bodies
-fn parse_body(parser: &mut ParserState) -> ASTNode {
+fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
     // Start
-    if !eat!(parser, Lbrace, "expected { to start body") {
-        return ASTNode::None;
-    }
+    eat!(parser, Lbrace, "expected { to start body")?;
     // Middle
     let mut body: Vec<ASTNode> = vec![];
     loop {
         // Exit loop on } or EOF
-        if let Rbrace | Eof = cur_tok(parser) {
+        if let Rbrace | Eof = parser.current() {
             break;
         }
         // Add statment
-        let stmt = parse_statement(parser);
+        let stmt = parse_statement(parser)?;
         body.push(stmt);
     }
     // End
-    if !eat!(parser, Rbrace, "expected } to end body, not EOF") {
-        return ASTNode::None;
+    eat!(parser, Rbrace, "expected } to end body, not EOF")?;
+    if body.len() == 0 {
+        // {} is a nop
+        return Some(ASTNode::Nop);
     }
-    return ASTNode::BodyStmt(body);
+    return Some(ASTNode::BodyStmt(body));
 }
 
 // If/else if/else
-fn parse_if(parser: &mut ParserState) -> ASTNode {
+fn parse_if(parser: &mut Parser) -> Option<ASTNode> {
     // Eat if
-    next_tok(parser);
+    parser.next();
     // Condition
-    let cond = parse_binop_logic(parser);
-    if let ASTNode::None = cond {
-        return ASTNode::None;
-    }
+    let cond = parse_expr(parser)?;
     // Body
-    let body = parse_body(parser);
-    if let ASTNode::None = body {
-        return ASTNode::None;
-    }
+    let body = parse_body(parser)?;
     // Else
-    let mut else_stmt = ASTNode::BodyStmt(vec![]);
-    if let Else = cur_tok(parser) {
-        else_stmt = match next_tok(parser) {
+    let else_body = if let Else = parser.current() {
+        match parser.next() {
             If => parse_if(parser),
             _ => parse_body(parser)
-        };
-    }
-    // Invalid else
-    if let ASTNode::None = else_stmt {
-        return ASTNode::None;
-    }
-    // No else
-    if let ASTNode::BodyStmt(ref nodes) = else_stmt {
-        if nodes.len() == 0 {
-            return ASTNode::IfStmt(Box::new(cond), Box::new(body), Option::None);
-        }
+        }?
+    } else {
+        ASTNode::Nop
+    };
+    // Nops
+    if body == ASTNode::Nop && else_body == ASTNode::Nop {
+        return Some(cond);
     }
     // Return
-    return ASTNode::IfStmt(
-        Box::new(cond), Box::new(body), Some(Box::new(else_stmt))
-    );
+    return Some(ASTNode::IfStmt(
+        Box::new(cond), Box::new(body), Box::new(else_body)
+    ));
 }
 
 // Loops
-fn parse_loop_iter(parser: &mut ParserState) -> ASTNode {
+fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     // Name
     let name: String;
-    if let Identifier(n) = cur_tok(parser) {
+    if let Identifier(n) = parser.current() {
         name = n;
     } else {
         error!(parser, "expected varible name");
-        return ASTNode::None;
+        return Option::None;
     }
-    next_tok(parser);
+    parser.next();
     // Obligatory 'in'
-    if !eat!(parser, In, "missing 'in' keyword in loop") {
-        return ASTNode::None;
-    }
+    eat!(parser, In, "missing 'in' keyword in loop")?;
     // Iterator
-    let iter = parse_binop_logic(parser);
-    if iter == ASTNode::None {
-        return ASTNode::None;
-    }
+    let iter = parse_expr(parser)?;
     // End parens
-    if !eat!(parser, Rparan, "missing ')' in loop") {
-        return ASTNode::None;
-    }
+    eat!(parser, Rparan, "missing ')' in loop")?;
     // Body
-    let body = parse_body(parser);
-    if body == ASTNode::None {
-        return ASTNode::None;
-    }
+    let body = parse_body(parser)?;
     // Return
-    return ASTNode::LoopStmt(name, Box::new(iter), Box::new(body));
+    return Some(ASTNode::LoopStmt(name, Box::new(iter), Box::new(body)));
 }
 
-fn parse_loop_while(parser: &mut ParserState) -> ASTNode {
+fn parse_loop_while(parser: &mut Parser) -> Option<ASTNode> {
     // Eat 'while'
-    if !eat!(parser, While, IMPOSSIBLE_STATE) {
-        return ASTNode::None;
-    }
+    eat!(parser, While, IMPOSSIBLE_STATE)?;
     // Condition
-    let cond = parse_binop_logic(parser);
-    if cond == ASTNode::None {
-        return ASTNode::None;
-    }
+    let cond = parse_expr(parser)?;
     // End parens
-    if !eat!(parser, Rparan, "missing ')' in loop") {
-        return ASTNode::None;
-    }
+    eat!(parser, Rparan, "missing ')' in loop")?;
     // Body
-    let body = parse_body(parser);
-    if body == ASTNode::None {
-        return ASTNode::None;
-    }
+    let body = parse_body(parser)?;
     // Return
-    return ASTNode::WhileStmt(Box::new(cond), Box::new(body));
+    return Some(ASTNode::WhileStmt(Box::new(cond), Box::new(body)));
 }
 
-fn parse_loop(parser: &mut ParserState) -> ASTNode {
+fn parse_loop(parser: &mut Parser) -> Option<ASTNode> {
     // Eat loop
-    next_tok(parser);
+    parser.next();
     // Start parens
-    if !eat!(parser, Lparan, "missing '(' in loop") {
-        return ASTNode::None;
-    }
+    eat!(parser, Lparan, "missing '(' in loop")?;
     // Get the loop type and call the helper
-    return if cur_tok(parser) == While {
+    return if parser.current() == While {
         parse_loop_while(parser)
     } else {
         parse_loop_iter(parser)
@@ -557,48 +501,39 @@ fn parse_loop(parser: &mut ParserState) -> ASTNode {
 }
 
 // Imports
-fn parse_import(parser: &mut ParserState) -> ASTNode {
+fn parse_import(parser: &mut Parser) -> Option<ASTNode> {
     // Eat import
-    next_tok(parser);
+    parser.next();
     // The parens part 1
-    if !eat!(parser, Lparan, "missing '(' in import") {
-        return ASTNode::None;
-    }
+    eat!(parser, Lparan, "missing '(' in import")?;
     // Import name
-    let value = parse_binop_logic(parser);
-    if value == ASTNode::None {
-        return ASTNode::None;
-    }
+    let value = parse_expr(parser)?;
     // The parens part 2: electric boogaloo
-    if !eat!(parser, Rparan, "missing ')' in import") {
-        return ASTNode::None;
-    }
+    eat!(parser, Rparan, "missing ')' in import")?;
     // Semicolon
-    if !eat_semicolon!(parser) {
-        return ASTNode::None;
-    }
+    eat_semicolon!(parser)?;
     // Return
-    return ASTNode::ImportStmt(Box::new(value));
+    return Some(ASTNode::ImportStmt(Box::new(value)));
 }
 
 // Varible definition
-fn parse_let(parser: &mut ParserState) -> ASTNode {
+fn parse_let(parser: &mut Parser) -> Option<ASTNode> {
     // Eat let
-    next_tok(parser);
+    parser.next();
     // Get var nane
     let name: String;
-    if let Identifier(n) = cur_tok(parser) {
+    if let Identifier(n) = parser.current() {
         name = n;
     } else {
         error!(parser, "expected varible name");
-        return ASTNode::None;
+        return Option::None;
     }
-    next_tok(parser);
+    parser.next();
     // Let without value (non-standard)
-    if let Semicolon = cur_tok(parser) {
-        next_tok(parser);
+    if let Semicolon = parser.current() {
+        parser.next();
         if parser.extentions.contains(&"auto-none".to_string()) {
-            return ASTNode::LetStmt(name, Box::new(ASTNode::NoneExpr));
+            return Some(ASTNode::LetStmt(name, Box::new(ASTNode::NoneExpr)));
         } else {
             error!(parser, "let must have value");
             error!(
@@ -606,41 +541,34 @@ fn parse_let(parser: &mut ParserState) -> ASTNode {
                 "this can be disabled by the auto none extention (`-use-auto-none`)",
                 ErrType::Hint
             );
-            return ASTNode::None;
+            return Option::None;
         }
     }
     // Equals symbol
-    if !eat!(parser, Equals, "expected '=' in variable declaration") {
-        return ASTNode::None;
-    }
+    eat!(parser, Equals, "expected '=' in variable declaration")?;
     // Let with value
-    let value = parse_binop_logic(parser);
-    if value == ASTNode::None {
-        return ASTNode::None;
-    }
+    let value = parse_expr(parser)?;
     // Semicolon
-    if !eat_semicolon!(parser) {
-        return ASTNode::None;
-    }
+    eat_semicolon!(parser)?;
     // Return
-    return ASTNode::LetStmt(name, Box::new(value));
+    return Some(ASTNode::LetStmt(name, Box::new(value)));
 }
 
 // Returning
-fn parse_return(parser: &mut ParserState) -> ASTNode {
+fn parse_return(parser: &mut Parser) -> Option<ASTNode> {
     // Function check
     if !parser.in_func {
         error!(parser, "return outside of functions");
-        next_tok(parser);
-        return ASTNode::None;
+        parser.next();
+        return Option::None;
     }
     // Eat return
-    next_tok(parser);
+    parser.next();
     // Return without value (non-standard)
-    if let Semicolon = cur_tok(parser) {
-        next_tok(parser);
+    if let Semicolon = parser.current() {
+        parser.next();
         if parser.extentions.contains(&"auto-none".to_string()) {
-            return ASTNode::ReturnStmt(Box::new(ASTNode::NoneExpr));
+            return Some(ASTNode::ReturnStmt(Box::new(ASTNode::NoneExpr)));
         } else {
             error!(parser, "return must have value");
             error!(
@@ -648,101 +576,92 @@ fn parse_return(parser: &mut ParserState) -> ASTNode {
                 "this can be disabled by the auto none extention (`-use-auto-none`)",
                 ErrType::Hint
             );
-            return ASTNode::None;
+            return Option::None;
         }
     }
     // Returns with a value
-    let ret_val = parse_binop_logic(parser);
-    if ret_val == ASTNode::None {
-        return ASTNode::None;
-    }
+    let ret_val = parse_expr(parser)?;
     // Semicolon
-    if !eat_semicolon!(parser) {
-        return ASTNode::None;
-    }
+    eat_semicolon!(parser)?;
     // Return return
-    return ASTNode::ReturnStmt(Box::new(ret_val));
+    return Some(ASTNode::ReturnStmt(Box::new(ret_val)));
 }
 
 // Functions
-fn parse_functi(parser: &mut ParserState) -> ASTNode {
+fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
     // Disallow functions in functions
     if parser.in_func {
-        next_tok(parser);
+        parser.next();
         error!(parser, "cannot create function in function");
-        return ASTNode::None;
+        return Option::None;
     }
     // Eat functi
-    next_tok(parser);
+    parser.next();
     // Name
     let name: String;
-    if let Identifier(n) = cur_tok(parser) {
+    if let Identifier(n) = parser.current() {
         name = n;
     } else {
         error!(parser, "expected function name");
-        return ASTNode::None;
+        return Option::None;
     }
-    next_tok(parser);
+    parser.next();
     // Args
-    if !eat!(parser, Lparan, "expected '(' at start of argument list") {
-        return ASTNode::None;
-    }
+    eat!(parser, Lparan, "expected '(' at start of argument list")?;
     let mut args: Vec<String> = vec![];
     loop {
-        if let Rparan = cur_tok(parser) {
+        if let Rparan = parser.current() {
             break;
         }
         // Arg name
-        if let Identifier(n) = cur_tok(parser) {
+        if let Identifier(n) = parser.current() {
             args.push(n);
-            next_tok(parser);
+            parser.next();
         } else {
             error!(parser, "expected argument name");
-            return ASTNode::None;
+            return Option::None;
         }
         // Comma for new args or rparan for end of args
-        if let Rparan | Comma = cur_tok(parser) {} else {
+        if let Rparan | Comma = parser.current() {} else {
             error!(parser, "expected comma or ')' in argument list");
-            return ASTNode::None;
+            return Option::None;
         }
         // Eat comma
-        if let Comma = cur_tok(parser) {
-            next_tok(parser);
+        if let Comma = parser.current() {
+            parser.next();
         }
     }
-    next_tok(parser);
+    parser.next();
     // Body
-    if let Lbrace = cur_tok(parser) {} else {
+    if let Lbrace = parser.current() {} else {
         error!(parser, "expected '{' to start function body");
         err(
             &parser.tokens[parser.at].stream,
             "forward declaration isn't supported",
             1, ErrType::Hint
         );
-        return ASTNode::None;
+        return Option::None;
     }
     parser.in_func = true;
     let body = parse_body(parser);
     parser.in_func = false;
-    if let ASTNode::None = body {
-        return ASTNode::None;
-    }
+    let body = body?;
     // Return
-    return ASTNode::FunctiStmt(name, args, Box::new(body));
+    return Some(ASTNode::FunctiStmt(name, args, Box::new(body)));
 }
 
 // Main parsing
 pub fn parse(tokens: Vec<Token>, extentions: Vec<String>) -> Vec<ASTNode> {
     // Set up
-    let mut parser = ParserState{
+    let mut parser = Parser{
         tokens, extentions, at: 0,
         has_err: false, in_func: false
     };
     let mut ret: Vec<ASTNode> = vec![];
     // Parse
-    while cur_tok(&parser) != Eof {
+    while parser.current() != Eof {
         let stmt = parse_statement(&mut parser);
-        if stmt != ASTNode::None {
+        if let Some(stmt) = stmt {
             ret.push(stmt);
         }
     }

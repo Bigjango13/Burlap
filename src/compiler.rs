@@ -16,9 +16,20 @@ impl Compiler {
         Compiler{bytes: Vec::new(), consts: Vec::new()}
     }
 
+    pub fn write_num(&mut self, val: u32, bytes: u8, start: usize) {
+        for i in 0..bytes {
+            self.bytes[start + i as usize] = ((val >> (i * 8)) & 255) as u8;
+        }
+    }
+
     pub fn push(&mut self, val: Value) {
-        let index = self.consts.len();
-        self.consts.push(val);
+        // Get the index, or append
+        let index = self.consts.iter().position(|i| i.clone() == val)
+            .unwrap_or_else(|| {
+            self.consts.push(val);
+            self.consts.len() - 1
+        });
+        // Push the instruction
         if index > 2usize.pow(24)-1 {
             panic!("Too many different constants!");
         } else if index > u8::MAX.into() {
@@ -201,6 +212,9 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> bool {
 
 fn compile_body(compiler: &mut Compiler, node: &ASTNode) -> bool {
     let BodyStmt(nodes) = node else {
+        if *node == Nop {
+            return true;
+        }
         panic!("compile_body got non-body node!");
     };
     // Compile all nodes
@@ -225,16 +239,31 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
             // The condition must be a expr, so no need to match against stmts
             compile_expr(compiler, &**cond);
 
+            // This is for when boolean not is forgotten
+            if **body == Nop {
+                compiler.bytes.push(Opcode::NOT as u8);
+                // Push the jump offset (which will be filled later)
+                compiler.bytes.push(Opcode::JMPNT as u8);
+                compiler.bytes.push(0);
+                // Compile body
+                let pos = compiler.bytes.len();
+                compile_body(compiler, &**else_part);
+                compiler.bytes[pos - 1] = (compiler.bytes.len() - pos + 1)
+                    as u8;
+                compiler.bytes.push(Opcode::NOP as u8);
+                return true
+            }
+
             // Push the jump offset (which will be filled later)
             compiler.bytes.push(Opcode::JMPNT as u8);
             compiler.bytes.push(0);
             let pos = compiler.bytes.len();
             // Compile true part
             compile_body(compiler, &**body);
-            compiler.bytes[pos - 1] = (compiler.bytes.len() - pos) as u8;
+            compiler.bytes[pos - 1] = (compiler.bytes.len() - pos + 1) as u8;
 
             // The else
-            if let Some(else_part) = else_part {
+            if **else_part != Nop {
                 // Prep exit offset
                 compiler.bytes[pos - 1] += 2;
                 compiler.bytes.push(Opcode::JMPU as u8);
@@ -242,8 +271,30 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
                 let pos = compiler.bytes.len();
                 // Compile else part
                 compile_body(compiler, &**else_part);
-                compiler.bytes[pos - 1] = (compiler.bytes.len() - pos) as u8;
+                compiler.bytes[pos - 1] = (compiler.bytes.len() - pos + 1) as u8;
             }
+            // Might jump too far, so cushion with NOP
+            compiler.bytes.push(Opcode::NOP as u8);
+        },
+        WhileStmt(cond, body) => {
+            // Start, exit jump + cond
+            let pos = compiler.bytes.len();
+            compile_expr(compiler, &**cond);
+            compiler.bytes.push(Opcode::JMPNT as u8);
+            compiler.bytes.push(0);
+            let offpos = compiler.bytes.len();
+
+            // Compile body
+            compile_body(compiler, &**body);
+            compiler.bytes[offpos - 1] = (compiler.bytes.len() - offpos + 3) as u8;
+
+            // Backwards jump
+            compiler.bytes.push(Opcode::JMPB as u8);
+            compiler.bytes.push((compiler.bytes.len() - pos) as u8);
+            compiler.bytes.push(Opcode::NOP as u8);
+        },
+        Nop => {
+            // Nop isn't turned into the NOP instruction because it's useless
         },
         _ => {
             return compile_expr(compiler, node);
@@ -254,7 +305,11 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
 
 pub fn compile(ast: Vec<ASTNode>) -> Option<(Vec<u8>, Vec<Value>)> {
     let mut compiler = Compiler::new();
-    let ret = compile_stmt(&mut compiler, &ast[0]);
+    for node in ast {
+        if !compile_stmt(&mut compiler, &node) {
+            return Option::None;
+        }
+    }
     println!("CC: {:?}", compiler);
     return Some((compiler.bytes, compiler.consts));
 }
