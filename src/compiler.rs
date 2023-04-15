@@ -53,39 +53,39 @@ fn compile_unary(
         // -/!
         TokenType::Minus => {
             compiler.push(Value::Int(0));
-            if !compile_expr(compiler, &*val.clone()) {
+            if !compile_expr(compiler, val) {
                 return false;
             }
             compiler.bytes.push(Opcode::SUB as u8);
         },
         TokenType::Not => {
-            if !compile_expr(compiler, &*val.clone()) {
+            if !compile_expr(compiler, val) {
                 return false;
             }
             compiler.bytes.push(Opcode::NOT as u8);
         },
         // ++/--
         TokenType::PlusPlus => {
-            if !compile_expr(compiler, &*val.clone()) {
+            if !compile_expr(compiler, val) {
                 return false;
             }
             compiler.push(Value::Int(1));
             compiler.bytes.push(Opcode::ADD as u8);
             compiler.bytes.push(Opcode::DUP as u8);
             if let VarExpr(s) = *val.clone() {
-                compiler.push(Value::Str(s.to_string()));
+                compiler.push(Value::Str(s));
                 compiler.bytes.push(Opcode::SV as u8);
             }
         },
         TokenType::MinusMinus => {
-            if !compile_expr(compiler, &*val.clone()) {
+            if !compile_expr(compiler, val) {
                 return false;
             }
             compiler.push(Value::Int(1));
             compiler.bytes.push(Opcode::SUB as u8);
             compiler.bytes.push(Opcode::DUP as u8);
             if let VarExpr(s) = *val.clone() {
-                compiler.push(Value::Str(s.to_string()));
+                compiler.push(Value::Str(s));
                 compiler.bytes.push(Opcode::SV as u8);
             }
         },
@@ -101,11 +101,11 @@ fn compile_binop(
     // Compile sides
     if let TokenType::Equals = op {} else {
         // No need to compile the value if it will just be reassigned
-        if !compile_expr(compiler, &*lhs.clone()) {
+        if !compile_expr(compiler, lhs) {
             return false;
         }
     }
-    if !compile_expr(compiler, &*rhs.clone()) {
+    if !compile_expr(compiler, rhs) {
         return false;
     }
     // Compile op
@@ -167,7 +167,7 @@ fn compile_binop(
         | TokenType::Equals = op.clone()
     {
         if let VarExpr(s) = *lhs.clone() {
-            compiler.push(Value::Str(s.to_string()));
+            compiler.push(Value::Str(s));
             compiler.bytes.push(Opcode::SV as u8);
         }
     }
@@ -185,13 +185,13 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> bool {
             compiler.push(Value::Str(val.clone()));
         },
         NumberExpr(val) => {
-            compiler.push(Value::Int(val.clone()));
+            compiler.push(Value::Int(*val));
         },
         DecimalExpr(val) => {
-            compiler.push(Value::Float(val.clone()));
+            compiler.push(Value::Float(*val));
         },
         BoolExpr(val) => {
-            compiler.push(Value::Bool(val.clone()));
+            compiler.push(Value::Bool(*val));
         },
         NoneExpr => {
             compiler.push(Value::None);
@@ -203,6 +203,18 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> bool {
         UnaryExpr(op, val) => {
             return compile_unary(compiler, op, val);
         },
+        // Calls
+        CallExpr(name, args) => {
+            // Push the call. Name, arg count, args (in reverse order)
+            for arg in args {
+                if !compile_expr(compiler, arg) {
+                    return false;
+                }
+            }
+            compiler.push(Value::Int(args.len() as i32));
+            compiler.push(Value::Str(name.clone()));
+            compiler.bytes.push(Opcode::CALL as u8);
+        },
         _ => {
             return false;
         }
@@ -210,13 +222,7 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> bool {
     return true;
 }
 
-fn compile_body(compiler: &mut Compiler, node: &ASTNode) -> bool {
-    let BodyStmt(nodes) = node else {
-        if *node == Nop {
-            return true;
-        }
-        panic!("compile_body got non-body node!");
-    };
+fn _compile_body(compiler: &mut Compiler, nodes: &Vec<ASTNode>) -> bool {
     // Compile all nodes
     for node in nodes {
         if !compile_stmt(compiler, node) {
@@ -225,6 +231,15 @@ fn compile_body(compiler: &mut Compiler, node: &ASTNode) -> bool {
         }
     }
     return true;
+}
+fn compile_body(compiler: &mut Compiler, node: &ASTNode) -> bool {
+    let BodyStmt(nodes) = node else {
+        if *node == Nop {
+            return true;
+        }
+        panic!("compile_body got non-body node!");
+    };
+    return _compile_body(compiler, nodes);
 }
 
 fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
@@ -237,7 +252,7 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
         },
         IfStmt(cond, body, else_part) => {
             // The condition must be a expr, so no need to match against stmts
-            compile_expr(compiler, &**cond);
+            compile_expr(compiler, cond);
 
             // This is for when boolean not is forgotten
             if **body == Nop {
@@ -247,7 +262,7 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
                 compiler.bytes.push(0);
                 // Compile body
                 let pos = compiler.bytes.len();
-                compile_body(compiler, &**else_part);
+                compile_body(compiler, else_part);
                 compiler.bytes[pos - 1] = (compiler.bytes.len() - pos + 1)
                     as u8;
                 compiler.bytes.push(Opcode::NOP as u8);
@@ -259,7 +274,7 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
             compiler.bytes.push(0);
             let pos = compiler.bytes.len();
             // Compile true part
-            compile_body(compiler, &**body);
+            compile_body(compiler, body);
             compiler.bytes[pos - 1] = (compiler.bytes.len() - pos + 1) as u8;
 
             // The else
@@ -270,7 +285,7 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
                 compiler.bytes.push(0);
                 let pos = compiler.bytes.len();
                 // Compile else part
-                compile_body(compiler, &**else_part);
+                compile_body(compiler, else_part);
                 compiler.bytes[pos - 1] = (compiler.bytes.len() - pos + 1) as u8;
             }
             // Might jump too far, so cushion with NOP
@@ -279,13 +294,13 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
         WhileStmt(cond, body) => {
             // Start, exit jump + cond
             let pos = compiler.bytes.len();
-            compile_expr(compiler, &**cond);
+            compile_expr(compiler, cond);
             compiler.bytes.push(Opcode::JMPNT as u8);
             compiler.bytes.push(0);
             let offpos = compiler.bytes.len();
 
             // Compile body
-            compile_body(compiler, &**body);
+            compile_body(compiler, body);
             compiler.bytes[offpos - 1] = (compiler.bytes.len() - offpos + 3) as u8;
 
             // Backwards jump
@@ -293,6 +308,7 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
             compiler.bytes.push((compiler.bytes.len() - pos) as u8);
             compiler.bytes.push(Opcode::NOP as u8);
         },
+        BodyStmt(nodes) => return _compile_body(compiler, nodes),
         Nop => {
             // Nop isn't turned into the NOP instruction because it's useless
         },

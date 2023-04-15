@@ -390,7 +390,7 @@ fn parse_statement(parser: &mut Parser) -> Option<ASTNode> {
             parse_statement(parser)
         }
         // EOF
-        Eof =>Option::None,
+        Eof => Option::None,
         // Expressions
         _ => {
             let ret = parse_binop_set(parser)?;
@@ -413,7 +413,9 @@ fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
         }
         // Add statment
         let stmt = parse_statement(parser)?;
-        body.push(stmt);
+        if stmt != ASTNode::Nop {
+            body.push(stmt);
+        }
     }
     // End
     eat!(parser, Rbrace, "expected } to end body, not EOF")?;
@@ -645,9 +647,8 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
     parser.in_func = true;
     let body = parse_body(parser);
     parser.in_func = false;
-    let body = body?;
     // Return
-    return Some(ASTNode::FunctiStmt(name, args, Box::new(body)));
+    return Some(ASTNode::FunctiStmt(name, args, Box::new(body?)));
 }
 
 // Main parsing

@@ -4,8 +4,6 @@ use indexmap::map::IndexMap;
 // Value enum for varibles
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
-    // Errors
-    Error(String),
     // Normal values
     Str(String),
     Int(i32),
@@ -24,10 +22,10 @@ macro_rules! do_op {
             Value::Float(f) => {
                 if let Value::Float(f_right) = $right {
                     // Two floats are easy!
-                    Value::Float(f $op &f_right)
+                    Ok(Value::Float(f $op &f_right))
                 } else if let Value::Int(i_right) = $right {
                     // A float and an int are easier
-                    Value::Float(f $op &(i_right as f32))
+                    Ok(Value::Float(f $op &(i_right as f32)))
                 } else {
                     $errval
                 }
@@ -36,10 +34,10 @@ macro_rules! do_op {
             Value::Int(i) => {
                 if let Value::Float(f_right) = $right {
                     // Int and float -> float and float
-                    Value::Float((i as f32) $op f_right)
+                    Ok(Value::Float((i as f32) $op f_right))
                 } else if let Value::Int(i_right) = $right {
                     // Two ints
-                    Value::Int(i $op &i_right)
+                    Ok(Value::Int(i $op &i_right))
                 } else {
                     $errval
                 }
@@ -127,7 +125,6 @@ impl Value {
             Value::None => "None",
             Value::List(_) => "List",
             // Internal types
-            Value::Error(_) => "_Error",
             Value::Null => "_Null",
         }.to_string();
     }
@@ -203,105 +200,105 @@ impl Value {
 }
 
 // Add
-impl_op_ex!(+ |left: Value, right: Value| -> Value {
+impl_op_ex!(+ |left: Value, right: Value| -> Result<Value, String> {
     return match left {
         // str + anything is a string
         Value::Str(s) => {
-            Value::Str(s + &right.to_string())
+            Ok(Value::Str(s + &right.to_string()))
         },
         Value::Bool(b) => {
             if let Value::Bool(b_right) = right {
                 // bool and a bool is only false is both are false.
-                Value::Bool(b || b_right)
-            } else {
-                // bool is converted to an int
-                    Value::Int(b as i32) * right
-            }
-        },
-        Value::None => Value::None,
-        _ => do_op!(left, right, +, Value::Error("addition failed".to_string())),
-    }
-});
-
-// Subtract
-impl_op_ex!(- |left: Value, right: Value| -> Value {
-    return match left {
-        // str - anything is invalid
-        Value::Str(_) => {
-            Value::Error("cannot subtract from string".to_string())
-        },
-        Value::Bool(b) => {
-            if let Value::Bool(b_right) = right {
-                // Bools and a bool
-                Value::Bool(b != b_right)
-            } else {
-                // bool is converted to an int
-                Value::Int(b as i32) - right
-            }
-        },
-        Value::None => Value::None,
-        _ => do_op!(left, right, -, Value::None),
-    }
-});
-
-// Multiply
-impl_op_ex!(* |left: Value, right: Value| -> Value {
-    return match left {
-        // str * number is valid
-        Value::Str(s) => {
-            if let Value::Int(i_right) = right {
-                if i_right > 0 {
-                    Value::Str(s.repeat(i_right.try_into().unwrap()))
-                } else {
-                    Value::Str("".to_string())
-                }
-            } else {
-                Value::Error("can only multiply string with number".to_string())
-            }
-        },
-        Value::Bool(b) => {
-            if let Value::Bool(b_right) = right {
-                // bool and a bool is only false if both are false.
-                Value::Bool(b || b_right)
+                Ok(Value::Bool(b || b_right))
             } else {
                 // bool is converted to an int
                 Value::Int(b as i32) * right
             }
         },
-        Value::None => Value::None,
-        _ => do_op!(left, right, *, Value::Error("multiplication failed".to_string())),
+        Value::None => Ok(Value::None),
+        _ => do_op!(left, right, +, Err("addition failed".to_string())),
+    }
+});
+
+// Subtract
+impl_op_ex!(- |left: Value, right: Value| -> Result<Value, String> {
+    return match left {
+        // str - anything is invalid
+        Value::Str(_) => {
+            Err("cannot subtract from string".to_string())
+        },
+        Value::Bool(b) => {
+            if let Value::Bool(b_right) = right {
+                // Bools and a bool
+                Ok(Value::Bool(b != b_right))
+            } else {
+                // bool is converted to an int
+                Value::Int(b as i32) - right
+            }
+        },
+        Value::None => Ok(Value::None),
+        _ => do_op!(left, right, -, Ok(Value::None)),
+    }
+});
+
+// Multiply
+impl_op_ex!(* |left: Value, right: Value| -> Result<Value, String> {
+    return match left {
+        // str * number is valid
+        Value::Str(s) => {
+            if let Value::Int(i_right) = right {
+                Ok(if i_right > 0 {
+                    Value::Str(s.repeat(i_right.try_into().unwrap()))
+                } else {
+                    Value::Str("".to_string())
+                })
+            } else {
+                Err("can only multiply string with number".to_string())
+            }
+        },
+        Value::Bool(b) => {
+            if let Value::Bool(b_right) = right {
+                // bool and a bool is only false if both are false.
+                Ok(Value::Bool(b || b_right))
+            } else {
+                // bool is converted to an int
+                Value::Int(b as i32) * right
+            }
+        },
+        Value::None => Ok(Value::None),
+        _ => do_op!(left, right, *, Err("multiplication failed".to_string())),
     }
 });
 
 // Div
-impl_op_ex!(/ |left: Value, right: Value| -> Value {
+impl_op_ex!(/ |left: Value, right: Value| -> Result<Value, String> {
     return match left {
         // str / anything is invalid
         Value::Str(_) => {
-            Value::Error("cannot divide string".to_string())
+            Err("cannot divide string".to_string())
         },
-        // none / anything is none
+        // bool is converted to an int
         Value::Bool(b) => {
-            // bool is converted to an int
             Value::Int(b as i32) / right
         },
-        Value::None => Value::None,
-        _ => do_op!(left, right, /, Value::Error("division failed".to_string())),
+        // none / anything is none
+        Value::None => Ok(Value::None),
+        _ => do_op!(left, right, /, Err("division failed".to_string())),
     }
 });
 
 // Modulo
-impl_op_ex!(% |left: Value, right: Value| -> Value {
+impl_op_ex!(% |left: Value, right: Value| -> Result<Value, String> {
     return match left {
         // str % anything is invalid
         Value::Str(_) => {
-            Value::Error("cannot modulo string".to_string())
+            Err("cannot modulo string".to_string())
         },
         Value::Bool(b) => {
             // bool is converted to an int
             Value::Int(b as i32) % right
         },
-        Value::None => Value::None,
-        _ => do_op!(left, right, %, Value::Error("modulo failed".to_string())),
+        Value::None => Ok(Value::None),
+        _ => do_op!(left, right, %, Err("modulo failed".to_string())),
     }
 });

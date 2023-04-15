@@ -11,14 +11,6 @@ use crate::value::Value;
 
 use indexmap::map::IndexMap;
 
-// Functies are burlap functions in rust (like print)
-type Functie = fn(&mut Vm, Vec<Value>) -> Value;
-
-// Sub struct for extentions/functies
-pub struct Functies {
-    builtin: HashMap<String, Functie>
-}
-
 #[repr(u8)]
 #[derive(Copy, Clone, Debug)]
 pub enum Opcode {
@@ -86,11 +78,16 @@ pub enum Opcode {
     JMPNT,
 
     // Calls
-    // CALL function ([u8], name, args...)
+    // CALL function (name, arg#, args...)
     CALL,
     // RETurn (ret)
     RET,
 }
+
+
+// A functie is a burlap functions implemented in rust (such as all the builtin ones)
+type Functie = fn(&mut Vm, Vec<Value>) -> Result<Value, String>;
+type Functies = HashMap<String, Functie>;
 
 // VM state
 pub struct Vm {
@@ -132,7 +129,7 @@ impl Vm {
         is_repl: bool, import_path: PathBuf, extentions: Vec<String>
     ) -> Vm {
         // Builtin functions
-        let functies = Functies{builtin: HashMap::from([
+        let functies = HashMap::from([
             // Builtins
             ("print".to_string(), sk_print as Functie),
             ("input".to_string(), sk_input as Functie),
@@ -142,8 +139,8 @@ impl Vm {
             ("int".to_string(), sk_int as Functie),
             ("float".to_string(), sk_float as Functie),
             ("string".to_string(), sk_string as Functie),
-        ])};
-        // This is one of those times I really really wish Rust had defaults
+        ]);
+        // I really wish Rust had defaults, but it doesn't
         Vm {
             is_repl, has_err: false, in_func: false,
             is_global: true, globals: HashMap::new(),
@@ -154,57 +151,47 @@ impl Vm {
         }
     }
     // Getting vars
-    fn get_local(&self, name: &String) -> Value {
+    fn get_local(&self, name: &String) -> Result<Value, String> {
         // Gets a local var
         let mut index = self.var_names.len();
         while index > self.var_min {
             index -= 1;
             if &self.var_names[index] == name {
-                return self.var_vals[index].clone();
+                return Ok(self.var_vals[index].clone());
             }
         }
         // Failed to get var, return an error
-        return Value::Error(format!("no variable called \"{}\"", name));
+        return Err(format!("no variable called \"{}\"", name).to_string());
     }
-    fn get_global(&self, name: &String) -> Value {
+    fn get_global(&self, name: &String) -> Result<Value, String> {
         // Gets a var in the global scope
         return match self.globals.get(name) {
-            Some(val) => val.clone(),
-            _ => Value::Error(format!("no variable called \"{}\"", name))
+            Some(val) => Ok(val.clone()),
+            _ => Err(format!("no variable called \"{}\"", name).to_string())
         };
     }
-    pub fn get_var(&self, name: &String) -> Value {
+    pub fn get_var(&self, name: &String) -> Result<Value, String> {
         // Try to get it in the normal scope first
         return match self.get_local(name) {
             // Not found, try global scope
-            Value::Error(_) => self.get_global(name),
+            Err(_) => self.get_global(name),
             // It's in the local scope
             x => x,
         }
     }
     // Create a variable
-    pub fn make_var(
-        &mut self, name: &String, val: Value, global: bool, force: bool
-    ) -> bool {
-        if global {
-            // Check
-            if let Value::Error(_) = self.get_global(name) {
-            } else if force {} else {
-                return false;
-            }
-            // Add
+    pub fn make_var(&mut self, name: &String, val: Value) {
+        // Change if it already exists
+        if self.change_var(name, val.clone()) {
+            return;
+        }
+        // Create
+        if self.is_global {
             self.globals.insert(name.clone(), val);
         } else {
-            // Check
-            if let Value::Error(_) = self.get_local(name) {
-            } else if force {} else {
-                return false;
-            }
-            // Add
             self.var_names.push(name.clone());
             self.var_vals.push(val);
         }
-        return true;
     }
     // Set a variable
     pub fn set_local(&mut self, name: &String, val: Value) -> bool {
@@ -270,24 +257,26 @@ impl Vm {
             self.var_vals.pop();
         }
     }
-    fn bad_args(&self, name: &String, got: usize, need: usize) -> Value {
-        if got > need {
-            return Value::Error(
-                format!("too mamy args for {} (got {} need {})", name, got, need)
-            );
-        }
-        return Value::Error(
+    fn bad_args(
+        &self, name: &String, got: usize, need: usize
+    ) -> Result<Value, String> {
+        Err(if got > need {
+            format!("too many args for {} (got {} need {})", name, got, need)
+        } else {
             format!("too few args for {} (got {} need {})", name, got, need)
-        );
+        }.to_string())
     }
     // Call a function
-    pub fn call(&mut self, name: &String, args: &Vec<Value>) -> Value {
-        /*/ Builtin functions
-        match (&self).functies.builtin.get(name) {
-            Some(functie) => { return functie(self, args.clone()); },
-            _ => ()
+    pub fn call(
+        &mut self, name: &String, args: &Vec<Value>
+    ) -> Result<Value, String> {
+        // Builtin functions
+        if let Some(functie) = self.functies.get(name) {
+            return functie(self, args.clone());
+        } else {
+            return Err(format!("no function called \"{}\"", name));
         }
-        // Try to get the function from the name
+        /*/ Try to get the function from the name
         let function: &ASTNode;
         match (&self).functions.get(name) {
             Some(val) => function = val,
@@ -332,7 +321,7 @@ impl Vm {
         self.in_func = old_func;
         self.raise_scope(scope_data);
         // TODO*/
-        return Value::None;
+        return Ok(Value::None);
     }
 
     pub fn cur_op(&mut self) -> u8 {
@@ -389,13 +378,13 @@ impl Vm {
 
 // Builtin Functions (prefixed with 'sk_')
 // Print
-fn sk_print(vm: &mut Vm, args: Vec<Value>) -> Value {
+fn sk_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if vm.extentions.contains(&"va-print".to_string()) {
         // VA print extention
         for i in args {
             print!("{} ", i.to_string());
         }
-        println!("");
+        println!();
     } else if args.len() != 1 {
         // Invalid args
         return vm.bad_args(&"print".to_string(), args.len(), 1);
@@ -403,11 +392,11 @@ fn sk_print(vm: &mut Vm, args: Vec<Value>) -> Value {
         // Normal printing
         println!("{}", args[0].to_string());
     }
-    return Value::None;
+    return Ok(Value::None);
 }
 
 // Input
-fn sk_input(vm: &mut Vm, args: Vec<Value>) -> Value {
+fn sk_input(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
         return vm.bad_args(&"input".to_string(), args.len(), 1);
@@ -417,60 +406,60 @@ fn sk_input(vm: &mut Vm, args: Vec<Value>) -> Value {
     let _ = std::io::stdout().flush();
     // Get input
     let mut buffer = String::new();
-    return match io::stdin().read_line(&mut buffer) {
+    return Ok(match io::stdin().read_line(&mut buffer) {
         Err(_) => Value::Str("".to_string()),
         _ => Value::Str(buffer.trim_end().to_string())
-    };
+    });
 }
 
 // Type
-fn sk_type(vm: &mut Vm, args: Vec<Value>) -> Value {
+fn sk_type(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
         return vm.bad_args(&"type".to_string(), args.len(), 1);
     }
-    return Value::Str(args[0].get_type());
+    return Ok(Value::Str(args[0].get_type()));
 }
 
 // Len
-fn sk_len(vm: &mut Vm, args: Vec<Value>) -> Value {
+fn sk_len(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
         return vm.bad_args(&"type".to_string(), args.len(), 1);
     }
     // Check that the type is a list
     if let Value::List(l) = &args[0] {
-        return Value::Int(l.len() as i32);
+        return Ok(Value::Int(l.len() as i32));
     }
-    return Value::Error("len() argument 1 must be a list".to_string());
+    return Err("len() argument 1 must be a list".to_string());
 }
 
 // Casting
 // Int
-fn sk_int(vm: &mut Vm, args: Vec<Value>) -> Value {
+fn sk_int(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
         return vm.bad_args(&"int".to_string(), args.len(), 1);
     }
-    return Value::Int(args[0].to_int());
+    return Ok(Value::Int(args[0].to_int()));
 }
 
 // Float
-fn sk_float(vm: &mut Vm, args: Vec<Value>) -> Value {
+fn sk_float(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
         return vm.bad_args(&"float".to_string(), args.len(), 1);
     }
-    return Value::Float(args[0].to_float());
+    return Ok(Value::Float(args[0].to_float()));
 }
 
 // String
-fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Value {
+fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
         return vm.bad_args(&"string".to_string(), args.len(), 1);
     }
-    return Value::Str(args[0].to_string());
+    return Ok(Value::Str(args[0].to_string()));
 }
 
 // The big switch, runs every instruction
@@ -497,27 +486,27 @@ fn exec_next(vm: &mut Vm) -> Result<Value, String> {
         Opcode::ADD => {
             let rhs = vm.pop();
             let lhs = vm.pop();
-            vm.push(lhs + rhs);
+            vm.push((lhs + rhs)?);
         },
         Opcode::SUB => {
             let rhs = vm.pop();
             let lhs = vm.pop();
-            vm.push(lhs - rhs);
+            vm.push((lhs - rhs)?);
         },
         Opcode::MUL => {
             let rhs = vm.pop();
             let lhs = vm.pop();
-            vm.push(lhs * rhs);
+            vm.push((lhs * rhs)?);
         },
         Opcode::DIV => {
             let rhs = vm.pop();
             let lhs = vm.pop();
-            vm.push(lhs / rhs);
+            vm.push((lhs / rhs)?);
         },
         Opcode::MOD => {
             let rhs = vm.pop();
             let lhs = vm.pop();
-            vm.push(lhs % rhs);
+            vm.push((lhs % rhs)?);
         },
         Opcode::EQ => {
             let rhs = vm.pop();
@@ -561,10 +550,7 @@ fn exec_next(vm: &mut Vm) -> Result<Value, String> {
                 return Err(IMPOSSIBLE_STATE.to_string());
             };
             // Get var
-            let var = vm.get_var(&varname);
-            if let Value::Error(s) = var {
-                return Err(s);
-            }
+            let var = vm.get_var(&varname)?;
             // Push
             vm.push(var);
         },
@@ -584,7 +570,7 @@ fn exec_next(vm: &mut Vm) -> Result<Value, String> {
                 return Err(IMPOSSIBLE_STATE.to_string());
             };
             let val = vm.pop();
-            vm.make_var(&varname, val, vm.is_global, true);
+            vm.make_var(&varname, val);
         },
 
         // Scope
@@ -615,18 +601,20 @@ fn exec_next(vm: &mut Vm) -> Result<Value, String> {
 
         // Functions
         Opcode::CALL => {
-            // Get args
-            let mut arg_num = vm.read(1);
             let Value::Str(name) = vm.pop() else {
                 panic!("Non-string function name");
             };
+            let Value::Int(mut arg_num) = vm.pop() else {
+                panic!("Non-int arg number");
+            };
+            // Get the args
             let mut args = Vec::<Value>::with_capacity(arg_num as usize);
-            while arg_num != 0 {
+            while arg_num > 0 {
                 args.push(vm.pop());
                 arg_num -= 1;
             }
             // Call
-            vm.call(&name, &args);
+            return vm.call(&name, &args);
         },
 
         Opcode::RET => {},
@@ -635,6 +623,9 @@ fn exec_next(vm: &mut Vm) -> Result<Value, String> {
 }
 
 pub fn run(vm: &mut Vm, ops: Vec<u8>, consts: Vec<Value>) -> bool {
+    if ops.is_empty() {
+        return true;
+    }
     vm.ops = ops;
     vm.at = 0;
     vm.consts = consts;
