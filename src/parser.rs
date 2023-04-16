@@ -388,11 +388,16 @@ fn parse_statement(parser: &mut Parser) -> Option<ASTNode> {
         },
         // Semicolons
         Semicolon => {
-            parser.next();
+            if parser.next() == Eof {
+                return Option::None;
+            };
             parse_statement(parser)
         }
         // EOF
-        Eof => Option::None,
+        Eof => {
+            error!(parser, "reached EOF too soon!");
+            Option::None
+        },
         // Expressions
         _ => {
             let ret = parse_binop_set(parser)?;
@@ -414,7 +419,12 @@ fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
             break;
         }
         // Add statment
-        let stmt = parse_statement(parser)?;
+        let Some(stmt) = parse_statement(parser) else {
+            if Eof == parser.current() && !parser.has_err {
+                break;
+            }
+            return Option::None;
+        };
         if stmt != ASTNode::Nop {
             body.push(stmt);
         }

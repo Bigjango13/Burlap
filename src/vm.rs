@@ -40,6 +40,10 @@ pub enum Opcode {
     LL,
     // INdeX (list, key -> value)
     INX,
+    // To ITeR (value -> iter)
+    TITR,
+    // NeXT (iter -> (iter, value, true) | (iter, false))
+    NXT,
 
     // Math
     // ADD (value, value -> value)
@@ -78,8 +82,6 @@ pub enum Opcode {
     JMPB,
     // JuMP if NoT ([u8], offset)
     JMPNT,
-    // To ITeR (value -> iter)
-    TITR,
 
     // Calls
     // CALL function (name, arg#, args...)
@@ -139,6 +141,7 @@ impl Vm {
             ("input".to_string(), sk_input as Functie),
             ("type".to_string(), sk_type as Functie),
             ("len".to_string(), sk_len as Functie),
+            ("range".to_string(), sk_range as Functie),
             // Casts
             ("int".to_string(), sk_int as Functie),
             ("float".to_string(), sk_float as Functie),
@@ -430,13 +433,37 @@ fn sk_type(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_len(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        return vm.bad_args(&"type".to_string(), args.len(), 1);
+        return vm.bad_args(&"len".to_string(), args.len(), 1);
     }
     // Check that the type is a list
     if let Value::List(l) = &args[0] {
         return Ok(Value::Int(l.len() as i32));
     }
     return Err("len() argument 1 must be a list".to_string());
+}
+
+// Range
+fn sk_range(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 2 {
+        // Invalid args
+        return vm.bad_args(&"range".to_string(), args.len(), 1);
+    }
+    // Create an iterator
+    let (mut min, max) = (args[0].to_int(), args[1].to_int());
+    // No need to iterate
+    if min == max {
+        return Ok(Value::Iter(vec![Value::Int(min)], 0));
+    }
+    // Find out which way it's going
+    let offset: i32 = if min > max { -1 } else { 1 };
+    // Loop and get values
+    let mut nums = Vec::<Value>::new();
+    while min != max {
+        nums.push(Value::Int(min));
+        min += offset;
+    }
+    nums.push(Value::Int(min));
+    return Ok(Value::Iter(nums, 0));
 }
 
 // Casting
@@ -519,6 +546,24 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                     "failed to index {} with {}",
                     list.to_string(), index.to_string()
                 )),
+            }
+        },
+        Opcode::TITR => {
+            // Convert to an iterator
+            let iter = vm.pop().to_iter()?;
+            vm.push(iter);
+        },
+        Opcode::NXT => {
+            // Get the value
+            let val = vm.stack.last_mut()
+                .ok_or("Overpopped stack!")?.iter_next()?;
+            if let Some(val) = val {
+                // Push value
+                vm.push(val);
+                vm.push(Value::Bool(true));
+            } else {
+                // End of list
+                vm.push(Value::Bool(false));
             }
         },
 
@@ -645,6 +690,8 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 args.push(vm.pop());
                 arg_num -= 1;
             }
+            // Reverse
+            let args = args.into_iter().rev().collect();
             // Call
             vm.call(&name, &args)?;
         },
@@ -667,7 +714,7 @@ pub fn run(vm: &mut Vm, ops: Vec<u8>, consts: Vec<Value>) -> bool {
         // Print debugging info
         let opcode = vm.cur_opcode();
         let op = vm.cur_op();
-        println!("{}: {:?}({}) {:?}", vm.at, opcode, op, vm.stack);
+        //println!("{}: {:?}({}) {:?}", vm.at, opcode, op, vm.stack);
         // Run
         if let Err(s) = exec_next(vm) {
             println!("{}", s);

@@ -11,6 +11,9 @@ pub enum Value {
     Bool(bool),
     List(IndexMap<String, Value>),
     None,
+
+    // Iterator (used for iter-based loops)
+    Iter(Vec<Value>, i32)
 }
 // Helper for ops
 macro_rules! do_op {
@@ -98,6 +101,7 @@ impl Value {
                 ret
             }
             Value::None => "none".to_string(),
+            Value::Iter(_, _) => "__burlap_iter".to_string(),
         };
     }
     // Truthy converstion
@@ -121,7 +125,36 @@ impl Value {
             Value::Bool(_) => "Bool",
             Value::List(_) => "List",
             Value::None => "None",
+            // Internal types
+            Value::Iter(_, _) => "__burlap_iter",
         }.to_string();
+    }
+    // Iterators
+    pub fn to_iter(&self) -> Result<Value, String> {
+        if let Value::Iter(_, _) = self {
+            return Ok(self.clone());
+        }
+        let Value::List(list) = self else {
+            return Err(format!("Cannot iterate over {}", self.get_type()));
+        };
+        return Ok(Value::Iter(list.values().map(|i| i.clone()).collect(), 0));
+    }
+    pub fn iter_next(&mut self) -> Result<Option<Value>, String> {
+        // Must be an iter
+        let Value::Iter(list, ref mut at) = self else {
+            return Err(
+                format!("Require __burlap_iter not {}", self.get_type())
+            );
+        };
+        // Get the value
+        let ret = list.get(*at as usize);
+        *at += 1;
+        // Return it
+        if let Some(ret) = ret {
+            return Ok(Some(ret.clone()));
+        } else {
+            return Ok(None);
+        }
     }
     // Indexing
     pub fn index(&self, index: Value) -> Option<&Value> {

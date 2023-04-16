@@ -1,0 +1,17 @@
+# 99 bottles of beer
+# Print "X bottles of beer" where X starts as 99 and goes down to zero
+
+loop(i in range(99, 1)) {
+    if i > 2 {
+        print("" + i + " bottles of beer on the wall, " + i + " bottles of beer!");
+        print("Take one down, pass it around, " + (i - 1) + " bottles of beer on the wall!");
+        print("--");
+    } else if i == 2 {
+        print("2 bottles of beer on the wall, 2 bottles of beer!");
+        print("Take one down, pass it around, 1 bottle of beer on the wall!");
+        print("--");
+    } else if i == 1 {
+        print("1 bottle of beer on the wall, 1 bottle of beer!");
+        print("Take one down, pass it around, no more bottles of beer on the wall!");
+    }
+}

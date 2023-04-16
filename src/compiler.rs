@@ -263,6 +263,7 @@ fn compile_body(compiler: &mut Compiler, node: &ASTNode) -> bool {
         if *node == Nop {
             return true;
         }
+        println!("Node: {:?}", node);
         panic!("compile_body got non-body node!");
     };
     return _compile_body(compiler, nodes);
@@ -288,7 +289,7 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
                 compiler.bytes.push(0);
                 // Compile body
                 let pos = compiler.bytes.len();
-                compile_body(compiler, else_part);
+                compile_stmt(compiler, else_part);
                 compiler.bytes[pos - 1] = (compiler.bytes.len() - pos + 1)
                     as u8;
                 compiler.bytes.push(Opcode::NOP as u8);
@@ -311,7 +312,7 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
                 compiler.bytes.push(0);
                 let pos = compiler.bytes.len();
                 // Compile else part
-                compile_body(compiler, else_part);
+                compile_stmt(compiler, else_part);
                 compiler.bytes[pos - 1] = (compiler.bytes.len() - pos + 1) as u8;
             }
             // Might jump too far, so cushion with NOP
@@ -321,14 +322,17 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
             // Load iter
             compile_expr(compiler, iter);
             compiler.bytes.push(Opcode::TITR as u8);
-            compiler.push(Value::Str(var.to_string()));
-            compiler.bytes.push(Opcode::PV as u8);
+            let pos = compiler.bytes.len();
+            compiler.bytes.push(Opcode::NXT as u8);
 
             // Exit jump
-            let pos = compiler.bytes.len();
             compiler.bytes.push(Opcode::JMPNT as u8);
             compiler.bytes.push(0);
             let offpos = compiler.bytes.len();
+
+            // Set the loop var
+            compiler.push(Value::Str(var.to_string()));
+            compiler.bytes.push(Opcode::DV as u8);
 
             // Body
             compile_body(compiler, body);
@@ -336,7 +340,8 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
             // Backwards jump
             compiler.bytes.push(Opcode::JMPB as u8);
             compiler.bytes.push((compiler.bytes.len() - pos) as u8);
-            compiler.bytes.push(Opcode::NOP as u8);
+            // Clean up the iter
+            compiler.bytes.push(Opcode::DEL as u8);
             compiler.bytes[offpos - 1] = (compiler.bytes.len() - offpos) as u8;
         },
         WhileStmt(cond, body) => {
@@ -362,6 +367,7 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
         },
         _ => {
             let ret = compile_expr(compiler, node);
+            // Remove unused values from the stack
             compiler.bytes.push(Opcode::DEL as u8);
             return ret;
         }
