@@ -11,8 +11,6 @@ pub enum Value {
     Bool(bool),
     List(IndexMap<String, Value>),
     None,
-    // Null (the diffrence between, no return and returning none)
-    Null
 }
 // Helper for ops
 macro_rules! do_op {
@@ -100,7 +98,6 @@ impl Value {
                 ret
             }
             Value::None => "none".to_string(),
-            _ => format!("{:?}", self),
         };
     }
     // Truthy converstion
@@ -122,28 +119,26 @@ impl Value {
             Value::Int(_) => "Number",
             Value::Float(_) => "Decimal",
             Value::Bool(_) => "Bool",
-            Value::None => "None",
             Value::List(_) => "List",
-            // Internal types
-            Value::Null => "_Null",
+            Value::None => "None",
         }.to_string();
     }
     // Indexing
     pub fn index(&self, index: Value) -> Option<&Value> {
-        if let Value::List(l) = self {
-            // String indexing (keys)
-            if let Value::Str(s) = index {
-              return l.get(&s);
-            }
-            // Number indexing
-            return match l.get_index(index.to_int() as usize) {
-                // Remove the key
-                Some((_, v)) => Some(v),
-                None => None
-            };
+        let Value::List(l) = self else {
+            // Not a list
+            return None;
+        };
+        // String indexing (keys)
+        if let Value::Str(s) = index {
+          return l.get(&s);
         }
-        // Not a list
-        return None;
+        // Number indexing
+        return match l.get_index(index.to_int() as usize) {
+            // Remove the key
+            Some((_, v)) => Some(v),
+            None => None
+        };
     }
     // ==
     pub fn eq(&self, right: Value) -> bool {
@@ -160,14 +155,18 @@ impl Value {
                 if let Value::None = right {
                     // none == none
                     true
-                } else { false }
+                } else {
+                    false
+                }
             },
             // bool == ?
             Value::Bool(b) => {
                 // float == float
                 if let Value::Bool(b_right) = right {
                     *b == b_right
-                } else { false }
+                } else {
+                    false
+                }
             },
             // Floats
             Value::Float(f) => {
@@ -277,9 +276,12 @@ impl_op_ex!(/ |left: Value, right: Value| -> Result<Value, String> {
         Value::Str(_) => {
             Err("cannot divide string".to_string())
         },
-        // bool is converted to an int
+        // bool and int are converted to floats
         Value::Bool(b) => {
-            Value::Int(b as i32) / right
+            Value::Float(b as i32 as f32) / right
+        },
+        Value::Int(i) => {
+            Value::Float(i as f32) / right
         },
         // none / anything is none
         Value::None => Ok(Value::None),

@@ -215,6 +215,32 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> bool {
             compiler.push(Value::Str(name.clone()));
             compiler.bytes.push(Opcode::CALL as u8);
         },
+        // List
+        ListExpr(keys, values) => {
+            // Build the list
+            let mut at = values.len();
+            while at > 0 {
+                at -= 1;
+                if !compile_expr(compiler, &values[at]) {
+                    return false;
+                }
+                compiler.push(Value::Str(keys[at].clone()));
+            }
+            // Push
+            compiler.push(Value::Int(values.len() as i32));
+            compiler.bytes.push(Opcode::LL as u8);
+        },
+        // Indexes
+        IndexExpr(val, index) => {
+            // Push
+            if !compile_expr(compiler, val) {
+                return false;
+            }
+            if !compile_expr(compiler, index) {
+                return false;
+            }
+            compiler.bytes.push(Opcode::INX as u8);
+        },
         _ => {
             return false;
         }
@@ -291,6 +317,28 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
             // Might jump too far, so cushion with NOP
             compiler.bytes.push(Opcode::NOP as u8);
         },
+        LoopStmt(var, iter, body) => {
+            // Load iter
+            compile_expr(compiler, iter);
+            compiler.bytes.push(Opcode::TITR as u8);
+            compiler.push(Value::Str(var.to_string()));
+            compiler.bytes.push(Opcode::PV as u8);
+
+            // Exit jump
+            let pos = compiler.bytes.len();
+            compiler.bytes.push(Opcode::JMPNT as u8);
+            compiler.bytes.push(0);
+            let offpos = compiler.bytes.len();
+
+            // Body
+            compile_body(compiler, body);
+
+            // Backwards jump
+            compiler.bytes.push(Opcode::JMPB as u8);
+            compiler.bytes.push((compiler.bytes.len() - pos) as u8);
+            compiler.bytes.push(Opcode::NOP as u8);
+            compiler.bytes[offpos - 1] = (compiler.bytes.len() - offpos) as u8;
+        },
         WhileStmt(cond, body) => {
             // Start, exit jump + cond
             let pos = compiler.bytes.len();
@@ -301,19 +349,21 @@ fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
 
             // Compile body
             compile_body(compiler, body);
-            compiler.bytes[offpos - 1] = (compiler.bytes.len() - offpos + 3) as u8;
 
             // Backwards jump
             compiler.bytes.push(Opcode::JMPB as u8);
             compiler.bytes.push((compiler.bytes.len() - pos) as u8);
             compiler.bytes.push(Opcode::NOP as u8);
+            compiler.bytes[offpos - 1] = (compiler.bytes.len() - offpos) as u8;
         },
         BodyStmt(nodes) => return _compile_body(compiler, nodes),
         Nop => {
             // Nop isn't turned into the NOP instruction because it's useless
         },
         _ => {
-            return compile_expr(compiler, node);
+            let ret = compile_expr(compiler, node);
+            compiler.bytes.push(Opcode::DEL as u8);
+            return ret;
         }
     };
     return true;

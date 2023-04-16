@@ -24,6 +24,8 @@ pub enum Opcode {
     PUSH3,
     // DUPlicate head (value -> value, value)
     DUP,
+    // DELete head (value)
+    DEL,
 
     // Variable
     // Push Variable ("name" -> value)
@@ -33,11 +35,11 @@ pub enum Opcode {
     // Set Variable ("name", value)
     SV,
 
-    // Scope
-    // Raise Scope
-    RS,
-    // Lower Scope
-    LS,
+    // Lists
+    // Load list (size, keys-and-values -> list)
+    LL,
+    // INdeX (list, key -> value)
+    INX,
 
     // Math
     // ADD (value, value -> value)
@@ -76,6 +78,8 @@ pub enum Opcode {
     JMPB,
     // JuMP if NoT ([u8], offset)
     JMPNT,
+    // To ITeR (value -> iter)
+    TITR,
 
     // Calls
     // CALL function (name, arg#, args...)
@@ -269,13 +273,15 @@ impl Vm {
     // Call a function
     pub fn call(
         &mut self, name: &String, args: &Vec<Value>
-    ) -> Result<Value, String> {
+    ) -> Result<(), String> {
         // Builtin functions
         if let Some(functie) = self.functies.get(name) {
-            return functie(self, args.clone());
+            let ret = functie(self, args.clone())?;
+            self.push(ret);
         } else {
             return Err(format!("no function called \"{}\"", name));
         }
+        Ok(())
         /*/ Try to get the function from the name
         let function: &ASTNode;
         match (&self).functions.get(name) {
@@ -321,7 +327,6 @@ impl Vm {
         self.in_func = old_func;
         self.raise_scope(scope_data);
         // TODO*/
-        return Ok(Value::None);
     }
 
     pub fn cur_op(&mut self) -> u8 {
@@ -463,7 +468,7 @@ fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 }
 
 // The big switch, runs every instruction
-fn exec_next(vm: &mut Vm) -> Result<Value, String> {
+fn exec_next(vm: &mut Vm) -> Result<(), String> {
     // Unsafe because casting an int to enum might not be valid
     match vm.cur_opcode() {
         Opcode::NOP => {},
@@ -480,6 +485,71 @@ fn exec_next(vm: &mut Vm) -> Result<Value, String> {
         Opcode::DUP => {
             let val = vm.stack.last();
             vm.push(val.expect("Overpopped stack!").clone());
+        },
+        Opcode::DEL => {
+            vm.stack.pop();
+        },
+
+        // Lists
+        Opcode::LL => {
+            let Value::Int(mut size) = vm.pop() else {
+                return Err("Non-int list size".to_string());
+            };
+            // Get the keys and values and put them into the list
+            let mut list = IndexMap::<String, Value>::with_capacity(
+                size as usize
+            );
+            while size > 0 {
+                let Value::Str(key) = vm.pop() else {
+                    return Err("Non-string list index".to_string());
+                };
+                let val = vm.pop();
+                // Store
+                list.insert(key, val);
+                size -= 1;
+            }
+            vm.push(Value::List(list));
+        },
+        Opcode::INX => {
+            let index = vm.pop();
+            let list = vm.pop();
+            match list.index(index.clone()) {
+                 Some(x) => vm.push(x.clone()),
+                 _ => return Err(format!(
+                    "failed to index {} with {}",
+                    list.to_string(), index.to_string()
+                )),
+            }
+        },
+
+        // Variables
+        Opcode::PV => {
+            // Get varname
+            let Value::Str(varname) = vm.pop() else {
+                return Err("variable name must be string".to_string());
+            };
+            // Get var
+            let var = vm.get_var(&varname)?;
+            // Push
+            vm.push(var);
+        },
+        Opcode::SV => {
+            // Get varname
+            let Value::Str(varname) = vm.pop() else {
+                return Err("variable name must be string".to_string());
+            };
+            // Set
+            let val = vm.pop();
+            if !vm.set_var(&varname, val, vm.is_global) {
+                return Err(format!("no variable called \"{}\"", varname));
+            }
+        },
+        Opcode::DV => {
+            let Value::Str(varname) = vm.pop() else {
+                return Err("variable name must be string".to_string());
+            };
+            let val = vm.pop();
+            vm.make_var(&varname, val);
         },
 
         // Binops
@@ -543,44 +613,6 @@ fn exec_next(vm: &mut Vm) -> Result<Value, String> {
             vm.push(Value::Bool(!v.is_truthy()));
         },
 
-        // Variables
-        Opcode::PV => {
-            // Get varname
-            let Value::Str(varname) = vm.pop() else {
-                return Err(IMPOSSIBLE_STATE.to_string());
-            };
-            // Get var
-            let var = vm.get_var(&varname)?;
-            // Push
-            vm.push(var);
-        },
-        Opcode::SV => {
-            // Get varname
-            let Value::Str(varname) = vm.pop() else {
-                return Err(IMPOSSIBLE_STATE.to_string());
-            };
-            // Set
-            let val = vm.pop();
-            if !vm.set_var(&varname, val, vm.is_global) {
-                return Err(format!("no variable called \"{}\"", varname));
-            }
-        },
-        Opcode::DV => {
-            let Value::Str(varname) = vm.pop() else {
-                return Err(IMPOSSIBLE_STATE.to_string());
-            };
-            let val = vm.pop();
-            vm.make_var(&varname, val);
-        },
-
-        // Scope
-        Opcode::LS => {
-            //vm.scope = vm.lower_scope(false);
-        }
-        Opcode::RS => {
-            //vm.raise_scope(vm.scope);
-        }
-
         // Jumps
         Opcode::JMPU => {
             let offset = vm.read(1);
@@ -602,10 +634,10 @@ fn exec_next(vm: &mut Vm) -> Result<Value, String> {
         // Functions
         Opcode::CALL => {
             let Value::Str(name) = vm.pop() else {
-                panic!("Non-string function name");
+                return Err("Non-string function name".to_string());
             };
             let Value::Int(mut arg_num) = vm.pop() else {
-                panic!("Non-int arg number");
+                return Err("Non-int arg number".to_string());
             };
             // Get the args
             let mut args = Vec::<Value>::with_capacity(arg_num as usize);
@@ -614,12 +646,13 @@ fn exec_next(vm: &mut Vm) -> Result<Value, String> {
                 arg_num -= 1;
             }
             // Call
-            return vm.call(&name, &args);
+            vm.call(&name, &args)?;
         },
 
-        Opcode::RET => {},
+        _ => {},
     };
-    return Ok(Value::None);
+    // If nothing has returned an error, everything is fine
+    Ok(())
 }
 
 pub fn run(vm: &mut Vm, ops: Vec<u8>, consts: Vec<Value>) -> bool {

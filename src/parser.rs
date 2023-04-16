@@ -45,8 +45,10 @@ pub enum ASTNode {
     WhileStmt(Box<ASTNode>, Box<ASTNode>),
     // Import, ("math")
     ImportStmt(Box<ASTNode>),
-    // Nop
-    Nop
+
+    // Special
+    // Nop, does nothing
+    Nop,
 }
 
 // Parser state
