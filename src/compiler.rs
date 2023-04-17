@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::common::IMPOSSIBLE_STATE;
 use crate::lexer::TokenType;
 use crate::parser::{ASTNode, ASTNode::*};
@@ -5,20 +7,28 @@ use crate::value::Value;
 use crate::vm::Opcode;
 
 #[derive(Debug)]
-struct Compiler {
-    pub bytes: Vec<u8>,
+pub struct Program {
+    // Opcodes and constants
+    pub ops: Vec<u8>,
     pub consts: Vec<Value>,
+    // Function locations (name : (byte pos, arg num))
+    pub functis: HashMap<String, (usize, i32)>,
+    // Line numbers (run-length encoded)
+    pub lines: Vec<usize>,
 }
 
-impl Compiler {
+impl Program {
     // Init
-    pub fn new() -> Compiler {
-        Compiler{bytes: Vec::new(), consts: Vec::new()}
+    pub fn new() -> Program {
+        Program{
+            ops: Vec::new(), consts: Vec::new(),
+            functis: HashMap::new(), lines: Vec::new()
+        }
     }
 
-    pub fn write_num(&mut self, val: u32, bytes: u8, start: usize) {
-        for i in 0..bytes {
-            self.bytes[start + i as usize] = ((val >> (i * 8)) & 255) as u8;
+    pub fn write_num(&mut self, val: u32, ops: u8, start: usize) {
+        for i in 0..ops {
+            self.ops[start + i as usize] = ((val >> (i * 8)) & 255) as u8;
         }
     }
 
@@ -34,59 +44,59 @@ impl Compiler {
             panic!("Too many different constants!");
         } else if index > u8::MAX.into() {
             // The len is too big for one byte, so push 3
-            self.bytes.push(Opcode::PUSH3 as u8);
-            self.bytes.push((index & 255) as u8);
-            self.bytes.push(((index >> 8) & 255) as u8);
-            self.bytes.push(((index >> 16) & 255) as u8);
+            self.ops.push(Opcode::PUSH3 as u8);
+            self.ops.push((index & 255) as u8);
+            self.ops.push(((index >> 8) & 255) as u8);
+            self.ops.push(((index >> 16) & 255) as u8);
         } else {
-            self.bytes.push(Opcode::PUSH as u8);
-            self.bytes.push(index as u8);
+            self.ops.push(Opcode::PUSH as u8);
+            self.ops.push(index as u8);
         }
     }
 }
 
 fn compile_unary(
-    compiler: &mut Compiler,
+    program: &mut Program,
     op: &TokenType, val: &Box<ASTNode>
 ) -> bool {
     match op {
         // -/!
         TokenType::Minus => {
-            compiler.push(Value::Int(0));
-            if !compile_expr(compiler, val) {
+            program.push(Value::Int(0));
+            if !compile_expr(program, val) {
                 return false;
             }
-            compiler.bytes.push(Opcode::SUB as u8);
+            program.ops.push(Opcode::SUB as u8);
         },
         TokenType::Not => {
-            if !compile_expr(compiler, val) {
+            if !compile_expr(program, val) {
                 return false;
             }
-            compiler.bytes.push(Opcode::NOT as u8);
+            program.ops.push(Opcode::NOT as u8);
         },
         // ++/--
         TokenType::PlusPlus => {
-            if !compile_expr(compiler, val) {
+            if !compile_expr(program, val) {
                 return false;
             }
-            compiler.push(Value::Int(1));
-            compiler.bytes.push(Opcode::ADD as u8);
-            compiler.bytes.push(Opcode::DUP as u8);
+            program.push(Value::Int(1));
+            program.ops.push(Opcode::ADD as u8);
+            program.ops.push(Opcode::DUP as u8);
             if let VarExpr(s) = *val.clone() {
-                compiler.push(Value::Str(s));
-                compiler.bytes.push(Opcode::SV as u8);
+                program.push(Value::Str(s));
+                program.ops.push(Opcode::SV as u8);
             }
         },
         TokenType::MinusMinus => {
-            if !compile_expr(compiler, val) {
+            if !compile_expr(program, val) {
                 return false;
             }
-            compiler.push(Value::Int(1));
-            compiler.bytes.push(Opcode::SUB as u8);
-            compiler.bytes.push(Opcode::DUP as u8);
+            program.push(Value::Int(1));
+            program.ops.push(Opcode::SUB as u8);
+            program.ops.push(Opcode::DUP as u8);
             if let VarExpr(s) = *val.clone() {
-                compiler.push(Value::Str(s));
-                compiler.bytes.push(Opcode::SV as u8);
+                program.push(Value::Str(s));
+                program.ops.push(Opcode::SV as u8);
             }
         },
         _ => panic!("{}", IMPOSSIBLE_STATE),
@@ -95,67 +105,68 @@ fn compile_unary(
 }
 
 fn compile_binop(
-    compiler: &mut Compiler,
-    lhs: &Box<ASTNode>, op: &TokenType, rhs: &Box<ASTNode>
+    program: &mut Program,
+    lhs: &Box<ASTNode>, op: &TokenType, rhs: &Box<ASTNode>,
+    clean: bool
 ) -> bool {
     // Compile sides
     if let TokenType::Equals = op {} else {
         // No need to compile the value if it will just be reassigned
-        if !compile_expr(compiler, lhs) {
+        if !compile_expr(program, lhs) {
             return false;
         }
     }
-    if !compile_expr(compiler, rhs) {
+    if !compile_expr(program, rhs) {
         return false;
     }
     // Compile op
     match op {
         // Simple single instructions
         TokenType::Plus | TokenType::PlusEquals => {
-            compiler.bytes.push(Opcode::ADD as u8);
+            program.ops.push(Opcode::ADD as u8);
         },
         TokenType::Minus | TokenType::MinusEquals => {
-            compiler.bytes.push(Opcode::SUB as u8);
+            program.ops.push(Opcode::SUB as u8);
         },
         TokenType::Times | TokenType::TimesEquals => {
-            compiler.bytes.push(Opcode::MUL as u8);
+            program.ops.push(Opcode::MUL as u8);
         },
         TokenType::Div | TokenType::DivEquals => {
-            compiler.bytes.push(Opcode::DIV as u8);
+            program.ops.push(Opcode::DIV as u8);
         },
         TokenType::Modulo => {
-            compiler.bytes.push(Opcode::MOD as u8);
+            program.ops.push(Opcode::MOD as u8);
         },
         TokenType::And => {
-            compiler.bytes.push(Opcode::AND as u8);
+            program.ops.push(Opcode::AND as u8);
         },
         TokenType::Or => {
-            compiler.bytes.push(Opcode::OR as u8);
+            program.ops.push(Opcode::OR as u8);
         },
         TokenType::Xor => {
-            compiler.bytes.push(Opcode::XOR as u8);
+            program.ops.push(Opcode::XOR as u8);
         },
         TokenType::Gt => {
-            compiler.bytes.push(Opcode::GT as u8);
+            program.ops.push(Opcode::GT as u8);
         },
         TokenType::Lt => {
-            compiler.bytes.push(Opcode::LT as u8);
+            program.ops.push(Opcode::LT as u8);
         },
         TokenType::EqualsEquals => {
-            compiler.bytes.push(Opcode::EQ as u8);
+            program.ops.push(Opcode::EQ as u8);
         },
         // Harder ones that don't have a single instruction
         TokenType::NotEquals => {
-            compiler.bytes.push(Opcode::EQ as u8);
-            compiler.bytes.push(Opcode::NOT as u8);
+            program.ops.push(Opcode::EQ as u8);
+            program.ops.push(Opcode::NOT as u8);
         },
         TokenType::LtEquals => {
-            compiler.bytes.push(Opcode::GT as u8);
-            compiler.bytes.push(Opcode::NOT as u8);
+            program.ops.push(Opcode::GT as u8);
+            program.ops.push(Opcode::NOT as u8);
         },
         TokenType::GtEquals => {
-            compiler.bytes.push(Opcode::LT as u8);
-            compiler.bytes.push(Opcode::NOT as u8);
+            program.ops.push(Opcode::LT as u8);
+            program.ops.push(Opcode::NOT as u8);
         },
         // Handled later
         TokenType::Equals => {},
@@ -167,53 +178,56 @@ fn compile_binop(
         | TokenType::Equals = op.clone()
     {
         if let VarExpr(s) = *lhs.clone() {
-            compiler.push(Value::Str(s));
-            compiler.bytes.push(Opcode::SV as u8);
+            program.push(Value::Str(s));
+            program.ops.push(Opcode::SV as u8);
         }
+    } else if clean {
+        // Clean up the stack
+        program.ops.push(Opcode::DEL as u8);
     }
     return true;
 }
 
-fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> bool {
+fn compile_expr(program: &mut Program, node: &ASTNode) -> bool {
     match node {
         // Values
         VarExpr(val) => {
-            compiler.push(Value::Str(val.clone()));
-            compiler.bytes.push(Opcode::PV as u8);
+            program.push(Value::Str(val.clone()));
+            program.ops.push(Opcode::PV as u8);
         },
         StringExpr(val) => {
-            compiler.push(Value::Str(val.clone()));
+            program.push(Value::Str(val.clone()));
         },
         NumberExpr(val) => {
-            compiler.push(Value::Int(*val));
+            program.push(Value::Int(*val));
         },
         DecimalExpr(val) => {
-            compiler.push(Value::Float(*val));
+            program.push(Value::Float(*val));
         },
         BoolExpr(val) => {
-            compiler.push(Value::Bool(*val));
+            program.push(Value::Bool(*val));
         },
         NoneExpr => {
-            compiler.push(Value::None);
+            program.push(Value::None);
         },
-        // Binops/unary
+        // Binop/unary
         BinopExpr(lhs, op, rhs) => {
-            return compile_binop(compiler, lhs, op, rhs);
-        },
+            return compile_binop(program, lhs, op, rhs, false);
+        }
         UnaryExpr(op, val) => {
-            return compile_unary(compiler, op, val);
+            return compile_unary(program, op, val);
         },
         // Calls
         CallExpr(name, args) => {
             // Push the call. Name, arg count, args (in reverse order)
             for arg in args {
-                if !compile_expr(compiler, arg) {
+                if !compile_expr(program, arg) {
                     return false;
                 }
             }
-            compiler.push(Value::Int(args.len() as i32));
-            compiler.push(Value::Str(name.clone()));
-            compiler.bytes.push(Opcode::CALL as u8);
+            program.push(Value::Int(args.len() as i32));
+            program.push(Value::Str(name.clone()));
+            program.ops.push(Opcode::CALL as u8);
         },
         // List
         ListExpr(keys, values) => {
@@ -221,167 +235,200 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> bool {
             let mut at = values.len();
             while at > 0 {
                 at -= 1;
-                if !compile_expr(compiler, &values[at]) {
+                if !compile_expr(program, &values[at]) {
                     return false;
                 }
-                compiler.push(Value::Str(keys[at].clone()));
+                program.push(Value::Str(keys[at].clone()));
             }
             // Push
-            compiler.push(Value::Int(values.len() as i32));
-            compiler.bytes.push(Opcode::LL as u8);
+            program.push(Value::Int(values.len() as i32));
+            program.ops.push(Opcode::LL as u8);
         },
         // Indexes
         IndexExpr(val, index) => {
             // Push
-            if !compile_expr(compiler, val) {
+            if !compile_expr(program, val) {
                 return false;
             }
-            if !compile_expr(compiler, index) {
+            if !compile_expr(program, index) {
                 return false;
             }
-            compiler.bytes.push(Opcode::INX as u8);
+            program.ops.push(Opcode::INX as u8);
         },
+        // TODO
+        ImportStmt(_) => {},
         _ => {
-            return false;
+            panic!("Unknown token! {:?}", node);
         }
     };
     return true;
 }
 
-fn _compile_body(compiler: &mut Compiler, nodes: &Vec<ASTNode>) -> bool {
+fn _compile_body(program: &mut Program, nodes: &Vec<ASTNode>) -> bool {
     // Compile all nodes
     for node in nodes {
-        if !compile_stmt(compiler, node) {
+        if !compile_stmt(program, node) {
             // Pass it down
             return false;
         }
     }
     return true;
 }
-fn compile_body(compiler: &mut Compiler, node: &ASTNode) -> bool {
+fn compile_body(program: &mut Program, node: &ASTNode) -> bool {
     let BodyStmt(nodes) = node else {
         if *node == Nop {
             return true;
         }
-        println!("Node: {:?}", node);
         panic!("compile_body got non-body node!");
     };
-    return _compile_body(compiler, nodes);
+    return _compile_body(program, nodes);
 }
 
-fn compile_stmt(compiler: &mut Compiler, node: &ASTNode) -> bool {
+fn compile_stmt(program: &mut Program, node: &ASTNode) -> bool {
     match node {
-        // Statments
+        // Statements
         LetStmt(name, val) => {
-            compile_expr(compiler, val);
-            compiler.push(Value::Str(name.to_string()));
-            compiler.bytes.push(Opcode::DV as u8);
+            compile_expr(program, val);
+            program.push(Value::Str(name.to_string()));
+            program.ops.push(Opcode::DV as u8);
         },
         IfStmt(cond, body, else_part) => {
             // The condition must be a expr, so no need to match against stmts
-            compile_expr(compiler, cond);
+            compile_expr(program, cond);
 
             // This is for when boolean not is forgotten
             if **body == Nop {
-                compiler.bytes.push(Opcode::NOT as u8);
+                program.ops.push(Opcode::NOT as u8);
                 // Push the jump offset (which will be filled later)
-                compiler.bytes.push(Opcode::JMPNT as u8);
-                compiler.bytes.push(0);
+                program.ops.push(Opcode::JMPNT as u8);
+                program.ops.push(0);
                 // Compile body
-                let pos = compiler.bytes.len();
-                compile_stmt(compiler, else_part);
-                compiler.bytes[pos - 1] = (compiler.bytes.len() - pos + 1)
+                let pos = program.ops.len();
+                compile_stmt(program, else_part);
+                program.ops[pos - 1] = (program.ops.len() - pos + 1)
                     as u8;
-                compiler.bytes.push(Opcode::NOP as u8);
                 return true
             }
 
             // Push the jump offset (which will be filled later)
-            compiler.bytes.push(Opcode::JMPNT as u8);
-            compiler.bytes.push(0);
-            let pos = compiler.bytes.len();
+            program.ops.push(Opcode::JMPNT as u8);
+            program.ops.push(0);
+            let pos = program.ops.len();
             // Compile true part
-            compile_body(compiler, body);
-            compiler.bytes[pos - 1] = (compiler.bytes.len() - pos + 1) as u8;
+            compile_body(program, body);
+            program.ops[pos - 1] = (program.ops.len() - pos + 1) as u8;
 
             // The else
             if **else_part != Nop {
                 // Prep exit offset
-                compiler.bytes[pos - 1] += 2;
-                compiler.bytes.push(Opcode::JMPU as u8);
-                compiler.bytes.push(0);
-                let pos = compiler.bytes.len();
+                program.ops[pos - 1] += 2;
+                program.ops.push(Opcode::JMPU as u8);
+                program.ops.push(0);
+                let pos = program.ops.len();
                 // Compile else part
-                compile_stmt(compiler, else_part);
-                compiler.bytes[pos - 1] = (compiler.bytes.len() - pos + 1) as u8;
+                compile_stmt(program, else_part);
+                program.ops[pos - 1] = (program.ops.len() - pos + 1) as u8;
             }
-            // Might jump too far, so cushion with NOP
-            compiler.bytes.push(Opcode::NOP as u8);
         },
         LoopStmt(var, iter, body) => {
             // Load iter
-            compile_expr(compiler, iter);
-            compiler.bytes.push(Opcode::TITR as u8);
-            let pos = compiler.bytes.len();
-            compiler.bytes.push(Opcode::NXT as u8);
+            compile_expr(program, iter);
+            program.ops.push(Opcode::TITR as u8);
+            let pos = program.ops.len();
+            program.ops.push(Opcode::NXT as u8);
 
             // Exit jump
-            compiler.bytes.push(Opcode::JMPNT as u8);
-            compiler.bytes.push(0);
-            let offpos = compiler.bytes.len();
+            program.ops.push(Opcode::JMPNT as u8);
+            program.ops.push(0);
+            let offpos = program.ops.len();
 
             // Set the loop var
-            compiler.push(Value::Str(var.to_string()));
-            compiler.bytes.push(Opcode::DV as u8);
+            program.push(Value::Str(var.to_string()));
+            program.ops.push(Opcode::DV as u8);
 
             // Body
-            compile_body(compiler, body);
+            compile_body(program, body);
 
             // Backwards jump
-            compiler.bytes.push(Opcode::JMPB as u8);
-            compiler.bytes.push((compiler.bytes.len() - pos) as u8);
+            program.ops.push(Opcode::JMPB as u8);
+            program.ops.push((program.ops.len() - pos) as u8);
             // Clean up the iter
-            compiler.bytes.push(Opcode::DEL as u8);
-            compiler.bytes[offpos - 1] = (compiler.bytes.len() - offpos) as u8;
+            program.ops.push(Opcode::DEL as u8);
+            program.ops[offpos - 1] = (program.ops.len() - offpos) as u8;
         },
         WhileStmt(cond, body) => {
             // Start, exit jump + cond
-            let pos = compiler.bytes.len();
-            compile_expr(compiler, cond);
-            compiler.bytes.push(Opcode::JMPNT as u8);
-            compiler.bytes.push(0);
-            let offpos = compiler.bytes.len();
+            let pos = program.ops.len();
+            compile_expr(program, cond);
+            program.ops.push(Opcode::JMPNT as u8);
+            program.ops.push(0);
+            let offpos = program.ops.len();
 
             // Compile body
-            compile_body(compiler, body);
+            compile_body(program, body);
 
             // Backwards jump
-            compiler.bytes.push(Opcode::JMPB as u8);
-            compiler.bytes.push((compiler.bytes.len() - pos) as u8);
-            compiler.bytes.push(Opcode::NOP as u8);
-            compiler.bytes[offpos - 1] = (compiler.bytes.len() - offpos) as u8;
+            program.ops.push(Opcode::JMPB as u8);
+            program.ops.push((program.ops.len() - pos) as u8);
+            program.ops[offpos - 1] = (program.ops.len() - offpos + 1) as u8;
         },
-        BodyStmt(nodes) => return _compile_body(compiler, nodes),
+        BodyStmt(nodes) => return _compile_body(program, nodes),
+        FunctiStmt(name, args, body) => {
+            // Declare function
+            program.push(Value::Int(args.len() as i32));
+            program.push(Value::Str(name.to_string()));
+            program.ops.push(Opcode::FN as u8);
+            // Jump around function
+            program.ops.push(Opcode::JMPU as u8);
+            program.ops.push(0);
+            let pos = program.ops.len();
+            // Load args
+            for arg in args {
+                program.push(Value::Str(arg.to_string()));
+                program.ops.push(Opcode::DV as u8);
+            }
+            // Compile body
+            compile_body(program, body);
+            // Return
+            program.push(Value::None);
+            program.ops.push(Opcode::RET as u8);
+            // Fill jump
+            program.ops[pos - 1] = (program.ops.len() - pos + 1) as u8;
+        },
+        ReturnStmt(ret) => {
+            // Compile return value
+            compile_expr(program, ret);
+            // Return return value
+            program.ops.push(Opcode::RET as u8);
+        }
         Nop => {
             // Nop isn't turned into the NOP instruction because it's useless
         },
+        // Expressions
+        // Binops don't always return, so let them clean up the stack themselves
+        BinopExpr(lhs, op, rhs) => {
+            return compile_binop(program, lhs, op, rhs, true);
+        }
         _ => {
-            let ret = compile_expr(compiler, node);
+            let ret = compile_expr(program, node);
             // Remove unused values from the stack
-            compiler.bytes.push(Opcode::DEL as u8);
+            program.ops.push(Opcode::DEL as u8);
             return ret;
         }
     };
     return true;
 }
 
-pub fn compile(ast: Vec<ASTNode>) -> Option<(Vec<u8>, Vec<Value>)> {
-    let mut compiler = Compiler::new();
+pub fn compile(ast: Vec<ASTNode>) -> Option<Program> {
+    let mut program = Program::new();
+    // Compile
     for node in ast {
-        if !compile_stmt(&mut compiler, &node) {
-            return Option::None;
+        if !compile_stmt(&mut program, &node) {
+            return None;
         }
     }
-    println!("CC: {:?}", compiler);
-    return Some((compiler.bytes, compiler.consts));
+    // Jumps go onto the next instruction, so a nop is needed at the end
+    program.ops.push(Opcode::NOP as u8);
+    //println!("CC: {:?}", program);
+    return Some(program);
 }

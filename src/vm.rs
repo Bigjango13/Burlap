@@ -4,6 +4,7 @@ use std::io::Write;
 use std::io;
 
 use crate::common::IMPOSSIBLE_STATE;
+use crate::compiler::Program;
 use crate::parser::{ASTNode, ASTNode::*};
 use crate::import_file;
 use crate::lexer::TokenType;
@@ -14,7 +15,7 @@ use indexmap::map::IndexMap;
 #[repr(u8)]
 #[derive(Copy, Clone, Debug)]
 pub enum Opcode {
-    // The almightly NOP
+    // The almighty NOP
     NOP,
 
     // Stack
@@ -83,7 +84,9 @@ pub enum Opcode {
     // JuMP if NoT ([u8], offset)
     JMPNT,
 
-    // Calls
+    // Functions
+    // declare FuNction (name, arg#)
+    FN,
     // CALL function (name, arg#, args...)
     CALL,
     // RETurn (ret)
@@ -91,13 +94,14 @@ pub enum Opcode {
 }
 
 
-// A functie is a burlap functions implemented in rust (such as all the builtin ones)
+// A functie is a sack functions implemented in rust
 type Functie = fn(&mut Vm, Vec<Value>) -> Result<Value, String>;
 type Functies = HashMap<String, Functie>;
 
 // VM state
 pub struct Vm {
     // Some config for the VM
+    pub is_debug: bool,
     pub is_repl: bool,
     pub has_err: bool,
     pub in_func: bool,
@@ -114,25 +118,25 @@ pub struct Vm {
     var_vals: Vec<Value>,
     var_min: usize,
 
-    // Extentions
-    pub extentions: Vec<String>,
+    // Extensions
+    pub extensions: Vec<String>,
 
     // Used for importing
     pub import_path: PathBuf,
 
+    // The program
+    pub program: Program,
     // Sacks stack
     stack: Vec<Value>,
-    // Ops and constants
-    ops: Vec<u8>,
     pub jump: bool,
     at: usize,
-    consts: Vec<Value>,
 }
 
 impl Vm {
     // Init
     pub fn new(
-        is_repl: bool, import_path: PathBuf, extentions: Vec<String>
+        is_repl: bool, is_debug: bool,
+        import_path: PathBuf, extensions: Vec<String>
     ) -> Vm {
         // Builtin functions
         let functies = HashMap::from([
@@ -149,14 +153,15 @@ impl Vm {
         ]);
         // I really wish Rust had defaults, but it doesn't
         Vm {
-            is_repl, has_err: false, in_func: false,
+            is_debug, is_repl, has_err: false, in_func: false,
             is_global: true, globals: HashMap::new(),
             functions: HashMap::new(), functies,
             var_names: Vec::new(), var_vals: Vec::new(),
-            var_min: 0, extentions, import_path, stack: Vec::new(),
-            ops: Vec::new(), jump: false, at: 0, consts: Vec::new(),
+            var_min: 0, extensions, import_path, stack: Vec::new(),
+            program: Program::new(), jump: false, at: 0
         }
     }
+
     // Getting vars
     fn get_local(&self, name: &String) -> Result<Value, String> {
         // Gets a local var
@@ -170,6 +175,7 @@ impl Vm {
         // Failed to get var, return an error
         return Err(format!("no variable called \"{}\"", name).to_string());
     }
+
     fn get_global(&self, name: &String) -> Result<Value, String> {
         // Gets a var in the global scope
         return match self.globals.get(name) {
@@ -177,6 +183,7 @@ impl Vm {
             _ => Err(format!("no variable called \"{}\"", name).to_string())
         };
     }
+
     pub fn get_var(&self, name: &String) -> Result<Value, String> {
         // Try to get it in the normal scope first
         return match self.get_local(name) {
@@ -186,6 +193,7 @@ impl Vm {
             x => x,
         }
     }
+
     // Create a variable
     pub fn make_var(&mut self, name: &String, val: Value) {
         // Change if it already exists
@@ -200,6 +208,7 @@ impl Vm {
             self.var_vals.push(val);
         }
     }
+
     // Set a variable
     pub fn set_local(&mut self, name: &String, val: Value) -> bool {
         // Sets a local var
@@ -215,6 +224,7 @@ impl Vm {
         // Failed to get var
         return false;
     }
+
     pub fn set_global(&mut self, name: &String, val: Value) -> bool {
         // Sets a global value
         if !self.globals.contains_key(name) {
@@ -223,6 +233,7 @@ impl Vm {
         self.globals.insert(name.clone(), val);
         return true;
     }
+
     pub fn set_var(&mut self, name: &String, val: Value, global: bool) -> bool {
         // Sets a variable, returns true if it was successful
         return if global {
@@ -231,13 +242,15 @@ impl Vm {
             self.set_local(name, val)
         };
     }
+
     pub fn change_var(&mut self, name: &String, val: Value) -> bool {
-        // Changes a variable to a diffrent value
+        // Changes a variable to a different value
         if !self.set_local(name, val.clone()) {
             return self.set_global(name, val)
         }
         return true;
     }
+
     // Raise/lower scope
     pub fn lower_scope(&mut self, call: bool) -> (bool, usize, usize) {
         // Lowers the scope
@@ -264,92 +277,74 @@ impl Vm {
             self.var_vals.pop();
         }
     }
+
     fn bad_args(
         &self, name: &String, got: usize, need: usize
-    ) -> Result<Value, String> {
+    ) -> Result<(), String> {
         Err(if got > need {
             format!("too many args for {} (got {} need {})", name, got, need)
         } else {
             format!("too few args for {} (got {} need {})", name, got, need)
         }.to_string())
     }
+
     // Call a function
     pub fn call(
         &mut self, name: &String, args: &Vec<Value>
     ) -> Result<(), String> {
         // Builtin functions
         if let Some(functie) = self.functies.get(name) {
-            let ret = functie(self, args.clone())?;
+            // Reverse (normally the vm pops the args in reverse)
+            let args = args.clone().into_iter().rev().collect();
+            let ret = functie(self, args)?;
             self.push(ret);
-        } else {
+            return Ok(());
+        }
+
+        // Non-builtin functions
+        let Some((pos, arg_num)) = self.program.functis.get(name) else
+        {
             return Err(format!("no function called \"{}\"", name));
-        }
-        Ok(())
-        /*/ Try to get the function from the name
-        let function: &ASTNode;
-        match (&self).functions.get(name) {
-            Some(val) => function = val,
-            _ => { return Value::Error(format!("no function called \"{}\"", name)); }
         };
-        // Get the args and body
-        let arg_names: Vec<String>;
-        let body: ASTNode;
-        if let FunctiStmt(_name, named_args, fbody) = function {
-            arg_names = named_args.clone();
-            body = (**fbody).clone();
-        } else {
-            // Impossible!
-            return Value::Error(IMPOSSIBLE_STATE.to_string());
+        // Dereference
+        let (pos, arg_num) = (*pos, *arg_num);
+        // Check args
+        if arg_num != args.len() as i32 {
+            self.bad_args(name, args.len(), arg_num as usize)?;
         }
-        // Lower scope
-        let old_func = self.in_func;
-        self.in_func = true;
-        let scope_data = self.lower_scope(true);
-        // Push the args
-        let mut index = 0;
-        for arg_name in &arg_names {
-            if index >= args.len() {
-                // Error
-                self.in_func = old_func;
-                self.raise_scope(scope_data);
-                return self.bad_args(name, args.len(), arg_names.len());
-            }
-            // Push arg
-            self.make_var(&arg_name, args[index].clone(), false, true);
-            index += 1;
+        // Store return address
+        self.push(Value::Int(self.at as i32));
+        // Jump there
+        self.at = pos;
+        self.jump = true;
+        // Push args
+        for arg in args {
+            self.push(arg.clone());
         }
-        // Check for too many args
-        if index != args.len() {
-            self.in_func = old_func;
-            self.raise_scope(scope_data);
-            return self.bad_args(name, args.len(), arg_names.len());
-        }
-        // Run body
-        let ret = exec(self);
-        // Raise scope
-        self.in_func = old_func;
-        self.raise_scope(scope_data);
-        // TODO*/
+        return Ok(());
     }
 
     pub fn cur_op(&mut self) -> u8 {
-        self.ops[self.at]
+        self.program.ops[self.at]
     }
+
     pub fn cur_opcode(&mut self) -> Opcode {
-        return unsafe {std::mem::transmute(self.ops[self.at])};
+        return unsafe {std::mem::transmute(self.program.ops[self.at])};
     }
+
     pub fn next_op(&mut self) -> u8 {
         self.at += 1;
-        if self.at > self.ops.len() {
+        if self.at > self.program.ops.len() {
             panic!("Read too many ops!");
         }
-        self.ops[self.at]
+        self.program.ops[self.at]
     }
 
     // Push/pop
     pub fn push(&mut self, value: Value) {
         self.stack.push(value)
     }
+
     pub fn pop(&mut self) -> Value {
         match self.stack.pop() {
             Some(v) => v,
@@ -376,7 +371,7 @@ impl Vm {
         } else {
             // Forward jump
             self.at += offset as usize;
-            if self.at >= self.ops.len() {
+            if self.at >= self.program.ops.len() {
                 panic!("Positive jump out of bounds!");
             }
         }
@@ -387,15 +382,15 @@ impl Vm {
 // Builtin Functions (prefixed with 'sk_')
 // Print
 fn sk_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if vm.extentions.contains(&"va-print".to_string()) {
-        // VA print extention
+    if vm.extensions.contains(&"va-print".to_string()) {
+        // VA print extension
         for i in args {
             print!("{} ", i.to_string());
         }
         println!();
     } else if args.len() != 1 {
         // Invalid args
-        return vm.bad_args(&"print".to_string(), args.len(), 1);
+        vm.bad_args(&"print".to_string(), args.len(), 1)?;
     } else {
         // Normal printing
         println!("{}", args[0].to_string());
@@ -407,7 +402,7 @@ fn sk_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_input(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        return vm.bad_args(&"input".to_string(), args.len(), 1);
+        vm.bad_args(&"input".to_string(), args.len(), 1)?;
     }
     // Print the prompt
     print!("{}", args[0].to_string());
@@ -424,7 +419,7 @@ fn sk_input(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_type(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        return vm.bad_args(&"type".to_string(), args.len(), 1);
+        vm.bad_args(&"type".to_string(), args.len(), 1)?;
     }
     return Ok(Value::Str(args[0].get_type()));
 }
@@ -433,7 +428,7 @@ fn sk_type(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_len(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        return vm.bad_args(&"len".to_string(), args.len(), 1);
+        vm.bad_args(&"len".to_string(), args.len(), 1)?;
     }
     // Check that the type is a list
     if let Value::List(l) = &args[0] {
@@ -446,7 +441,7 @@ fn sk_len(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_range(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
         // Invalid args
-        return vm.bad_args(&"range".to_string(), args.len(), 1);
+        vm.bad_args(&"range".to_string(), args.len(), 1)?;
     }
     // Create an iterator
     let (mut min, max) = (args[0].to_int(), args[1].to_int());
@@ -471,7 +466,7 @@ fn sk_range(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_int(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        return vm.bad_args(&"int".to_string(), args.len(), 1);
+        vm.bad_args(&"int".to_string(), args.len(), 1)?;
     }
     return Ok(Value::Int(args[0].to_int()));
 }
@@ -480,7 +475,7 @@ fn sk_int(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_float(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        return vm.bad_args(&"float".to_string(), args.len(), 1);
+        vm.bad_args(&"float".to_string(), args.len(), 1)?;
     }
     return Ok(Value::Float(args[0].to_float()));
 }
@@ -489,7 +484,7 @@ fn sk_float(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        return vm.bad_args(&"string".to_string(), args.len(), 1);
+        vm.bad_args(&"string".to_string(), args.len(), 1)?;
     }
     return Ok(Value::Str(args[0].to_string()));
 }
@@ -503,11 +498,11 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         // Push
         Opcode::PUSH => {
             let index = vm.read(1);
-            vm.push(vm.consts[index as usize].clone());
+            vm.push(vm.program.consts[index as usize].clone());
         },
         Opcode::PUSH3 => {
             let index = vm.read(3);
-            vm.push(vm.consts[index as usize].clone());
+            vm.push(vm.program.consts[index as usize].clone());
         },
         Opcode::DUP => {
             let val = vm.stack.last();
@@ -677,6 +672,17 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         },
 
         // Functions
+        Opcode::FN => {
+            let Value::Str(name) = vm.pop() else {
+                return Err("Non-string function name".to_string());
+            };
+            let Value::Int(args_num) = vm.pop() else {
+                return Err("Non-int arg number".to_string());
+            };
+            // Add the function
+            vm.program.functis.insert(name, (vm.at + 3, args_num));
+        }
+
         Opcode::CALL => {
             let Value::Str(name) = vm.pop() else {
                 return Err("Non-string function name".to_string());
@@ -690,31 +696,44 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 args.push(vm.pop());
                 arg_num -= 1;
             }
-            // Reverse
-            let args = args.into_iter().rev().collect();
             // Call
             vm.call(&name, &args)?;
         },
 
-        _ => {},
+        Opcode::RET => {
+            let ret = vm.pop();
+            let Value::Int(pos) = vm.pop() else {
+                return Err("Non-int return address".to_string());
+            };
+            // Move
+            vm.at = pos as usize + 1;
+            vm.jump = true;
+            // Push ret back
+            vm.push(ret);
+        }
+
+        #[allow(unreachable_patterns)]
+        _ => {
+            panic!("Unhandled opcode! {:?}", vm.cur_opcode());
+        },
     };
     // If nothing has returned an error, everything is fine
     Ok(())
 }
 
-pub fn run(vm: &mut Vm, ops: Vec<u8>, consts: Vec<Value>) -> bool {
-    if ops.is_empty() {
+pub fn run(vm: &mut Vm, program: Program) -> bool {
+    if program.ops.is_empty() {
         return true;
     }
-    vm.ops = ops;
     vm.at = 0;
-    vm.consts = consts;
-    vm.stack = Vec::new();
+    vm.program = program;
     loop {
-        // Print debugging info
-        let opcode = vm.cur_opcode();
-        let op = vm.cur_op();
-        //println!("{}: {:?}({}) {:?}", vm.at, opcode, op, vm.stack);
+        if vm.is_debug {
+            // Print debugging info
+            let opcode = vm.cur_opcode();
+            let op = vm.cur_op();
+            println!("{}: {:?}({}) {:?}", vm.at, opcode, op, vm.stack);
+        }
         // Run
         if let Err(s) = exec_next(vm) {
             println!("{}", s);
@@ -726,11 +745,14 @@ pub fn run(vm: &mut Vm, ops: Vec<u8>, consts: Vec<Value>) -> bool {
             vm.jump = false;
             continue;
         }
-        if vm.at + 1 != vm.ops.len() {
+        if vm.at + 1 != vm.program.ops.len() {
             vm.next_op();
         } else {
             // At the end
-            println!("FINAL: {:?}", vm.stack);
+            if vm.is_debug {
+                // print the stack at the end
+                println!("FINAL: {:?}", vm.stack);
+            }
             break;
         }
     }

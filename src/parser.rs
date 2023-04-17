@@ -29,7 +29,7 @@ pub enum ASTNode {
     ListExpr(Vec<String>, Vec<ASTNode>),
 
     // Statements
-    // Body, ([Call(Var(print), [String("Hello Worls")])])
+    // Body, ([Call(Var(print), [String("Hello World")])])
     BodyStmt(Vec<ASTNode>),
     // Function, (foobar, [a, b, c], Body(...))
     FunctiStmt(String, Vec<String>, Box<ASTNode>),
@@ -54,7 +54,7 @@ pub enum ASTNode {
 // Parser state
 struct Parser {
     tokens: Vec<Token>,
-    extentions: Vec<String>,
+    extensions: Vec<String>,
     at: usize,
     has_err: bool,
     in_func: bool,
@@ -418,7 +418,7 @@ fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
         if let Rbrace | Eof = parser.current() {
             break;
         }
-        // Add statment
+        // Add statement
         let Some(stmt) = parse_statement(parser) else {
             if Eof == parser.current() && !parser.has_err {
                 break;
@@ -472,7 +472,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     if let Identifier(n) = parser.current() {
         name = n;
     } else {
-        error!(parser, "expected varible name");
+        error!(parser, "expected variable name");
         return Option::None;
     }
     parser.next();
@@ -530,29 +530,29 @@ fn parse_import(parser: &mut Parser) -> Option<ASTNode> {
     return Some(ASTNode::ImportStmt(Box::new(value)));
 }
 
-// Varible definition
+// Variable definition
 fn parse_let(parser: &mut Parser) -> Option<ASTNode> {
     // Eat let
     parser.next();
-    // Get var nane
+    // Get var name
     let name: String;
     if let Identifier(n) = parser.current() {
         name = n;
     } else {
-        error!(parser, "expected varible name");
+        error!(parser, "expected variable name");
         return Option::None;
     }
     parser.next();
     // Let without value (non-standard)
     if let Semicolon = parser.current() {
         parser.next();
-        if parser.extentions.contains(&"auto-none".to_string()) {
+        if parser.extensions.contains(&"auto-none".to_string()) {
             return Some(ASTNode::LetStmt(name, Box::new(ASTNode::NoneExpr)));
         } else {
             error!(parser, "let must have value");
             error!(
                 parser,
-                "this can be disabled by the auto none extention (`-use-auto-none`)",
+                "this can be disabled by the auto none extension (`-use-auto-none`)",
                 ErrType::Hint
             );
             return Option::None;
@@ -581,13 +581,13 @@ fn parse_return(parser: &mut Parser) -> Option<ASTNode> {
     // Return without value (non-standard)
     if let Semicolon = parser.current() {
         parser.next();
-        if parser.extentions.contains(&"auto-none".to_string()) {
+        if parser.extensions.contains(&"auto-none".to_string()) {
             return Some(ASTNode::ReturnStmt(Box::new(ASTNode::NoneExpr)));
         } else {
             error!(parser, "return must have value");
             error!(
                 parser,
-                "this can be disabled by the auto none extention (`-use-auto-none`)",
+                "this can be disabled by the auto none extension (`-use-auto-none`)",
                 ErrType::Hint
             );
             return Option::None;
@@ -664,23 +664,24 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
 }
 
 // Main parsing
-pub fn parse(tokens: Vec<Token>, extentions: Vec<String>) -> Vec<ASTNode> {
+pub fn parse(tokens: Vec<Token>, extensions: Vec<String>) -> Vec<ASTNode> {
     // Set up
     let mut parser = Parser{
-        tokens, extentions, at: 0,
+        tokens, extensions, at: 0,
         has_err: false, in_func: false
     };
-    let mut ret: Vec<ASTNode> = vec![];
+    let mut ast: Vec<ASTNode> = vec![];
     // Parse
     while parser.current() != Eof {
         let stmt = parse_statement(&mut parser);
-        if let Some(stmt) = stmt {
-            ret.push(stmt);
-        }
+        let Some(stmt) = stmt else {
+            continue;
+        };
+        ast.push(stmt);
     }
     // Return
     if parser.has_err {
         return vec![];
     }
-    return ret;
+    return ast;
 }

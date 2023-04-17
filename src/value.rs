@@ -1,7 +1,7 @@
 use std::ops;
 use indexmap::map::IndexMap;
 
-// Value enum for varibles
+// Value enum for variables
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     // Normal values
@@ -104,7 +104,7 @@ impl Value {
             Value::Iter(_, _) => "__burlap_iter".to_string(),
         };
     }
-    // Truthy converstion
+    // Truthy conversion
     pub fn is_truthy(&self) -> bool {
         return match self {
             Value::Str(s) => s != "",
@@ -248,7 +248,9 @@ impl_op_ex!(+ |left: Value, right: Value| -> Result<Value, String> {
             }
         },
         Value::None => Ok(Value::None),
-        _ => do_op!(left, right, +, Err("addition failed".to_string())),
+        _ => do_op!(left, right, +, Err(
+            format!("Cannot add {} and {}", left.get_type(), right.get_type())
+        )),
     }
 });
 
@@ -257,7 +259,7 @@ impl_op_ex!(- |left: Value, right: Value| -> Result<Value, String> {
     return match left {
         // str - anything is invalid
         Value::Str(_) => {
-            Err("cannot subtract from string".to_string())
+            Err(format!("Cannot subtract {} and {}", left.get_type(), right.get_type()))
         },
         Value::Bool(b) => {
             if let Value::Bool(b_right) = right {
@@ -275,7 +277,7 @@ impl_op_ex!(- |left: Value, right: Value| -> Result<Value, String> {
 
 // Multiply
 impl_op_ex!(* |left: Value, right: Value| -> Result<Value, String> {
-    return match left {
+    return match left.clone() {
         // str * number is valid
         Value::Str(s) => {
             if let Value::Int(i_right) = right {
@@ -285,7 +287,7 @@ impl_op_ex!(* |left: Value, right: Value| -> Result<Value, String> {
                     Value::Str("".to_string())
                 })
             } else {
-                Err("can only multiply string with number".to_string())
+                Err(format!("Cannot multiply {} and {}", left.get_type(), right.get_type()))
             }
         },
         Value::Bool(b) => {
@@ -298,7 +300,9 @@ impl_op_ex!(* |left: Value, right: Value| -> Result<Value, String> {
             }
         },
         Value::None => Ok(Value::None),
-        _ => do_op!(left, right, *, Err("multiplication failed".to_string())),
+        _ => do_op!(left, right, *,
+            Err(format!("Cannot multiply {} and {}", left.get_type(), right.get_type()))
+        ),
     }
 });
 
@@ -307,7 +311,7 @@ impl_op_ex!(/ |left: Value, right: Value| -> Result<Value, String> {
     return match left {
         // str / anything is invalid
         Value::Str(_) => {
-            Err("cannot divide string".to_string())
+            Err(format!("Cannot divide {} and {}", left.get_type(), right.get_type()))
         },
         // bool and int are converted to floats
         Value::Bool(b) => {
@@ -318,7 +322,9 @@ impl_op_ex!(/ |left: Value, right: Value| -> Result<Value, String> {
         },
         // none / anything is none
         Value::None => Ok(Value::None),
-        _ => do_op!(left, right, /, Err("division failed".to_string())),
+        _ => do_op!(left, right, /,
+            Err(format!("Cannot divide {} and {}", left.get_type(), right.get_type()))
+        ),
     }
 });
 
@@ -327,13 +333,15 @@ impl_op_ex!(% |left: Value, right: Value| -> Result<Value, String> {
     return match left {
         // str % anything is invalid
         Value::Str(_) => {
-            Err("cannot modulo string".to_string())
+            Err(format!("Cannot modulo {} and {}", left.get_type(), right.get_type()))
         },
         Value::Bool(b) => {
             // bool is converted to an int
             Value::Int(b as i32) % right
         },
         Value::None => Ok(Value::None),
-        _ => do_op!(left, right, %, Err("modulo failed".to_string())),
+        _ => do_op!(left, right, %,
+            Err(format!("Cannot divide {} and {}", left.get_type(), right.get_type()))
+        )
     }
 });

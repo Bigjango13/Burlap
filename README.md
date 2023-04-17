@@ -7,7 +7,7 @@ Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) progr
 ## Features
 - [x] Complete sack v0.0.5 support
 - [x] Complete sack v1.0.0 support
-  - [x] Varibles
+  - [x] Variables
     - [x] Strings
     - [x] Number
     - [x] Decimal
@@ -18,7 +18,7 @@ Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) progr
   - [x] Operators
     - [x] Logical operators (`&&`, `||`, `^^`, `!`)
     - [x] Comparison operators (`>`, `<`, `>=`, `<=`, `==`, `!=`)
-    - [x] Mathmatical operators (`+`, `-`, `*`, `/`, `%`)
+    - [x] Mathematical operators (`+`, `-`, `*`, `/`, `%`)
     - [x] Variable operators (`=`, `+=`, `-=`, `*=`, `/=`)
   - [x] Print
   - [x] Input (New)
@@ -38,7 +38,7 @@ Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) progr
 
 ## Where's the C++ interpreter?
 
-It was removed, the last commit with it was `196539`, here are the benchmarks for both the Rust and C++ implmentation at that time (made using [hyperfine](https://github.com/sharkdp/hyperfine)):
+It was removed, the last commit with it was `196539`, here are the benchmarks for both the Rust and C++ implementation at that time (made using [hyperfine](https://github.com/sharkdp/hyperfine)):
 | Interpreter | Mean | Min | Max |
 |:---|---:|---:|---:|
 | Rust cargo/--release `tests/speedtest.sk` | 5.582 | 5.415 | 5.779 |
@@ -46,21 +46,21 @@ It was removed, the last commit with it was `196539`, here are the benchmarks fo
 
 As you can see, the Rust interpreter is a *lot* faster, it also uses nicer abstractions.
 
-## Extentions
+## Extensions
 These are either sack ideas that aren't currently in the spec, or non-standard changes to the sack language. **They are not part of the sack language.** <br>
 They can be enabled by passing a specific flag or all enabled by `-use-all`.
 
-Here is the list of extentions:
+Here is the list of extensions:
 - String escapes (`-use-escape`), allows for `\n`, `\r`, `\t`, `\e`, `\'`, `\"` and `\\` escape codes in strings.
 - Automatic none (`-use-auto-none`), allows for using `return;` as syntactic sugar for `return none;`, and `let x;` for `let x = none;`.
-- Varible argument print (`-use-va-print`), allows for passing any number of args to print instead of just one.
+- Variable argument print (`-use-va-print`), allows for passing any number of args to print instead of just one.
 
 ## Goals/roadmap
 - Sack formatter, so all code can be formatted to fit the current sack spec.
 - Sack debugger, so you can see what your program is doing and why it sets x to `none` instead of `26`.
-- Transpiling to Python, transpiling sack to any diffrent language will provide huge benefits such as calling python functions and using a wider range of tools (and not to forget performance! Generally huge languages with lots of funding have pretty fast interpreters).
+- Transpiling to Python, transpiling sack to any different language will provide huge benefits such as calling python functions and using a wider range of tools (and not to forget performance! Generally huge languages with lots of funding have pretty fast interpreters).
 - Transpiling to JavaScript, see above for reasons, but this will also allow for using sack on the web. Running on the web will make it easier to create web-based sack playgrounds.
-- Transpiling to C, see above for reasons, but this will also allow for using sack as a compiled langauge which opens lots of doors.
+- Transpiling to C, see above for reasons, but this will also allow for using sack as a compiled language which opens lots of doors.
 
 ## Building
 It's a normal rust project, so `cargo run` to run, `cargo build` to build, and `cargo build --release` to build in release mode.

@@ -58,7 +58,7 @@ fn is_next(stream: &mut Stream, c: char) -> bool {
 }
 
 // Identifier/keywords
-fn lex_identifier(stream: &mut Stream, _extentions: &[String]) -> TokenType {
+fn lex_identifier(stream: &mut Stream, _extensions: &[String]) -> TokenType {
     let mut chr = get_chr(stream);
     let mut name = "".to_string();
     // Invalid id
@@ -91,7 +91,7 @@ fn lex_identifier(stream: &mut Stream, _extentions: &[String]) -> TokenType {
 }
 
 // Strings
-fn lex_str(stream: &mut Stream, end: char, extentions: &[String]) -> TokenType {
+fn lex_str(stream: &mut Stream, end: char, extensions: &[String]) -> TokenType {
     let mut chr = get_chr(stream);
     let mut ret = "".to_string();
     // Read the string until the end
@@ -102,7 +102,7 @@ fn lex_str(stream: &mut Stream, end: char, extentions: &[String]) -> TokenType {
                 format!("unterminated string, missing {}", end)
             );
         }
-        if chr == '\\' && extentions.contains(&"escape".to_string()) {
+        if chr == '\\' && extensions.contains(&"escape".to_string()) {
             ret.push(match next_chr(stream) {
                 'e' => '\x1b',
                 'r' => '\r',
@@ -122,7 +122,7 @@ fn lex_str(stream: &mut Stream, end: char, extentions: &[String]) -> TokenType {
 }
 
 // Numbers
-fn lex_number(stream: &mut Stream, _extentions: &[String]) -> TokenType {
+fn lex_number(stream: &mut Stream, _extensions: &[String]) -> TokenType {
     let mut chr = get_chr(stream);
     let mut num = "".to_string();
     // Get the digits as a string
@@ -153,7 +153,7 @@ fn lex_number(stream: &mut Stream, _extentions: &[String]) -> TokenType {
 }
 
 // Get a single TokenType
-fn get_tok(stream: &mut Stream, extentions: &[String]) -> TokenType {
+fn get_tok(stream: &mut Stream, extensions: &[String]) -> TokenType {
     let chr = get_chr(stream);
     next_chr(stream);
     return match chr {
@@ -213,9 +213,9 @@ fn get_tok(stream: &mut Stream, extentions: &[String]) -> TokenType {
                 "invalid token '^', did you mean '^^'?".to_string())
             },
         // Strings
-        '\'' | '"' => lex_str(stream, chr, extentions),
+        '\'' | '"' => lex_str(stream, chr, extensions),
         // Numbers
-        '0'..='9' => {stream.at -= 1; lex_number(stream, extentions)},
+        '0'..='9' => {stream.at -= 1; lex_number(stream, extensions)},
         // Whitespace/comments
         ' ' | '\t' | '\n' | '\r' | '\0' => TokenType::Blank,
         '#' => {
@@ -225,12 +225,12 @@ fn get_tok(stream: &mut Stream, extentions: &[String]) -> TokenType {
         // Identifier
         _ => {
             stream.at -= 1;
-            lex_identifier(stream, extentions)
+            lex_identifier(stream, extensions)
         }
     };
 }
 
-pub fn lex(str: &str, name: String, extentions: &[String]) -> Vec<Token> {
+pub fn lex(str: &str, name: String, extensions: &[String]) -> Vec<Token> {
     let mut stream = Stream{
         str: "".to_string(), name,
         line: 0, at: 0
@@ -249,7 +249,7 @@ pub fn lex(str: &str, name: String, extentions: &[String]) -> Vec<Token> {
         // Tokenize the line
         while get_chr(&stream) != '\0' {
             let old_stream = stream.clone();
-            let token = get_tok(&mut stream, extentions);
+            let token = get_tok(&mut stream, extensions);
             if let TokenType::Error(msg) = token.clone() {
                 errors = true;
                 err(&old_stream, &msg, (stream.at - old_stream.at) as u8, ErrType::Err);
