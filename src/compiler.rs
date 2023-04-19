@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::common::IMPOSSIBLE_STATE;
-use crate::lexer::TokenType;
+use crate::lexer::{Token, TokenType};
 use crate::parser::{ASTNode, ASTNode::*};
 use crate::value::Value;
 use crate::vm::Opcode;

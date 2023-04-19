@@ -12,3 +12,5 @@ impl_ops = "0.1.1"
 indexmap = "1.9.2"
 # For REPL
 rustyline = "10.1.0"
+# For lexing
+logos = "0.13.0"

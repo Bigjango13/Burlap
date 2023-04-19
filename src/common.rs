@@ -1,5 +1,5 @@
-use crate::lexer::TokenType::*;
-use crate::lexer::TokenType;
+use crate::lexer::{TokenType, Token};
+use TokenType::*;
 
 // Stream
 #[derive(Debug, Clone)]
@@ -55,7 +55,8 @@ pub fn get_len(token: &TokenType) -> u8 {
         Bool(val) => if *val { 4 } else { 5 },
         None => 4,
         // Keywords
-        Func => 4,
+        Func(true) => 6,
+        Func(false) => 4,
         Let => 3,
         Return => 6,
         In => 2,

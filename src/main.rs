@@ -42,7 +42,7 @@ fn repl(extensions: Vec<String>, is_debug: bool) {
             // Execute line
             Ok(line) => {
                 rl.add_history_entry(line.as_str());
-                let tokens = lex(&(line + ";"), "<stdin>".to_string(), &extensions);
+                let tokens = lex(&(line + ";"), "<stdin>".to_string());
                 if tokens.is_empty() {
                     continue;
                 }
@@ -50,9 +50,11 @@ fn repl(extensions: Vec<String>, is_debug: bool) {
                 if ast.is_empty() {
                     continue;
                 }
-                //println!("Ast: {:?}", ast);
+                if is_debug {
+                    println!("Ast: {:?}", ast);
+                }
                 let Some(program) = compile(ast) else { todo!() };
-                run(&mut vm,program);
+                run(&mut vm, program);
             },
             // Exit on EOF
             Err(ReadlineError::Eof) => {
@@ -112,7 +114,7 @@ fn import_file(vm: &mut Vm, path: &mut PathBuf) -> bool {
     let cur_path = vm.import_path.clone();
     vm.import_path = path.to_path_buf();
     // Run
-    let tokens = lex(&contents, file_name, &vm.extensions);
+    let tokens = lex(&contents, file_name);
     if tokens.is_empty() {
         return false;
     }
@@ -120,7 +122,9 @@ fn import_file(vm: &mut Vm, path: &mut PathBuf) -> bool {
     if ast.is_empty() {
         return false;
     }
-    //println!("Ast: {:?}", ast);
+    if vm.is_debug {
+        println!("Ast: {:?}", ast);
+    }
     let Some(program) = compile(ast) else { todo!() };
     run(vm, program);
     // Reset import path

@@ -49,21 +49,37 @@ pub enum ASTNode {
     // Special
     // Nop, does nothing
     Nop,
+    // Newline, signifies newline
+    Newline,
 }
 
 // Parser state
 struct Parser {
     tokens: Vec<Token>,
+    ast: Vec<ASTNode>,
     extensions: Vec<String>,
     at: usize,
-    has_err: bool,
     in_func: bool,
+    has_err: bool,
+    // Compressed line numbers
+    lines: Vec<u32>,
 }
 
 impl Parser {
     // Current token
-    fn current(&self) -> TokenType {
-        self.tokens[self.at].token.clone()
+    fn current(&mut self) -> TokenType {
+        let mut ret = self.tokens[self.at].token.clone();
+        while ret == Newline {
+            // Skip the newlines
+            self.at += 1;
+            ret = self.tokens[self.at].token.clone();
+            // Push the line
+            self.lines.push(
+                self.lines.len() as u32 - self.lines.last().unwrap_or(&0)
+            );
+        }
+        // Return
+        ret
     }
 
     // Advance and return token
@@ -361,8 +377,8 @@ fn parse_statement(parser: &mut Parser) -> Option<ASTNode> {
             parser.next();
             Option::None
         },
-        // Functions (functi forever!)
-        Func => parse_functi(parser),
+        // Functions
+        Func(_) => parse_functi(parser),
         // Var def
         Let => parse_let(parser),
         // Loop
@@ -668,20 +684,21 @@ pub fn parse(tokens: Vec<Token>, extensions: Vec<String>) -> Vec<ASTNode> {
     // Set up
     let mut parser = Parser{
         tokens, extensions, at: 0,
-        has_err: false, in_func: false
+        has_err: false, in_func: false,
+        ast: vec![], lines: vec![]
     };
-    let mut ast: Vec<ASTNode> = vec![];
     // Parse
     while parser.current() != Eof {
         let stmt = parse_statement(&mut parser);
         let Some(stmt) = stmt else {
             continue;
         };
-        ast.push(stmt);
+        parser.ast.push(stmt);
     }
+    println!("L: {:?} F: {:?}", parser.lines, parser.tokens);
     // Return
     if parser.has_err {
         return vec![];
     }
-    return ast;
+    return parser.ast;
 }

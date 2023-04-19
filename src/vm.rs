@@ -7,7 +7,7 @@ use crate::common::IMPOSSIBLE_STATE;
 use crate::compiler::Program;
 use crate::parser::{ASTNode, ASTNode::*};
 use crate::import_file;
-use crate::lexer::TokenType;
+use crate::lexer::Token;
 use crate::value::Value;
 
 use indexmap::map::IndexMap;
@@ -28,7 +28,7 @@ pub enum Opcode {
     // DELete head (value)
     DEL,
 
-    // Variable
+    // Variables
     // Push Variable ("name" -> value)
     PV,
     // Declare Variable ("name", value)
@@ -96,33 +96,29 @@ pub enum Opcode {
 
 // A functie is a sack functions implemented in rust
 type Functie = fn(&mut Vm, Vec<Value>) -> Result<Value, String>;
-type Functies = HashMap<String, Functie>;
 
 // VM state
 pub struct Vm {
-    // Some config for the VM
+    // Config
     pub is_debug: bool,
     pub is_repl: bool,
     pub has_err: bool,
     pub in_func: bool,
+    // Extensions
+    pub extensions: Vec<String>,
+    // Used for importing
+    pub import_path: PathBuf,
 
-    // Global vars and functions (which are always global)
+    // Variables
+    // Global vars
     is_global: bool,
     globals: HashMap<String, Value>,
-    functions: HashMap<String, ASTNode>,
-    functies: Functies,
-
-    // Variables in the current scope
-    // Each scope stacks
+    // Functies
+    functies: HashMap<String, Functie>,
+    // Non-global variables
     var_names: Vec<String>,
     var_vals: Vec<Value>,
     var_min: usize,
-
-    // Extensions
-    pub extensions: Vec<String>,
-
-    // Used for importing
-    pub import_path: PathBuf,
 
     // The program
     pub program: Program,
@@ -154,8 +150,7 @@ impl Vm {
         // I really wish Rust had defaults, but it doesn't
         Vm {
             is_debug, is_repl, has_err: false, in_func: false,
-            is_global: true, globals: HashMap::new(),
-            functions: HashMap::new(), functies,
+            is_global: true, globals: HashMap::new(), functies,
             var_names: Vec::new(), var_vals: Vec::new(),
             var_min: 0, extensions, import_path, stack: Vec::new(),
             program: Program::new(), jump: false, at: 0
@@ -251,7 +246,7 @@ impl Vm {
         return true;
     }
 
-    // Raise/lower scope
+    // Scope
     pub fn lower_scope(&mut self, call: bool) -> (bool, usize, usize) {
         // Lowers the scope
         // Impossible for a lowered scope to be global
