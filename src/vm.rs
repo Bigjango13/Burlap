@@ -139,6 +139,8 @@ impl Vm {
             ("int".to_string(), sk_int as Functie),
             ("float".to_string(), sk_float as Functie),
             ("string".to_string(), sk_string as Functie),
+            // Burlap internals
+            ("__burlap_typed_eq".to_string(), sk_typed_eq as Functie),
         ]);
         // I really wish Rust had defaults, but it doesn't
         Vm {
@@ -478,6 +480,16 @@ fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     }
     return Ok(Value::Str(args[0].to_string()));
 }
+
+// Internal functies
+fn sk_typed_eq(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 2 {
+        // Invalid args
+        vm.bad_args(&"__burlap_typed_eq".to_string(), args.len(), 2)?;
+    }
+    return Ok(Value::Bool(args[0] == args[1]));
+}
+
 
 // The big switch, runs every instruction
 fn exec_next(vm: &mut Vm) -> Result<(), String> {

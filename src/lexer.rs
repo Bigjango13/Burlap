@@ -1,7 +1,7 @@
 use logos::Logos;
 
 use crate::Arguments;
-use crate::common::Stream;
+use crate::common::{err, ErrType, Stream};
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(subpattern numbers = r"[0-9]((_?[0-9])*)?")]
@@ -134,25 +134,36 @@ impl std::fmt::Debug for Token {
 pub fn lex(args: &Arguments) -> Vec<Token> {
     let mut lex = TokenType::lexer(args.source.as_str());
     let mut ret: Vec<Token> = vec![];
-    let stream = Stream{
-        name: args.name.clone(), at: 0, line: 0, str: "".to_string()
+    // Empty file
+    let lines = args.source.lines().collect::<Vec<&str>>();
+    if lines.is_empty() {
+        return vec![];
+    }
+    // Stream (for errors)
+    let mut stream = Stream{
+        name: args.name.clone(), at: 0, line: 1, str: lines[0].to_string()
     };
+    let mut lastat = 0;
 
     let mut tok = lex.next();
     while tok != None {
+        stream.at = lex.span().start - lastat;
         if let Err(_) = tok.clone().unwrap() {
-            // TODO: Make errors work and use common::err
-            println!(
-                "Lexing error {}:{}: {}",
-                args.name, 0,
-                lex.slice()
-            );
+            let size = lex.span().end - lex.span().start;
+            err(&stream, "failure to lex", size as u8, ErrType::Err);
             return vec![];
         } else {
-            ret.push(Token{
-                token: tok.unwrap().unwrap(),
-                stream: stream.clone()
-            });
+            let token = tok.unwrap().unwrap();
+            if token == TokenType::Newline {
+                // Bump line
+                stream.str = match lines.get(stream.line) {
+                    Some(s) => *s,
+                    None => ""
+                }.to_string();
+                stream.line += 1;
+                lastat = lex.span().start;
+            }
+            ret.push(Token{token, stream: stream.clone()});
         }
         tok = lex.next();
     }

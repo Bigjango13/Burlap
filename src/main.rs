@@ -102,20 +102,29 @@ fn get_args() -> Option<Arguments> {
         name: "<stdin>".to_string()
     };
     let mut file: String = "".to_string();
+    let mut cmd_from_cli: bool = false;
     // [1..] to skip the first arg
     for arg in &env::args().collect::<Vec<String>>()[1..] {
-        if !arg.starts_with('-') && file.is_empty() {
+        if cmd_from_cli {
+            args.source = arg.to_string();
+            cmd_from_cli = false;
+        } else if !arg.starts_with('-') && file.is_empty() {
             // Files
             file = arg.to_string();
             args.name = arg.to_string();
             args.is_repl = false;
-        } else if !arg.starts_with("-use-") {
+        } else if arg.starts_with("-use-") {
             // Extensions
             let extension = arg[5..].to_string();
             args.extensions.push(extension);
         } else if arg == "-d" {
             // Debug
             args.is_debug = true;
+        } else if arg == "-" {
+            // Read source from command line
+            args.name = "<cli>".to_string();
+            cmd_from_cli = file.is_empty();
+            args.is_repl = false;
         } else {
             // Anything else
             print_err(
@@ -123,8 +132,8 @@ fn get_args() -> Option<Arguments> {
             );
         }
     }
-    // Don't open files in REPL mode
-    if args.is_repl {
+    // Don't open files if source is filled or REPL
+    if args.is_repl || !args.source.is_empty() {
         return Some(args);
     }
     // Open file
@@ -142,37 +151,6 @@ fn get_args() -> Option<Arguments> {
     }
     return Some(args);
 }
-
-/*fn import_file(vm: &mut Vm, path: &mut PathBuf, args: Arguments) -> bool {
-    // Open file
-    let file_name = path.to_str().unwrap().to_string();
-    let file = fs::read_to_string(path.clone());
-    if file.is_err() {
-         return false;
-    }
-    let contents = file.unwrap();
-    // Set vm import path
-    path.pop();
-    let cur_path = vm.import_path.clone();
-    vm.import_path = path.to_path_buf();
-    // Run
-    let tokens = lex(&contents, file_name);
-    if tokens.is_empty() {
-        return false;
-    }
-    let ast = parse(tokens, vm.extensions.clone());
-    if ast.is_empty() {
-        return false;
-    }
-    if vm.is_debug {
-        println!("Ast: {:?}", ast);
-    }
-    let Some(program) = compile(ast) else { todo!() };
-    run(vm, program);
-    // Reset import path
-    vm.import_path = cur_path;
-    return true;
-}*/
 
 fn main() {
     // Parse args

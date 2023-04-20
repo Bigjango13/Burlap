@@ -79,7 +79,7 @@ impl Value {
         return match self {
             Value::Str(s) => s.clone(),
             Value::Int(i) => format!("{}", i),
-            Value::Float(f) => format!("{}", f),
+            Value::Float(f) => format!("{:?}", f),
             Value::Bool(b) => format!("{}", b),
             Value::List(l) => {
                 let mut ret = "[".to_string();
