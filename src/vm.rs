@@ -3,11 +3,8 @@ use std::path::PathBuf;
 use std::io::Write;
 use std::io;
 
-use crate::common::IMPOSSIBLE_STATE;
+use crate::Arguments;
 use crate::compiler::Program;
-use crate::parser::{ASTNode, ASTNode::*};
-use crate::import_file;
-use crate::lexer::Token;
 use crate::value::Value;
 
 use indexmap::map::IndexMap;
@@ -99,15 +96,14 @@ type Functie = fn(&mut Vm, Vec<Value>) -> Result<Value, String>;
 
 // VM state
 pub struct Vm {
-    // Config
-    pub is_debug: bool,
-    pub is_repl: bool,
-    pub has_err: bool,
-    pub in_func: bool,
     // Extensions
-    pub extensions: Vec<String>,
+    pub args: Arguments,
     // Used for importing
     pub import_path: PathBuf,
+
+    // State
+    pub has_err: bool,
+    pub in_func: bool,
 
     // Variables
     // Global vars
@@ -130,10 +126,7 @@ pub struct Vm {
 
 impl Vm {
     // Init
-    pub fn new(
-        is_repl: bool, is_debug: bool,
-        import_path: PathBuf, extensions: Vec<String>
-    ) -> Vm {
+    pub fn new(args: Arguments, import_path: PathBuf) -> Vm {
         // Builtin functions
         let functies = HashMap::from([
             // Builtins
@@ -149,10 +142,10 @@ impl Vm {
         ]);
         // I really wish Rust had defaults, but it doesn't
         Vm {
-            is_debug, is_repl, has_err: false, in_func: false,
+            args, has_err: false, in_func: false, import_path,
             is_global: true, globals: HashMap::new(), functies,
             var_names: Vec::new(), var_vals: Vec::new(),
-            var_min: 0, extensions, import_path, stack: Vec::new(),
+            var_min: 0, stack: Vec::new(),
             program: Program::new(), jump: false, at: 0
         }
     }
@@ -246,7 +239,8 @@ impl Vm {
         return true;
     }
 
-    // Scope
+    // Scope TODO
+    #[allow(dead_code)]
     pub fn lower_scope(&mut self, call: bool) -> (bool, usize, usize) {
         // Lowers the scope
         // Impossible for a lowered scope to be global
@@ -262,6 +256,7 @@ impl Vm {
         // Return data needed to raise the dead/scope
         return (old_global, old_min, old_top);
     }
+    #[allow(dead_code)]
     pub fn raise_scope(&mut self, (old_global, old_min, old_top): (bool, usize, usize)) {
         // Raises the scope back
         self.is_global = old_global;
@@ -377,7 +372,7 @@ impl Vm {
 // Builtin Functions (prefixed with 'sk_')
 // Print
 fn sk_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if vm.extensions.contains(&"va-print".to_string()) {
+    if vm.args.extensions.contains(&"va-print".to_string()) {
         // VA print extension
         for i in args {
             print!("{} ", i.to_string());
@@ -616,7 +611,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         Opcode::EQ => {
             let rhs = vm.pop();
             let lhs = vm.pop();
-            vm.push(Value::Bool(lhs == rhs));
+            vm.push(Value::Bool(lhs.eq(rhs)));
         },
         Opcode::LT => {
             let rhs = vm.pop();
@@ -721,9 +716,10 @@ pub fn run(vm: &mut Vm, program: Program) -> bool {
         return true;
     }
     vm.at = 0;
+    vm.stack = vec![];
     vm.program = program;
     loop {
-        if vm.is_debug {
+        if vm.args.is_debug {
             // Print debugging info
             let opcode = vm.cur_opcode();
             let op = vm.cur_op();
@@ -744,9 +740,15 @@ pub fn run(vm: &mut Vm, program: Program) -> bool {
             vm.next_op();
         } else {
             // At the end
-            if vm.is_debug {
+            if vm.args.is_debug {
                 // print the stack at the end
                 println!("FINAL: {:?}", vm.stack);
+            }
+            if vm.args.is_repl && vm.stack.len() >= 1 {
+                // Print the result
+                if vm.stack[0] != Value::None {
+                    println!("{}", vm.stack[0].to_string());
+                }
             }
             break;
         }

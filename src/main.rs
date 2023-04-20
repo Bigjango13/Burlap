@@ -1,4 +1,3 @@
-#![allow(dead_code, unused_imports, unreachable_code)]
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -14,6 +13,7 @@ mod vm;
 use crate::lexer::lex;
 use crate::parser::parse;
 use crate::compiler::compile;
+use crate::common::{print_err, ErrType};
 use crate::vm::{run, Vm};
 
 #[macro_use] extern crate impl_ops;
@@ -21,87 +21,129 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use home::home_dir;
 
-fn repl(extensions: Vec<String>, is_debug: bool) {
+#[derive(Clone)]
+pub struct Arguments {
+    source: String,
+    name: String,
+    is_debug: bool,
+    is_repl: bool,
+    extensions: Vec<String>
+}
+
+fn execute(vm: &mut Vm, args: &mut Arguments) -> bool {
+    // Lex
+    let tokens = lex(args);
+    if tokens.is_empty() {
+        return false;
+    }
+    // Parse
+    let ast = parse(tokens, args);
+    if ast.is_empty() {
+        return false;
+    }
+    if args.is_debug {
+        // Debug print ast
+        println!("Ast: {:?}", ast);
+    }
+    // Compile
+    let Some(program) = compile(ast) else {
+        return false;
+    };
+    // Run!
+    return run(vm, program);
+}
+
+fn repl(args: &mut Arguments) {
     // Print welcome msg
     println!("Burlap v{}", env!("CARGO_PKG_VERSION"));
     let mut rl = Editor::<()>::new().unwrap();
     // Try to get the home dir
     let hist_file = match home_dir() {
-        Some(path) => path.into_os_string().into_string().unwrap() + "/.burlap_history",
+        Some(path) =>
+            path.into_os_string().into_string().unwrap() + "/.burlap_history",
         None => "".to_string(),
     };
     // Load history
     if hist_file != "" && rl.load_history(&hist_file).is_err() {
-        println!("Failed to open history file, make `~/.burlap_history` if you want history to save.");
+        print_err("failed to open history file", ErrType::Warn);
+        print_err(
+            "create `~/.burlap_history` if you want history to save.", ErrType::Hint
+        );
     };
-    let mut vm = Vm::new(true, is_debug, PathBuf::from("."), extensions.clone());
+    // REPL loop
+    let mut vm = Vm::new(args.clone(), PathBuf::from("."));
     loop {
         // Get input
         let readline = rl.readline(">> ");
-        match readline {
-            // Execute line
-            Ok(line) => {
-                rl.add_history_entry(line.as_str());
-                let tokens = lex(&(line + ";"), "<stdin>".to_string());
-                if tokens.is_empty() {
-                    continue;
-                }
-                let ast = parse(tokens, extensions.clone());
-                if ast.is_empty() {
-                    continue;
-                }
-                if is_debug {
-                    println!("Ast: {:?}", ast);
-                }
-                let Some(program) = compile(ast) else { todo!() };
-                run(&mut vm, program);
-            },
-            // Exit on EOF
-            Err(ReadlineError::Eof) => {
-                break;
-            },
-            _ => {}
+        // C-d to exit
+        if let Err(ReadlineError::Eof) = readline {
+            break;
+        }
+        // Input
+        if let Ok(line) = readline {
+            // Add to history
+            rl.add_history_entry(line.clone());
+            args.source = line + ";";
+            execute(&mut vm, args);
         }
     }
     // Save history
     if hist_file != "" {
-        if rl.save_history(&hist_file).is_err() {};
+        if rl.save_history(&hist_file).is_err() {
+            print_err("failed to save history", ErrType::Err);
+        };
     }
 }
 
-fn get_args() -> (String, Vec<String>, bool) {
-    let possible_extensions = vec!["escape", "auto-none", "va-print"];
-    let mut extensions: Vec<String> = vec![];
-    let mut debug = false;
+fn get_args() -> Option<Arguments> {
+    let mut args = Arguments{
+        source: "".to_string(), is_debug: false,
+        is_repl: true, extensions: vec![],
+        name: "<stdin>".to_string()
+    };
     let mut file: String = "".to_string();
-    let args: Vec<String> = env::args().collect();
-    // &args[1..] is to skip the first arg
-    for arg in &args[1..] {
-        if !arg.starts_with("-use-") {
-            if !arg.starts_with('-') && file.is_empty() {
-                file = arg.to_string();
-            } else if arg == "-d" {
-                debug = true;
-            } else {
-                println!("Unknown argument: {}", arg);
-            }
-            continue;
+    // [1..] to skip the first arg
+    for arg in &env::args().collect::<Vec<String>>()[1..] {
+        if !arg.starts_with('-') && file.is_empty() {
+            // Files
+            file = arg.to_string();
+            args.name = arg.to_string();
+            args.is_repl = false;
+        } else if !arg.starts_with("-use-") {
+            // Extensions
+            let extension = arg[5..].to_string();
+            args.extensions.push(extension);
+        } else if arg == "-d" {
+            // Debug
+            args.is_debug = true;
+        } else {
+            // Anything else
+            print_err(
+                format!("unknown argument: {}", arg).as_str(), ErrType::Warn
+            );
         }
-        let extension = arg[5..].to_string();
-        if extension == "all" {
-            possible_extensions.iter().for_each(|i| extensions.push(i.to_string()));
-            continue;
-        }
-        if !possible_extensions.contains(&extension.as_str()) {
-            println!("Invalid extension: {}", extension);
-            continue;
-        }
-        extensions.push(extension);
     }
-    return (file, extensions, debug);
+    // Don't open files in REPL mode
+    if args.is_repl {
+        return Some(args);
+    }
+    // Open file
+    match fs::read_to_string(file) {
+        Ok(v) => {
+            args.source = v;
+        },
+        Err(err) => {
+            // Report error
+            print_err(
+                format!("failed to open file: {}", err).as_str(), ErrType::Warn
+            );
+            return None;
+        }
+    }
+    return Some(args);
 }
 
-fn import_file(vm: &mut Vm, path: &mut PathBuf) -> bool {
+/*fn import_file(vm: &mut Vm, path: &mut PathBuf, args: Arguments) -> bool {
     // Open file
     let file_name = path.to_str().unwrap().to_string();
     let file = fs::read_to_string(path.clone());
@@ -130,20 +172,22 @@ fn import_file(vm: &mut Vm, path: &mut PathBuf) -> bool {
     // Reset import path
     vm.import_path = cur_path;
     return true;
-}
+}*/
 
 fn main() {
-    let (file_name, extensions, is_debug) = get_args();
-    // Repl
-    if file_name.is_empty() {
-        repl(extensions, is_debug);
-        exit(0);
-    }
-    // Run the file
-    let mut path = PathBuf::from(file_name.clone());
-    // The path passed to the vm doesn't matter, import_file will fill it
-    let mut vm = Vm::new(false, is_debug, path.clone(), extensions);
-    if !import_file(&mut vm, &mut path) {
+    // Parse args
+    let Some(mut args) = get_args() else {
         exit(1);
+    };
+    // Run
+    if args.is_repl {
+        // Repl
+        repl(&mut args);
+    } else {
+        // Execute file
+        let mut vm = Vm::new(args.clone(), PathBuf::from("."));
+        if !execute(&mut vm, &mut args) {
+            exit(1);
+        }
     }
 }

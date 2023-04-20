@@ -1,5 +1,6 @@
 use logos::Logos;
 
+use crate::Arguments;
 use crate::common::Stream;
 
 #[derive(Logos, Debug, PartialEq, Clone)]
@@ -16,8 +17,10 @@ pub enum TokenType {
     // Literals/data types
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_string())]
     Identifier(String),
-    #[regex("'[^']*'", |lex| lex.slice().to_string())]
-    #[regex("\"[^\"]*\"", |lex| lex.slice().to_string())]
+    #[regex("'[^']*'", |lex| lex.slice()[1..lex.slice().len()-1].to_string())]
+    #[regex(
+        "\"[^\"]*\"", |lex| lex.slice()[1..lex.slice().len()-1].to_string()
+    )]
     Str(String),
     #[regex(r"(?&numbers)", |lex| lex.slice().parse().ok())]
     Int(i32),
@@ -128,20 +131,20 @@ impl std::fmt::Debug for Token {
     }
 }
 
-pub fn lex(input: &str, name: String) -> Vec<Token> {
-    let mut lex = TokenType::lexer(input.clone());
+pub fn lex(args: &Arguments) -> Vec<Token> {
+    let mut lex = TokenType::lexer(args.source.as_str());
     let mut ret: Vec<Token> = vec![];
-    let mut line: usize = 1;
-    let mut stream = Stream{
-        name: name.clone(), at: 0, line: 0, str: input.to_string()
+    let stream = Stream{
+        name: args.name.clone(), at: 0, line: 0, str: "".to_string()
     };
 
     let mut tok = lex.next();
     while tok != None {
         if let Err(_) = tok.clone().unwrap() {
+            // TODO: Make errors work and use common::err
             println!(
                 "Lexing error {}:{}: {}",
-                name, line,
+                args.name, 0,
                 lex.slice()
             );
             return vec![];

@@ -1,4 +1,4 @@
-use crate::lexer::{TokenType, Token};
+use crate::lexer::TokenType;
 use TokenType::*;
 
 // Stream
@@ -20,9 +20,8 @@ pub const IMPOSSIBLE_STATE: &str =
 
 // Errors
 pub enum ErrType{Err, Warn, Hint}
-pub fn err(stream: &Stream, msg: &str, size: u8, errtype: ErrType) {
-    // Print file name and line/char info ("test.sk:1:3: ")
-    print!("\x1b[1m{}:{}:{}:\x1b[0m ", stream.name, stream.line, stream.at);
+// Prints and error and returns the color
+pub fn print_err(msg: &str, errtype: ErrType) -> String {
     // Get the name and color code from errtype
     let (color, name) = match errtype {
         // Red
@@ -32,8 +31,15 @@ pub fn err(stream: &Stream, msg: &str, size: u8, errtype: ErrType) {
         // Cyan
         ErrType::Hint => ("\x1b[1;36m", "hint"),
     };
+    println!("{}{}:\x1b[0m {}", color.clone(), name, msg);
+    return color.to_string();
+}
+
+pub fn err(stream: &Stream, msg: &str, size: u8, errtype: ErrType) {
+    // Print file name and line/char info ("test.sk:1:3: ")
+    print!("\x1b[1m{}:{}:{}:\x1b[0m ", stream.name, stream.line, stream.at);
     // Print the type ("error:")
-    println!("{}{}:\x1b[0m {}", color, name, msg);
+    let color = print_err(msg, errtype);
     // Print the line ("    1 | print("Hello World!");")
     let line = format!("    {} | ", stream.line);
     println!("{}{}", line, stream.str);

@@ -1,3 +1,4 @@
+use crate::Arguments;
 use crate::common::{err, ErrType, get_len, IMPOSSIBLE_STATE};
 use crate::lexer::{Token, TokenType};
 use TokenType::*;
@@ -49,8 +50,6 @@ pub enum ASTNode {
     // Special
     // Nop, does nothing
     Nop,
-    // Newline, signifies newline
-    Newline,
 }
 
 // Parser state
@@ -680,11 +679,12 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
 }
 
 // Main parsing
-pub fn parse(tokens: Vec<Token>, extensions: Vec<String>) -> Vec<ASTNode> {
+pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Vec<ASTNode> {
     // Set up
+    // TODO: Line numbers
     let mut parser = Parser{
-        tokens, extensions, at: 0,
-        has_err: false, in_func: false,
+        tokens, extensions: args.extensions.clone(),
+        at: 0, has_err: false, in_func: false,
         ast: vec![], lines: vec![]
     };
     // Parse
@@ -695,7 +695,6 @@ pub fn parse(tokens: Vec<Token>, extensions: Vec<String>) -> Vec<ASTNode> {
         };
         parser.ast.push(stmt);
     }
-    println!("L: {:?} F: {:?}", parser.lines, parser.tokens);
     // Return
     if parser.has_err {
         return vec![];

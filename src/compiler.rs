@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::common::IMPOSSIBLE_STATE;
-use crate::lexer::{Token, TokenType};
+use crate::lexer::TokenType;
 use crate::parser::{ASTNode, ASTNode::*};
 use crate::value::Value;
 use crate::vm::Opcode;
@@ -23,12 +23,6 @@ impl Program {
         Program{
             ops: Vec::new(), consts: Vec::new(),
             functis: HashMap::new(), lines: Vec::new()
-        }
-    }
-
-    pub fn write_num(&mut self, val: u32, ops: u8, start: usize) {
-        for i in 0..ops {
-            self.ops[start + i as usize] = ((val >> (i * 8)) & 255) as u8;
         }
     }
 
@@ -267,7 +261,7 @@ fn compile_expr(program: &mut Program, node: &ASTNode) -> bool {
 fn _compile_body(program: &mut Program, nodes: &Vec<ASTNode>) -> bool {
     // Compile all nodes
     for node in nodes {
-        if !compile_stmt(program, node) {
+        if !compile_stmt(program, node, false) {
             // Pass it down
             return false;
         }
@@ -284,7 +278,7 @@ fn compile_body(program: &mut Program, node: &ASTNode) -> bool {
     return _compile_body(program, nodes);
 }
 
-fn compile_stmt(program: &mut Program, node: &ASTNode) -> bool {
+fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
     match node {
         // Statements
         LetStmt(name, val) => {
@@ -304,7 +298,7 @@ fn compile_stmt(program: &mut Program, node: &ASTNode) -> bool {
                 program.ops.push(0);
                 // Compile body
                 let pos = program.ops.len();
-                compile_stmt(program, else_part);
+                compile_stmt(program, else_part, false);
                 program.ops[pos - 1] = (program.ops.len() - pos + 1)
                     as u8;
                 return true
@@ -326,7 +320,7 @@ fn compile_stmt(program: &mut Program, node: &ASTNode) -> bool {
                 program.ops.push(0);
                 let pos = program.ops.len();
                 // Compile else part
-                compile_stmt(program, else_part);
+                compile_stmt(program, else_part, false);
                 program.ops[pos - 1] = (program.ops.len() - pos + 1) as u8;
             }
         },
@@ -405,14 +399,16 @@ fn compile_stmt(program: &mut Program, node: &ASTNode) -> bool {
             // Nop isn't turned into the NOP instruction because it's useless
         },
         // Expressions
-        // Binops don't always return, so let them clean up the stack themselves
+        // Binops don't always return, so let them manage cleaning the stack
         BinopExpr(lhs, op, rhs) => {
-            return compile_binop(program, lhs, op, rhs, true);
-        }
+            return compile_binop(program, lhs, op, rhs, !dirty);
+        },
         _ => {
             let ret = compile_expr(program, node);
-            // Remove unused values from the stack
-            program.ops.push(Opcode::DEL as u8);
+            if !dirty {
+                // Remove unused values from the stack
+                program.ops.push(Opcode::DEL as u8);
+            }
             return ret;
         }
     };
@@ -420,15 +416,21 @@ fn compile_stmt(program: &mut Program, node: &ASTNode) -> bool {
 }
 
 pub fn compile(ast: Vec<ASTNode>) -> Option<Program> {
+    // Make ast mutable
+    let mut ast = ast;
     let mut program = Program::new();
     // Compile
+    let last = ast.pop()?;
     for node in ast {
-        if !compile_stmt(&mut program, &node) {
+        if !compile_stmt(&mut program, &node, false) {
             return None;
         }
     }
+    // Compile the last value without cleaning up
+    if !compile_stmt(&mut program, &last, true) {
+        return None;
+    }
     // Jumps go onto the next instruction, so a nop is needed at the end
     program.ops.push(Opcode::NOP as u8);
-    //println!("CC: {:?}", program);
     return Some(program);
 }
