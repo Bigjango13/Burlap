@@ -12,8 +12,10 @@ pub enum Value {
     List(IndexMap<String, Value>),
     None,
 
-    // Iterator (used for iter-based loops)
-    Iter(Vec<Value>, i32)
+    // Iterator (used for iter based loops)
+    Iter(Vec<Value>, i32),
+    // RangeType (used for optimized ranges)
+    RangeType(i32, i32, i32),
 }
 // Helper for ops
 macro_rules! do_op {
@@ -101,7 +103,9 @@ impl Value {
                 ret
             }
             Value::None => "none".to_string(),
+            // Internal types
             Value::Iter(_, _) => "__burlap_iter".to_string(),
+            Value::RangeType(_, _, _) => "__burlap_rangetype".to_string(),
         };
     }
     // Truthy conversion
@@ -127,11 +131,12 @@ impl Value {
             Value::None => "None",
             // Internal types
             Value::Iter(_, _) => "__burlap_iter",
+            Value::RangeType(_, _, _) => "__burlap_rangetype",
         }.to_string();
     }
     // Iterators
     pub fn to_iter(&self) -> Result<Value, String> {
-        if let Value::Iter(_, _) = self {
+        if let Value::RangeType(_, _, _) | Value::Iter(_, _) = self {
             return Ok(self.clone());
         }
         let Value::List(list) = self else {
@@ -140,11 +145,28 @@ impl Value {
         return Ok(Value::Iter(list.values().map(|i| i.clone()).collect(), 0));
     }
     pub fn iter_next(&mut self) -> Result<Option<Value>, String> {
-        // Must be an iter
+        // Must be an iter or rangetype
+        if let Value::RangeType(ref mut at, max, step) = self {
+            if *step == 0 {
+                // End of loop
+                return Ok(None);
+            }
+            if at == max {
+                // Final part
+                *step = 0;
+                return Ok(Some(Value::Int(*at)));
+            }
+            let ret = Value::Int(*at);
+            // Step
+            *at += *step;
+            return Ok(Some(ret));
+        }
+        // It's not rangetype, must be an iter
         let Value::Iter(list, ref mut at) = self else {
-            return Err(
-                format!("Require __burlap_iter not {}", self.get_type())
-            );
+            return Err(format!(
+                "Require __burlap_rangetype or __burlap_iter not {}",
+                self.get_type()
+            ));
         };
         // Get the value
         let ret = list.get(*at as usize);

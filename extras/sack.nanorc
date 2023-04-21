@@ -1,4 +1,4 @@
-## Syntax highlighting for sack, based off c.nanorc
+## Nano syntax highlighting for sack
 syntax sack "\.(sk|sack)$"
 comment "#"
 

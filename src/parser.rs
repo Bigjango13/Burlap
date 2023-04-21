@@ -94,14 +94,16 @@ macro_rules! error {
         $parser.has_err = true;
         err(
             &$parser.tokens[$parser.at].stream, $msg,
-            get_len(&$parser.tokens[$parser.at].token), ErrType::Err
+            get_len(&$parser.tokens[$parser.at].token), ErrType::Err,
+            $parser.extensions.contains(&"color".to_string())
         );
     );
     // DO NOT USE WITH ErrType::Err
     ($parser:expr, $msg:expr, $err_type:expr) => (
         err(
             &$parser.tokens[$parser.at].stream, $msg,
-            get_len(&$parser.tokens[$parser.at].token), $err_type
+            get_len(&$parser.tokens[$parser.at].token), $err_type,
+            $parser.extensions.contains(&"color".to_string())
         );
     )
 }
@@ -120,8 +122,21 @@ macro_rules! eat {
 // Semicolons eating macro
 macro_rules! eat_semicolon {
     ($parser:expr) => (
-        eat!($parser, Semicolon, "expected semicolon")
-    )
+        if let Semicolon = $parser.current() {
+            $parser.next();
+            Some(())
+         } else {
+            let subbed = if $parser.at >= 2 {
+                $parser.at -= 2;
+                true
+            } else { false };
+            error!($parser, "expected semicolon");
+            if subbed {
+                $parser.at += 2;
+            }
+            Option::None
+         }
+    );
 }
 
 // Expressions
@@ -667,7 +682,8 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         err(
             &parser.tokens[parser.at].stream,
             "forward declaration isn't supported",
-            1, ErrType::Hint
+            1, ErrType::Hint,
+            parser.extensions.contains(&"color".to_string())
         );
         return Option::None;
     }
@@ -690,10 +706,17 @@ pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Vec<ASTNode> {
     // Parse
     while parser.current() != Eof {
         let stmt = parse_statement(&mut parser);
-        let Some(stmt) = stmt else {
+        if let Some(stmt) = stmt {
+            parser.ast.push(stmt);
             continue;
-        };
-        parser.ast.push(stmt);
+        }
+        // Skip along until EOF/; so the errors don't go crazy
+        loop {
+            if let Eof | Semicolon = parser.current() {
+                break;
+            }
+            parser.next();
+        }
     }
     // Return
     if parser.has_err {

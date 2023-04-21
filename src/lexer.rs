@@ -150,7 +150,10 @@ pub fn lex(args: &Arguments) -> Vec<Token> {
         stream.at = lex.span().start - lastat;
         if let Err(_) = tok.clone().unwrap() {
             let size = lex.span().end - lex.span().start;
-            err(&stream, "failure to lex", size as u8, ErrType::Err);
+            err(
+                &stream, "failure to lex", size as u8, ErrType::Err,
+                args.extensions.contains(&"color".to_string())
+            );
             return vec![];
         } else {
             let token = tok.unwrap().unwrap();

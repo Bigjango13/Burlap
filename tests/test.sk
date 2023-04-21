@@ -39,7 +39,7 @@ test("42 / 3 / 2", 42 / 3 / 2, 7.0);
 test("2 % 3", 2 % 3, 2);
 test("15 % 4", 15 % 4, 3);
 
-# Cmp tests
+# Compare tests
 print("*** Comparison tests ***");
 test("2 > 2", 2 > 2, false);
 test("3 > 1", 3 > 1, true);
@@ -122,8 +122,8 @@ test("Decimal", type(0.0), "Decimal");
 test("Bool", type(false), "Bool");
 test("None", type(none), "None");
 
-# Factoral
-print("*** Factoral tests ***");
+# Factorial
+print("*** Factorial tests ***");
 func factorial(n) {
     if n < 0 {
         # factorial(x) is undefined when x < 0

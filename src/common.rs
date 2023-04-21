@@ -21,9 +21,9 @@ pub const IMPOSSIBLE_STATE: &str =
 // Errors
 pub enum ErrType{Err, Warn, Hint}
 // Prints and error and returns the color
-pub fn print_err(msg: &str, errtype: ErrType) -> String {
+pub fn print_err(msg: &str, errtype: ErrType, color: bool) -> String {
     // Get the name and color code from errtype
-    let (color, name) = match errtype {
+    let (color_code, name) = match errtype {
         // Red
         ErrType::Err => ("\x1b[1;31m", "error"),
         // Yellow
@@ -31,24 +31,38 @@ pub fn print_err(msg: &str, errtype: ErrType) -> String {
         // Cyan
         ErrType::Hint => ("\x1b[1;36m", "hint"),
     };
-    println!("{}{}:\x1b[0m {}", color.clone(), name, msg);
-    return color.to_string();
+    if color {
+        println!("{}{}:\x1b[0m {}", color_code.clone(), name, msg);
+        return color_code.to_string();
+    } else {
+        println!("{}: {}", name, msg);
+        return "".to_string();
+    }
 }
 
-pub fn err(stream: &Stream, msg: &str, size: u8, errtype: ErrType) {
+pub fn err(stream: &Stream, msg: &str, size: u8, errtype: ErrType, color: bool)
+{
     // Print file name and line/char info ("test.sk:1:3: ")
-    print!("\x1b[1m{}:{}:{}:\x1b[0m ", stream.name, stream.line, stream.at);
+    if color {
+        print!("\x1b[1m{}:{}:{}:\x1b[0m ", stream.name, stream.line, stream.at);
+    } else {
+        print!("{}:{}:{}: ", stream.name, stream.line, stream.at);
+    }
     // Print the type ("error:")
-    let color = print_err(msg, errtype);
+    let color_code = print_err(msg, errtype, color);
     // Print the line ("    1 | print("Hello World!");")
     let line = format!("    {} | ", stream.line);
     println!("{}{}", line, stream.str);
     // Print arrow ("      |   ^")
-    println!(
-        "{}| {}{}{}\x1b[0m",
-        " ".repeat(line.len() - 2), " ".repeat(stream.at), color,
-        "^".repeat(size.into())
+    print!(
+        "{}| {}",
+        " ".repeat(line.len() - 2), " ".repeat(stream.at)
     );
+    if color {
+        println!("{}{}\x1b[0m", color_code, "^".repeat(size.into()));
+    } else {
+        println!("{}", "^".repeat(size.into()));
+    }
 }
 
 // Token size finder

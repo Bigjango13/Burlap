@@ -128,7 +128,7 @@ impl Vm {
     // Init
     pub fn new(args: Arguments, import_path: PathBuf) -> Vm {
         // Builtin functions
-        let functies = HashMap::from([
+        let mut functies = HashMap::from([
             // Builtins
             ("print".to_string(), sk_print as Functie),
             ("input".to_string(), sk_input as Functie),
@@ -139,9 +139,16 @@ impl Vm {
             ("int".to_string(), sk_int as Functie),
             ("float".to_string(), sk_float as Functie),
             ("string".to_string(), sk_string as Functie),
-            // Burlap internals
-            ("__burlap_typed_eq".to_string(), sk_typed_eq as Functie),
         ]);
+        // Burlap internal functies
+        if args.extensions.contains(&"burlap-extensions".to_string()) {
+            functies.insert(
+                "__burlap_typed_eq".to_string(), sk_typed_eq as Functie
+            );
+            functies.insert(
+                "__burlap_range".to_string(), sk_fastrange as Functie
+            );
+        }
         // I really wish Rust had defaults, but it doesn't
         Vm {
             args, has_err: false, in_func: false, import_path,
@@ -488,6 +495,15 @@ fn sk_typed_eq(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         vm.bad_args(&"__burlap_typed_eq".to_string(), args.len(), 2)?;
     }
     return Ok(Value::Bool(args[0] == args[1]));
+}
+
+fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 2 {
+        vm.bad_args(&"__burlap_range".to_string(), args.len(), 2)?;
+    }
+    let (at, max) = (args[0].to_int(), args[1].to_int());
+    let step = if max.gt(&at) {1} else {-1};
+    return Ok(Value::RangeType(at, max, step));
 }
 
 
