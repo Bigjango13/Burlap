@@ -509,7 +509,22 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     // Obligatory 'in'
     eat!(parser, In, "missing 'in' keyword in loop")?;
     // Iterator
-    let iter = parse_expr(parser)?;
+    let mut iter = parse_expr(parser)?;
+    // Range optimization
+    if let ASTNode::CallExpr(name, args) = iter.clone() {
+        if name == "range".to_string() {
+            if args.len() != 2 {
+                // Arg check
+                error!(
+                    parser,
+                    format!("range takes 2 args, not {}", args.len()).as_str()
+                );
+                return Option::None;
+            }
+            // Use the faster range
+            iter = ASTNode::CallExpr("__burlap_range".to_string(), args);
+        }
+    }
     // End parens
     eat!(parser, Rparan, "missing ')' in loop")?;
     // Body

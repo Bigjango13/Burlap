@@ -18,6 +18,14 @@ Enables using internal burlap functions, see below.
 
 ## Functions
 
+### `__burlap_range(start, end)`
+
+A faster version of `range` made for for-loops, burlap automatically uses it. Because of this, it cannot be disabled.
+
+Ranges can be very wastful, as Burlap has to construct a `List` and then immediately turn it into a `__burlap_iter`, as well as storing *every* value that will be looped over.
+
+`__burlap_range` does better than just producing a `__burlap_iter`, it makes a `__burlap_rangetype`, which only stores `(at, max, step)` and so the range can be a lot bigger and use very little memory.
+
 ### `__burlap_typed_eq(a, b)`
 
 Can be used to make a typed equality check between two values, for example:
@@ -41,14 +49,6 @@ functi typed_eq(a, b) {
     return false;
 }
 ```
-
-### `__burlap_range(start, end)`
-
-A faster version of `range` made for for-loops, in burlap for loops convert a `List` to `__burlap_iter` (an internal burlap type).
-
-This can be very wastful, as Burlap has to construct a `List` and then immediately turn it into a `__burlap_iter`, as well as storing *every* value of the loops. 
-
-`__burlap_range` does better than just producing a `__burlap_iter`, it makes a `__burlap_rangetype`, which only stores `(at, max, step)` and so the range can be a lot bigger and use very little memory ()
 
 ### `__burlap_print_stack()`
 

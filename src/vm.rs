@@ -139,6 +139,8 @@ impl Vm {
             ("int".to_string(), sk_int as Functie),
             ("float".to_string(), sk_float as Functie),
             ("string".to_string(), sk_string as Functie),
+            // Non-togglable internals
+            ("__burlap_range".to_string(), sk_fastrange as Functie),
         ]);
         // Burlap internal functies
         if args.extensions.contains(&"burlap-extensions".to_string()) {
@@ -146,7 +148,7 @@ impl Vm {
                 "__burlap_typed_eq".to_string(), sk_typed_eq as Functie
             );
             functies.insert(
-                "__burlap_range".to_string(), sk_fastrange as Functie
+                "__burlap_print_stack".to_string(), sk_print_stack as Functie
             );
         }
         // I really wish Rust had defaults, but it doesn't
@@ -440,24 +442,20 @@ fn sk_len(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_range(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
         // Invalid args
-        vm.bad_args(&"range".to_string(), args.len(), 1)?;
+        vm.bad_args(&"range".to_string(), args.len(), 2)?;
     }
-    // Create an iterator
+    // Get the values
     let (mut min, max) = (args[0].to_int(), args[1].to_int());
-    // No need to iterate
-    if min == max {
-        return Ok(Value::Iter(vec![Value::Int(min)], 0));
-    }
     // Find out which way it's going
     let offset: i32 = if min > max { -1 } else { 1 };
     // Loop and get values
-    let mut nums = Vec::<Value>::new();
+    let mut ret = IndexMap::<String, Value>::new();
     while min != max {
-        nums.push(Value::Int(min));
+        ret.insert(min.to_string(), Value::Int(min));
         min += offset;
     }
-    nums.push(Value::Int(min));
-    return Ok(Value::Iter(nums, 0));
+    ret.insert(min.to_string(), Value::Int(min));
+    return Ok(Value::List(ret));
 }
 
 // Casting
@@ -506,6 +504,13 @@ fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     return Ok(Value::RangeType(at, max, step));
 }
 
+fn sk_print_stack(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 0 {
+        vm.bad_args(&"__burlap_print_stack".to_string(), args.len(), 0)?;
+    }
+    println!("{:?}", vm.stack);
+    return Ok(Value::None);
+}
 
 // The big switch, runs every instruction
 fn exec_next(vm: &mut Vm) -> Result<(), String> {
