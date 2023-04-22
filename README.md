@@ -7,7 +7,7 @@ Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) progr
 ## Features
 - [x] Complete sack v0.0.5 support
 - [ ] Complete sack v1.0.0-beta support
-  - [x] Variables
+  - [ ] Variables
     - [x] Strings
     - [x] Number
     - [x] Decimal
@@ -53,7 +53,7 @@ If you want to install it, run `cargo install --git https://github.com/Bigjango1
 If you don't use any arguments burlap will enter REPL mode, to exit use Ctrl-D.
 If you want to run a file just pass the file name as the argument.
 
-To run code in argv use `-`, for example: `burlap - "print('Hello world!');`.
+To run code in argv use `-`, for example: `burlap - "print('Hello world!');"`.
 
 To show help, run `burlap -h` or `burlap --help`.
 

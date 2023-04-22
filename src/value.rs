@@ -247,6 +247,25 @@ impl Value {
                     false
                 }
             },
+            // Lists
+            Value::List(lhs) => {
+                if let Value::List(rhs) = right {
+                    // This isn't spec defined, so may change in the future
+                    if lhs.len() != rhs.len() {
+                        return false;
+                    }
+                    // Compare values
+                    for ab in lhs.values().zip(rhs.values()) {
+                        let (a, b) = ab;
+                        if !a.eq(b.clone()) {
+                            return false;
+                        }
+                    }
+                    true
+                } else {
+                    false
+                }
+            },
             // Anything else
             _ => false,
         };

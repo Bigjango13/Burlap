@@ -25,6 +25,14 @@ pub enum Opcode {
     // DELete head (value)
     DEL,
 
+    // Functions
+    // declare FuNction (name, arg#)
+    FN,
+    // CALL function (name, arg#, args...)
+    CALL,
+    // RETurn (ret)
+    RET,
+
     // Variables
     // Push Variable ("name" -> value)
     PV,
@@ -80,14 +88,6 @@ pub enum Opcode {
     JMPB,
     // JuMP if NoT ([u8], offset)
     JMPNT,
-
-    // Functions
-    // declare FuNction (name, arg#)
-    FN,
-    // CALL function (name, arg#, args...)
-    CALL,
-    // RETurn (ret)
-    RET,
 }
 
 
