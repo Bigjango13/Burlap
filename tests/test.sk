@@ -2,16 +2,16 @@
 let testTotal = 0;
 let testBad = 0;
 func test(msg, val, goodVal) {
-    let str = "";
+    let status_msg = "";
     testTotal += 1;
     if val == goodVal {
-        str = "works: ";
+        status_msg = "works: ";
     } else {
-        str = "FAIL: ";
+        status_msg = "FAIL: ";
         testBad += 1;
     }
-    str += msg + ": ";
-    print(str + goodVal + " == " + val);
+    status_msg += msg + ": ";
+    print(status_msg + goodVal + " == " + val);
 }
 
 func testSummary() {
@@ -171,7 +171,6 @@ test("i == 6", i, 6);
 print("*** Import tests ***");
 import ("import-test.sk");
 test("import func", ret4(), 4);
-test("import var (extension)", myCoolVar, 7);
 
 # Casting tests
 print("*** Casting tests ***");

@@ -93,7 +93,7 @@ fn repl(args: &mut Arguments) {
     if hist_file != "" {
         if rl.save_history(&hist_file).is_err() {
             print_err(
-                "failed to save history", ErrType::Err,
+                "failed to save history", ErrType::Warn,
                 args.extensions.contains(&"color".to_string())
             );
         };
@@ -180,7 +180,7 @@ fn get_args() -> Result<Arguments, bool> {
         Err(err) => {
             // Report error
             print_err(
-                format!("failed to open file: {}", err).as_str(), ErrType::Warn,
+                format!("failed to open file: {}", err).as_str(), ErrType::Err,
                 args.extensions.contains(&"color".to_string())
             );
             return Err(false);

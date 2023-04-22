@@ -122,20 +122,7 @@ macro_rules! eat {
 // Semicolons eating macro
 macro_rules! eat_semicolon {
     ($parser:expr) => (
-        if let Semicolon = $parser.current() {
-            $parser.next();
-            Some(())
-         } else {
-            let subbed = if $parser.at >= 2 {
-                $parser.at -= 2;
-                true
-            } else { false };
-            error!($parser, "expected semicolon");
-            if subbed {
-                $parser.at += 2;
-            }
-            Option::None
-         }
+        eat!($parser, Semicolon, "expected semicolon")
     );
 }
 

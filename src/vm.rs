@@ -25,6 +25,11 @@ pub enum Opcode {
     // DELete head (value)
     DEL,
 
+    // Scope
+    // Raise/Lower Scope (Call scope is handled by CALL and RET)
+    RS,
+    LS,
+
     // Functions
     // declare FuNction (name, arg#)
     FN,
@@ -40,6 +45,8 @@ pub enum Opcode {
     DV,
     // Set Variable ("name", value)
     SV,
+    // Declare Or Set ariable ("name", value)
+    DOS,
 
     // Lists
     // Load list (size, keys-and-values -> list)
@@ -115,6 +122,8 @@ pub struct Vm {
     var_names: Vec<String>,
     var_vals: Vec<Value>,
     var_min: usize,
+    // Scope
+    scope: Vec<(usize, usize, u8)>,
 
     // The program
     pub program: Program,
@@ -156,7 +165,7 @@ impl Vm {
             args, has_err: false, in_func: false, import_path,
             is_global: true, globals: HashMap::new(), functies,
             var_names: Vec::new(), var_vals: Vec::new(),
-            var_min: 0, stack: Vec::new(),
+            var_min: 0, stack: Vec::new(), scope: Vec::new(),
             program: Program::new(), jump: false, at: 0
         }
     }
@@ -194,10 +203,12 @@ impl Vm {
     }
 
     // Create a variable
-    pub fn make_var(&mut self, name: &String, val: Value) {
+    pub fn make_var(
+        &mut self, name: &String, val: Value
+    ) -> Result<(), String> {
         // Change if it already exists
-        if self.change_var(name, val.clone()) {
-            return;
+        if let Ok(_) = self.get_var(name) {
+            return Err(format!("cannot redefine \"{}\"", name));
         }
         // Create
         if self.is_global {
@@ -206,6 +217,7 @@ impl Vm {
             self.var_names.push(name.clone());
             self.var_vals.push(val);
         }
+        Ok(())
     }
 
     // Set a variable
@@ -233,50 +245,52 @@ impl Vm {
         return true;
     }
 
-    pub fn set_var(&mut self, name: &String, val: Value, global: bool) -> bool {
-        // Sets a variable, returns true if it was successful
-        return if global {
-            self.set_global(name, val)
-        } else {
-            self.set_local(name, val)
-        };
-    }
-
-    pub fn change_var(&mut self, name: &String, val: Value) -> bool {
+    pub fn set_var(&mut self, name: &String, val: Value) -> Result<(), String>
+    {
         // Changes a variable to a different value
-        if !self.set_local(name, val.clone()) {
-            return self.set_global(name, val)
+        if self.set_local(name, val.clone()) {
+            return Ok(());
         }
-        return true;
+        if self.set_global(name, val) {
+            return Ok(());
+        }
+        return Err(format!("no variable called \"{}\"", name));
     }
 
-    // Scope TODO
-    #[allow(dead_code)]
-    pub fn lower_scope(&mut self, call: bool) -> (bool, usize, usize) {
-        // Lowers the scope
+    // Scope
+    pub fn lower_scope(&mut self, call: bool) {
         // Impossible for a lowered scope to be global
-        let old_global = self.is_global;
         self.is_global = false;
+        // Where the vars need to be cut off at
+        let old_top = self.var_names.len();
         // Functions can't access higher yet non-global scopes
         let old_min = self.var_min;
         if call {
-            self.var_min = self.var_names.len();
+            self.var_min = old_top;
         }
-        // Where the vars need to be cut off at
-        let old_top = self.var_names.len();
-        // Return data needed to raise the dead/scope
-        return (old_global, old_min, old_top);
+        let count: u8 = if call {
+            0
+        } else {
+            let (_, _, c) = *self.scope.last().unwrap_or(&(0, 0, 0));
+            c + 1
+        };
+        // Push data so the scope can be raised
+        self.scope.push((old_min, old_top, count));
     }
-    #[allow(dead_code)]
-    pub fn raise_scope(&mut self, (old_global, old_min, old_top): (bool, usize, usize)) {
-        // Raises the scope back
-        self.is_global = old_global;
+    pub fn raise_scope(&mut self) -> Result<(), String> {
+        let Some((old_min, old_top, _)) = self.scope.pop() else {
+            return Err("cannot raise global scope".to_string());
+        };
+        // Raise scope back up
+        self.is_global = self.scope.len() == 0;
         self.var_min = old_min;
         // Remove new vars
         while old_top < self.var_names.len() {
             self.var_names.pop();
             self.var_vals.pop();
         }
+
+        Ok(())
     }
 
     fn bad_args(
@@ -322,6 +336,8 @@ impl Vm {
         for arg in args {
             self.push(arg.clone());
         }
+        // Lower scope
+        self.lower_scope(true);
         return Ok(());
     }
 
@@ -535,6 +551,15 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             vm.stack.pop();
         },
 
+        // Scope
+        // Raise scope
+        Opcode::RS => {
+            vm.raise_scope()?;
+        },
+        Opcode::LS => {
+            vm.lower_scope(false);
+        },
+
         // Lists
         Opcode::LL => {
             let Value::Int(mut size) = vm.pop() else {
@@ -603,16 +628,23 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             };
             // Set
             let val = vm.pop();
-            if !vm.set_var(&varname, val, vm.is_global) {
-                return Err(format!("no variable called \"{}\"", varname));
-            }
+            vm.set_var(&varname, val)?;
         },
         Opcode::DV => {
             let Value::Str(varname) = vm.pop() else {
                 return Err("variable name must be string".to_string());
             };
             let val = vm.pop();
-            vm.make_var(&varname, val);
+            vm.make_var(&varname, val)?;
+        },
+        Opcode::DOS => {
+            let Value::Str(varname) = vm.pop() else {
+                return Err("variable name must be string".to_string());
+            };
+            let val = vm.pop();
+            if let Err(_) = vm.make_var(&varname, val.clone()) {
+                vm.set_var(&varname, val)?;
+            }
         },
 
         // Binops
@@ -728,6 +760,17 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             let Value::Int(pos) = vm.pop() else {
                 return Err("Non-int return address".to_string());
             };
+            // Fix scope
+            loop {
+                let Some((_, _, c)) = vm.scope.last() else {
+                    break;
+                };
+                if *c == 0 {
+                    vm.raise_scope()?;
+                    break;
+                }
+                vm.raise_scope()?;
+            }
             // Move
             vm.at = pos as usize + 1;
             vm.jump = true;
@@ -760,7 +803,7 @@ pub fn run(vm: &mut Vm, program: Program) -> bool {
         }
         // Run
         if let Err(s) = exec_next(vm) {
-            println!("{}", s);
+            println!("Runtime Error: {}", s);
             return false;
         }
 

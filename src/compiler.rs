@@ -155,11 +155,11 @@ fn compile_binop(
             program.ops.push(Opcode::NOT as u8);
         },
         TokenType::LtEquals => {
-            program.ops.push(Opcode::GT as u8);
+            program.ops.push(Opcode::LT as u8);
             program.ops.push(Opcode::NOT as u8);
         },
         TokenType::GtEquals => {
-            program.ops.push(Opcode::LT as u8);
+            program.ops.push(Opcode::GT as u8);
             program.ops.push(Opcode::NOT as u8);
         },
         // Handled later
@@ -258,7 +258,13 @@ fn compile_expr(program: &mut Program, node: &ASTNode) -> bool {
     return true;
 }
 
-fn _compile_body(program: &mut Program, nodes: &Vec<ASTNode>) -> bool {
+fn _compile_body(
+    program: &mut Program, nodes: &Vec<ASTNode>, call: bool
+) -> bool {
+    // Lower scope
+    if !call {
+        program.ops.push(Opcode::LS as u8);
+    }
     // Compile all nodes
     for node in nodes {
         if !compile_stmt(program, node, false) {
@@ -266,16 +272,20 @@ fn _compile_body(program: &mut Program, nodes: &Vec<ASTNode>) -> bool {
             return false;
         }
     }
+    // Raise scope
+    if !call {
+        program.ops.push(Opcode::RS as u8);
+    }
     return true;
 }
-fn compile_body(program: &mut Program, node: &ASTNode) -> bool {
+fn compile_body(program: &mut Program, node: &ASTNode, call: bool) -> bool {
     let BodyStmt(nodes) = node else {
         if *node == Nop {
             return true;
         }
         panic!("compile_body got non-body node!");
     };
-    return _compile_body(program, nodes);
+    return _compile_body(program, nodes, call);
 }
 
 fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
@@ -309,7 +319,7 @@ fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
             program.ops.push(0);
             let pos = program.ops.len();
             // Compile true part
-            compile_body(program, body);
+            compile_body(program, body, false);
             program.ops[pos - 1] = (program.ops.len() - pos + 1) as u8;
 
             // The else
@@ -338,10 +348,10 @@ fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
 
             // Set the loop var
             program.push(Value::Str(var.to_string()));
-            program.ops.push(Opcode::DV as u8);
+            program.ops.push(Opcode::DOS as u8);
 
             // Body
-            compile_body(program, body);
+            compile_body(program, body, false);
 
             // Backwards jump
             program.ops.push(Opcode::JMPB as u8);
@@ -359,14 +369,14 @@ fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
             let offpos = program.ops.len();
 
             // Compile body
-            compile_body(program, body);
+            compile_body(program, body, false);
 
             // Backwards jump
             program.ops.push(Opcode::JMPB as u8);
             program.ops.push((program.ops.len() - pos) as u8);
             program.ops[offpos - 1] = (program.ops.len() - offpos + 1) as u8;
         },
-        BodyStmt(nodes) => return _compile_body(program, nodes),
+        BodyStmt(nodes) => return _compile_body(program, nodes, false),
         FunctiStmt(name, args, body) => {
             // Declare function
             program.push(Value::Int(args.len() as i32));
@@ -382,7 +392,7 @@ fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
                 program.ops.push(Opcode::DV as u8);
             }
             // Compile body
-            compile_body(program, body);
+            compile_body(program, body, true);
             // Return
             program.push(Value::None);
             program.ops.push(Opcode::RET as u8);
