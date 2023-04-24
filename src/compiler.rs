@@ -1,10 +1,10 @@
-use std::collections::HashMap;
-
 use crate::common::IMPOSSIBLE_STATE;
 use crate::lexer::TokenType;
 use crate::parser::{ASTNode, ASTNode::*};
 use crate::value::Value;
 use crate::vm::Opcode;
+
+use rustc_hash::FxHashMap;
 
 #[derive(Debug)]
 pub struct Program {
@@ -12,7 +12,7 @@ pub struct Program {
     pub ops: Vec<u8>,
     pub consts: Vec<Value>,
     // Function locations (name : (byte pos, arg num))
-    pub functis: HashMap<String, (usize, i32)>,
+    pub functis: FxHashMap<String, (usize, i32)>,
     // Line numbers (run-length encoded)
     pub lines: Vec<usize>,
 }
@@ -22,7 +22,7 @@ impl Program {
     pub fn new() -> Program {
         Program{
             ops: Vec::new(), consts: Vec::new(),
-            functis: HashMap::new(), lines: Vec::new()
+            functis: FxHashMap::default(), lines: Vec::new()
         }
     }
 

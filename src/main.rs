@@ -1,3 +1,4 @@
+#![allow(clippy::needless_return, clippy::print_literal)]
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -90,13 +91,11 @@ fn repl(args: &mut Arguments) {
         }
     }
     // Save history
-    if hist_file != "" {
-        if rl.save_history(&hist_file).is_err() {
-            print_err(
-                "failed to save history", ErrType::Warn,
-                args.extensions.contains(&"color".to_string())
-            );
-        };
+    if hist_file != "" && rl.save_history(&hist_file).is_err() {
+        print_err(
+            "failed to save history", ErrType::Warn,
+            args.extensions.contains(&"color".to_string())
+        );
     }
 }
 

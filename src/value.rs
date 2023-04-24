@@ -2,6 +2,7 @@ use std::ops;
 use indexmap::map::IndexMap;
 
 // Value enum for variables
+// TODO: Speed up (pointer tagging?)
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     // Normal values

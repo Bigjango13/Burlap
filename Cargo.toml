@@ -8,6 +8,8 @@ edition = "2021"
 home = "0.5.4"
 # For values
 impl_ops = "0.1.1"
+# For speed
+rustc-hash = "1.1.0"
 # For lists
 indexmap = "1.9.2"
 # For REPL

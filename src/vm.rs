@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::io::Write;
 use std::io;
@@ -8,9 +7,11 @@ use crate::compiler::Program;
 use crate::value::Value;
 
 use indexmap::map::IndexMap;
+use rustc_hash::FxHashMap;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum Opcode {
     // The almighty NOP
     NOP,
@@ -115,9 +116,9 @@ pub struct Vm {
     // Variables
     // Global vars
     is_global: bool,
-    globals: HashMap<String, Value>,
+    globals: FxHashMap<String, Value>,
     // Functies
-    functies: HashMap<String, Functie>,
+    functies: FxHashMap<String, Functie>,
     // Non-global variables
     var_names: Vec<String>,
     var_vals: Vec<Value>,
@@ -137,20 +138,21 @@ impl Vm {
     // Init
     pub fn new(args: Arguments, import_path: PathBuf) -> Vm {
         // Builtin functions
-        let mut functies = HashMap::from([
-            // Builtins
-            ("print".to_string(), sk_print as Functie),
-            ("input".to_string(), sk_input as Functie),
-            ("type".to_string(), sk_type as Functie),
-            ("len".to_string(), sk_len as Functie),
-            ("range".to_string(), sk_range as Functie),
-            // Casts
-            ("int".to_string(), sk_int as Functie),
-            ("float".to_string(), sk_float as Functie),
-            ("string".to_string(), sk_string as Functie),
-            // Non-togglable internals
-            ("__burlap_range".to_string(), sk_fastrange as Functie),
-        ]);
+        let mut functies = FxHashMap::with_capacity_and_hasher(
+            16, Default::default()
+        );
+        // Builtins
+        functies.insert("print".to_string(), sk_print as Functie);
+        functies.insert("input".to_string(), sk_input as Functie);
+        functies.insert("type".to_string(), sk_type as Functie);
+        functies.insert("len".to_string(), sk_len as Functie);
+        functies.insert("range".to_string(), sk_range as Functie);
+        // Casts
+        functies.insert("int".to_string(), sk_int as Functie);
+        functies.insert("float".to_string(), sk_float as Functie);
+        functies.insert("string".to_string(), sk_string as Functie);
+        // Non-togglable internals
+        functies.insert("__burlap_range".to_string(), sk_fastrange as Functie);
         // Burlap internal functies
         if args.extensions.contains(&"burlap-extensions".to_string()) {
             functies.insert(
@@ -163,7 +165,7 @@ impl Vm {
         // I really wish Rust had defaults, but it doesn't
         Vm {
             args, has_err: false, in_func: false, import_path,
-            is_global: true, globals: HashMap::new(), functies,
+            is_global: true, globals: FxHashMap::default(), functies,
             var_names: Vec::new(), var_vals: Vec::new(),
             var_min: 0, stack: Vec::new(), scope: Vec::new(),
             program: Program::new(), jump: false, at: 0
@@ -181,33 +183,42 @@ impl Vm {
             }
         }
         // Failed to get var, return an error
-        return Err(format!("no variable called \"{}\"", name).to_string());
+        return Err(format!("no variable called \"{}\"", name));
     }
 
     fn get_global(&self, name: &String) -> Result<Value, String> {
         // Gets a var in the global scope
         return match self.globals.get(name) {
             Some(val) => Ok(val.clone()),
-            _ => Err(format!("no variable called \"{}\"", name).to_string())
+            _ => Err(format!("no variable called \"{}\"", name))
         };
     }
 
     pub fn get_var(&self, name: &String) -> Result<Value, String> {
-        // Try to get it in the normal scope first
-        return match self.get_local(name) {
-            // Not found, try global scope
-            Err(_) => self.get_global(name),
-            // It's in the local scope
-            x => x,
+        if self.is_global {
+            // Don't bother checking local scope
+            return self.get_global(name);
         }
+        return self.get_local(name).or_else(|_| self.get_global(name));
+    }
+
+    pub fn check_for_var(&self, name: &String) -> bool {
+        if !self.is_global {
+            // Check locals
+            if self.var_names[self.var_min..].contains(name) {
+                return true;
+            }
+        }
+        // Check globals
+        return self.globals.contains_key(name);
     }
 
     // Create a variable
     pub fn make_var(
         &mut self, name: &String, val: Value
     ) -> Result<(), String> {
-        // Change if it already exists
-        if let Ok(_) = self.get_var(name) {
+        // Check if it already exists
+        if self.check_for_var(name) {
             return Err(format!("cannot redefine \"{}\"", name));
         }
         // Create
@@ -282,13 +293,11 @@ impl Vm {
             return Err("cannot raise global scope".to_string());
         };
         // Raise scope back up
-        self.is_global = self.scope.len() == 0;
+        self.is_global = self.scope.is_empty();
         self.var_min = old_min;
         // Remove new vars
-        while old_top < self.var_names.len() {
-            self.var_names.pop();
-            self.var_vals.pop();
-        }
+        self.var_names.truncate(old_top);
+        self.var_vals.truncate(old_top);
 
         Ok(())
     }
@@ -300,25 +309,26 @@ impl Vm {
             format!("too many args for {} (got {} need {})", name, got, need)
         } else {
             format!("too few args for {} (got {} need {})", name, got, need)
-        }.to_string())
+        })
     }
 
     // Call a function
+    #[inline]
     pub fn call(
         &mut self, name: &String, args: &Vec<Value>
     ) -> Result<(), String> {
-        // Builtin functions
-        if let Some(functie) = self.functies.get(name) {
-            // Reverse (normally the vm pops the args in reverse)
-            let args = args.clone().into_iter().rev().collect();
-            let ret = functie(self, args)?;
-            self.push(ret);
-            return Ok(());
-        }
 
         // Non-builtin functions
         let Some((pos, arg_num)) = self.program.functis.get(name) else
         {
+            // Builtin functions
+            if let Some(functie) = self.functies.get(name) {
+                // Reverse (normally the vm pops the args in reverse)
+                let args = args.clone().into_iter().rev().collect();
+                let ret = functie(self, args)?;
+                self.push(ret);
+                return Ok(());
+            }
             return Err(format!("no function called \"{}\"", name));
         };
         // Dereference
@@ -346,6 +356,7 @@ impl Vm {
     }
 
     pub fn cur_opcode(&mut self) -> Opcode {
+        // Unsafe because casting an int to enum might not be valid
         return unsafe {std::mem::transmute(self.program.ops[self.at])};
     }
 
@@ -358,15 +369,14 @@ impl Vm {
     }
 
     // Push/pop
+    #[inline]
     pub fn push(&mut self, value: Value) {
         self.stack.push(value)
     }
 
+    #[inline]
     pub fn pop(&mut self) -> Value {
-        match self.stack.pop() {
-            Some(v) => v,
-            _ => panic!("Overpopped stack!")
-        }
+        self.stack.pop().unwrap()
     }
 
     pub fn read(&mut self, size: u8) -> i32 {
@@ -521,7 +531,7 @@ fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 }
 
 fn sk_print_stack(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if args.len() != 0 {
+    if !args.is_empty() {
         vm.bad_args(&"__burlap_print_stack".to_string(), args.len(), 0)?;
     }
     println!("{:?}", vm.stack);
@@ -529,8 +539,8 @@ fn sk_print_stack(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 }
 
 // The big switch, runs every instruction
+#[inline]
 fn exec_next(vm: &mut Vm) -> Result<(), String> {
-    // Unsafe because casting an int to enum might not be valid
     match vm.cur_opcode() {
         Opcode::NOP => {},
 
@@ -642,7 +652,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 return Err("variable name must be string".to_string());
             };
             let val = vm.pop();
-            if let Err(_) = vm.make_var(&varname, val.clone()) {
+            if vm.make_var(&varname, val.clone()).is_err() {
                 vm.set_var(&varname, val)?;
             }
         },
@@ -756,8 +766,8 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         },
 
         Opcode::RET => {
-            let ret = vm.pop();
-            let Value::Int(pos) = vm.pop() else {
+            let Value::Int(pos) = vm.stack.swap_remove(vm.stack.len() - 2) else
+            {
                 return Err("Non-int return address".to_string());
             };
             // Fix scope
@@ -774,14 +784,12 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             // Move
             vm.at = pos as usize + 1;
             vm.jump = true;
-            // Push ret back
-            vm.push(ret);
         }
 
-        #[allow(unreachable_patterns)]
+        /*#[allow(unreachable_patterns)]
         _ => {
             panic!("Unhandled opcode! {:?}", vm.cur_opcode());
-        },
+        },*/
     };
     // If nothing has returned an error, everything is fine
     Ok(())
@@ -820,7 +828,7 @@ pub fn run(vm: &mut Vm, program: Program) -> bool {
                 // print the stack at the end
                 println!("FINAL: {:?}", vm.stack);
             }
-            if vm.args.is_repl && vm.stack.len() >= 1 {
+            if vm.args.is_repl && !vm.stack.is_empty() {
                 // Print the result
                 if vm.stack[0] != Value::None {
                     println!("{}", vm.stack[0].to_string());
