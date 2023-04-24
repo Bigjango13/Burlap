@@ -1,6 +1,11 @@
-use crate::common::IMPOSSIBLE_STATE;
+use std::fs::read_to_string;
+use std::path::PathBuf;
+
+use crate::Arguments;
+use crate::common::{print_err, ErrType, IMPOSSIBLE_STATE};
 use crate::lexer::TokenType;
 use crate::parser::{ASTNode, ASTNode::*};
+use crate::to_ast;
 use crate::value::Value;
 use crate::vm::Opcode;
 
@@ -13,8 +18,8 @@ pub struct Program {
     pub consts: Vec<Value>,
     // Function locations (name : (byte pos, arg num))
     pub functis: FxHashMap<String, (usize, i32)>,
-    // Line numbers (run-length encoded)
-    pub lines: Vec<usize>,
+    // Import dir
+    pub path: PathBuf,
 }
 
 impl Program {
@@ -22,7 +27,8 @@ impl Program {
     pub fn new() -> Program {
         Program{
             ops: Vec::new(), consts: Vec::new(),
-            functis: FxHashMap::default(), lines: Vec::new()
+            functis: FxHashMap::default(),
+            path: PathBuf::from(".")
         }
     }
 
@@ -249,8 +255,6 @@ fn compile_expr(program: &mut Program, node: &ASTNode) -> bool {
             }
             program.ops.push(Opcode::INX as u8);
         },
-        // TODO
-        ImportStmt(_) => {},
         _ => {
             panic!("Unknown token! {:?}", node);
         }
@@ -259,7 +263,8 @@ fn compile_expr(program: &mut Program, node: &ASTNode) -> bool {
 }
 
 fn _compile_body(
-    program: &mut Program, nodes: &Vec<ASTNode>, call: bool
+    program: &mut Program, args: &mut Arguments,
+    nodes: &Vec<ASTNode>, call: bool
 ) -> bool {
     // Lower scope
     if !call {
@@ -267,7 +272,7 @@ fn _compile_body(
     }
     // Compile all nodes
     for node in nodes {
-        if !compile_stmt(program, node, false) {
+        if !compile_stmt(program, args, node, false) {
             // Pass it down
             return false;
         }
@@ -278,17 +283,21 @@ fn _compile_body(
     }
     return true;
 }
-fn compile_body(program: &mut Program, node: &ASTNode, call: bool) -> bool {
+fn compile_body(
+    program: &mut Program, args: &mut Arguments, node: &ASTNode, call: bool
+) -> bool {
     let BodyStmt(nodes) = node else {
         if *node == Nop {
             return true;
         }
         panic!("compile_body got non-body node!");
     };
-    return _compile_body(program, nodes, call);
+    return _compile_body(program, args, nodes, call);
 }
 
-fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
+fn compile_stmt(
+    program: &mut Program, args: &mut Arguments, node: &ASTNode, dirty: bool
+) -> bool {
     match node {
         // Statements
         LetStmt(name, val) => {
@@ -308,7 +317,7 @@ fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
                 program.ops.push(0);
                 // Compile body
                 let pos = program.ops.len();
-                compile_stmt(program, else_part, false);
+                compile_stmt(program, args, else_part, false);
                 program.ops[pos - 1] = (program.ops.len() - pos + 1)
                     as u8;
                 return true
@@ -319,7 +328,7 @@ fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
             program.ops.push(0);
             let pos = program.ops.len();
             // Compile true part
-            compile_body(program, body, false);
+            compile_body(program, args, body, false);
             program.ops[pos - 1] = (program.ops.len() - pos + 1) as u8;
 
             // The else
@@ -330,7 +339,7 @@ fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
                 program.ops.push(0);
                 let pos = program.ops.len();
                 // Compile else part
-                compile_stmt(program, else_part, false);
+                compile_stmt(program, args, else_part, false);
                 program.ops[pos - 1] = (program.ops.len() - pos + 1) as u8;
             }
         },
@@ -351,7 +360,7 @@ fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
             program.ops.push(Opcode::DOS as u8);
 
             // Body
-            compile_body(program, body, false);
+            compile_body(program, args, body, false);
 
             // Backwards jump
             program.ops.push(Opcode::JMPB as u8);
@@ -369,17 +378,17 @@ fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
             let offpos = program.ops.len();
 
             // Compile body
-            compile_body(program, body, false);
+            compile_body(program, args, body, false);
 
             // Backwards jump
             program.ops.push(Opcode::JMPB as u8);
             program.ops.push((program.ops.len() - pos) as u8);
             program.ops[offpos - 1] = (program.ops.len() - offpos + 1) as u8;
         },
-        BodyStmt(nodes) => return _compile_body(program, nodes, false),
-        FunctiStmt(name, args, body) => {
+        BodyStmt(nodes) => return _compile_body(program, args, nodes, false),
+        FunctiStmt(name, fargs, body) => {
             // Declare function
-            program.push(Value::Int(args.len() as i32));
+            program.push(Value::Int(fargs.len() as i32));
             program.push(Value::Str(name.to_string()));
             program.ops.push(Opcode::FN as u8);
             // Jump around function
@@ -387,12 +396,12 @@ fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
             program.ops.push(0);
             let pos = program.ops.len();
             // Load args
-            for arg in args {
+            for arg in fargs {
                 program.push(Value::Str(arg.to_string()));
                 program.ops.push(Opcode::DV as u8);
             }
             // Compile body
-            compile_body(program, body, true);
+            compile_body(program, args, body, true);
             // Return
             program.push(Value::None);
             program.ops.push(Opcode::RET as u8);
@@ -404,7 +413,46 @@ fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
             compile_expr(program, ret);
             // Return return value
             program.ops.push(Opcode::RET as u8);
-        }
+        },
+        ImportStmt(file) => {
+            // Open file
+            let mut path = program.path.clone();
+            path.push(file);
+            // Try x.sk first
+            path.set_extension("sk");
+            if let Ok(src) = read_to_string(path.to_str().unwrap()) {
+                args.source = src;
+            } else {
+                // Try x.sack
+                path.set_extension("sack");
+                if let Ok(src) = read_to_string(path.to_str().unwrap()) {
+                    args.source = src;
+                } else {
+                    // No such file
+                    print_err(
+                        format!("cannot import {}", file).as_str(),
+                        ErrType::Err,
+                        args.extensions.contains(&"color".to_string())
+                    );
+                    return false;
+                }
+            }
+            // Gen ast
+            let Some(ast) = to_ast(args) else {
+                return false;
+            };
+            // Fix import path
+            let old_path = program.path.clone();
+            program.path = program.path.join(file);
+            program.path.pop();
+            // Compile
+            program.ops.push(Opcode::LS as u8);
+            if !compile(ast, args, program) {
+                return false;
+            }
+            program.ops.push(Opcode::RS as u8);
+            program.path = old_path;
+        },
         Nop => {
             // Nop isn't turned into the NOP instruction because it's useless
         },
@@ -425,22 +473,24 @@ fn compile_stmt(program: &mut Program, node: &ASTNode, dirty: bool) -> bool {
     return true;
 }
 
-pub fn compile(ast: Vec<ASTNode>) -> Option<Program> {
-    // Make ast mutable
-    let mut ast = ast;
-    let mut program = Program::new();
+pub fn compile(
+    ast: Vec<ASTNode>, args: &mut Arguments, program: &mut Program
+) -> bool {
+    if ast.is_empty() {
+        return true;
+    }
     // Compile
-    let last = ast.pop()?;
-    for node in ast {
-        if !compile_stmt(&mut program, &node, false) {
-            return None;
+    for node in &ast[..ast.len()-1] {
+        if !compile_stmt(program, args, &node, false) {
+            return false;
         }
     }
-    // Compile the last value without cleaning up
-    if !compile_stmt(&mut program, &last, true) {
-        return None;
+    // If repl, compile the last value without cleaning up
+    // Else just compile normally
+    if !compile_stmt(program, args, ast.last().unwrap(), args.is_repl) {
+        return false;
     }
     // Jumps go onto the next instruction, so a nop is needed at the end
     program.ops.push(Opcode::NOP as u8);
-    return Some(program);
+    return true;
 }

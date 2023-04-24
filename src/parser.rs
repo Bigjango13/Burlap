@@ -45,7 +45,7 @@ pub enum ASTNode {
     // While loop, (6 > i, Body(...))
     WhileStmt(Box<ASTNode>, Box<ASTNode>),
     // Import, ("math")
-    ImportStmt(Box<ASTNode>),
+    ImportStmt(String),
 
     // Special
     // Nop, does nothing
@@ -392,14 +392,18 @@ fn parse_statement(parser: &mut Parser) -> Option<ASTNode> {
             parser.next();
             Option::None
         },
-        // Import
-        Import => parse_import(parser),
         // Return
         Return => parse_return(parser),
         // If
         If => parse_if(parser),
         Else => {
             error!(parser, "missing previous if statement");
+            parser.next();
+            Option::None
+        },
+        // Imports
+        Import => {
+            error!(parser, "imports must be at highest level");
             parser.next();
             Option::None
         },
@@ -553,13 +557,17 @@ fn parse_import(parser: &mut Parser) -> Option<ASTNode> {
     // The parens part 1
     eat!(parser, Lparan, "missing '(' in import")?;
     // Import name
-    let value = parse_expr(parser)?;
+    let Str(value) = parser.current() else {
+        error!(parser, "import filename must be a constant string");
+        return Option::None;
+    };
+    parser.next();
     // The parens part 2: electric boogaloo
     eat!(parser, Rparan, "missing ')' in import")?;
     // Semicolon
     eat_semicolon!(parser)?;
     // Return
-    return Some(ASTNode::ImportStmt(Box::new(value)));
+    return Some(ASTNode::ImportStmt(value));
 }
 
 // Variable definition
@@ -707,7 +715,12 @@ pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Vec<ASTNode> {
     };
     // Parse
     while parser.current() != Eof {
-        let stmt = parse_statement(&mut parser);
+        // Import must be highest scope
+        let stmt = if parser.current() == Import {
+            parse_import(&mut parser)
+        } else {
+            parse_statement(&mut parser)
+        };
         if let Some(stmt) = stmt {
             parser.ast.push(stmt);
             continue;

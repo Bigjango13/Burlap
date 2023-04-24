@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::io::Write;
 use std::io;
 
@@ -106,8 +105,6 @@ type Functie = fn(&mut Vm, Vec<Value>) -> Result<Value, String>;
 pub struct Vm {
     // Extensions
     pub args: Arguments,
-    // Used for importing
-    pub import_path: PathBuf,
 
     // State
     pub has_err: bool,
@@ -131,12 +128,12 @@ pub struct Vm {
     // Sacks stack
     stack: Vec<Value>,
     pub jump: bool,
-    at: usize,
+    pub at: usize,
 }
 
 impl Vm {
     // Init
-    pub fn new(args: Arguments, import_path: PathBuf) -> Vm {
+    pub fn new(args: Arguments) -> Vm {
         // Builtin functions
         let mut functies = FxHashMap::with_capacity_and_hasher(
             16, Default::default()
@@ -164,8 +161,8 @@ impl Vm {
         }
         // I really wish Rust had defaults, but it doesn't
         Vm {
-            args, has_err: false, in_func: false, import_path,
-            is_global: true, globals: FxHashMap::default(), functies,
+            args, has_err: false, in_func: false, functies,
+            is_global: true, globals: FxHashMap::default(),
             var_names: Vec::new(), var_vals: Vec::new(),
             var_min: 0, stack: Vec::new(), scope: Vec::new(),
             program: Program::new(), jump: false, at: 0
@@ -785,23 +782,17 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             vm.at = pos as usize + 1;
             vm.jump = true;
         }
-
-        /*#[allow(unreachable_patterns)]
-        _ => {
-            panic!("Unhandled opcode! {:?}", vm.cur_opcode());
-        },*/
     };
     // If nothing has returned an error, everything is fine
     Ok(())
 }
 
-pub fn run(vm: &mut Vm, program: Program) -> bool {
-    if program.ops.is_empty() {
+pub fn run(vm: &mut Vm) -> bool {
+    if vm.program.ops.is_empty() {
         return true;
     }
-    vm.at = 0;
+    //vm.at = 0;
     vm.stack = vec![];
-    vm.program = program;
     loop {
         if vm.args.is_debug {
             // Print debugging info

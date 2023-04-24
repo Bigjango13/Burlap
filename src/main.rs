@@ -12,7 +12,7 @@ mod compiler;
 mod vm;
 
 use crate::lexer::lex;
-use crate::parser::parse;
+use crate::parser::{parse, ASTNode};
 use crate::compiler::compile;
 use crate::common::{print_err, ErrType};
 use crate::vm::{run, Vm};
@@ -31,27 +31,32 @@ pub struct Arguments {
     extensions: Vec<String>
 }
 
-fn execute(vm: &mut Vm, args: &mut Arguments) -> bool {
+impl Arguments {
+    pub fn new() -> Arguments {
+        Arguments {
+            source: "".to_string(), is_debug: false,
+            is_repl: true, extensions: vec!["color".to_string()],
+            name: "<stdin>".to_string()
+        }
+    }
+}
+
+pub fn to_ast(args: &mut Arguments) -> Option<Vec<ASTNode>> {
     // Lex
     let tokens = lex(args);
     if tokens.is_empty() {
-        return false;
+        return None;
     }
     // Parse
     let ast = parse(tokens, args);
     if ast.is_empty() {
-        return false;
+        return None;
     }
     if args.is_debug {
         // Debug print ast
         println!("Ast: {:?}", ast);
     }
-    // Compile
-    let Some(program) = compile(ast) else {
-        return false;
-    };
-    // Run!
-    return run(vm, program);
+    return Some(ast);
 }
 
 fn repl(args: &mut Arguments) {
@@ -74,7 +79,7 @@ fn repl(args: &mut Arguments) {
         );
     };
     // REPL loop
-    let mut vm = Vm::new(args.clone(), PathBuf::from("."));
+    let mut vm = Vm::new(args.clone());
     loop {
         // Get input
         let readline = rl.readline(">> ");
@@ -87,7 +92,20 @@ fn repl(args: &mut Arguments) {
             // Add to history
             rl.add_history_entry(line.clone());
             args.source = line + ";";
-            execute(&mut vm, args);
+            // Gen ast
+            let Some(ast) = to_ast(args) else {
+                continue;
+            };
+            args.source = "".to_string();
+            // Compile
+            if !compile(ast, args, &mut vm.program) {
+                continue;
+            }
+            // Run
+            if vm.at != 0 {
+                vm.at += 1;
+            }
+            run(&mut vm);
         }
     }
     // Save history
@@ -100,11 +118,7 @@ fn repl(args: &mut Arguments) {
 }
 
 fn get_args() -> Result<Arguments, bool> {
-    let mut args = Arguments{
-        source: "".to_string(), is_debug: false,
-        is_repl: true, extensions: vec!["color".to_string()],
-        name: "<stdin>".to_string()
-    };
+    let mut args = Arguments::new();
     let mut file: String = "".to_string();
     let mut cmd_from_cli: bool = false;
     // [1..] to skip the first arg
@@ -200,8 +214,19 @@ fn main() {
         repl(&mut args);
     } else {
         // Execute file
-        let mut vm = Vm::new(args.clone(), PathBuf::from("."));
-        if !execute(&mut vm, &mut args) {
+        let Some(ast) = to_ast(&mut args) else {
+            exit(1);
+        };
+        args.source = "".to_string();
+        let mut vm = Vm::new(args.clone());
+        // Fix import path
+        vm.program.path = PathBuf::from(args.name.clone());
+        vm.program.path.pop();
+        if !compile(ast, &mut args, &mut vm.program) {
+            exit(1);
+        }
+        // Run
+        if !run(&mut vm) {
             exit(1);
         }
     }

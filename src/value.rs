@@ -275,6 +275,9 @@ impl Value {
 
 // Add
 impl_op_ex!(+ |left: Value, right: Value| -> Result<Value, String> {
+    if let Value::Str(s) = right {
+        return Ok(Value::Str(left.to_string() + &s));
+    }
     return match left {
         // str + anything is a string
         Value::Str(s) => {
