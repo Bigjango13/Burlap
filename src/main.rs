@@ -5,16 +5,18 @@ use std::path::PathBuf;
 use std::process::exit;
 
 mod common;
+mod formatter;
 mod lexer;
 mod parser;
 mod value;
 mod compiler;
 mod vm;
 
-use crate::lexer::lex;
-use crate::parser::{parse, ASTNode};
+use crate::formatter::format;
 use crate::compiler::compile;
 use crate::common::{print_err, ErrType};
+use crate::lexer::lex;
+use crate::parser::{parse, ASTNode};
 use crate::vm::{run, Vm};
 
 #[macro_use] extern crate impl_ops;
@@ -28,6 +30,7 @@ pub struct Arguments {
     name: String,
     is_debug: bool,
     is_repl: bool,
+    format: bool,
     extensions: Vec<String>
 }
 
@@ -36,7 +39,7 @@ impl Arguments {
         Arguments {
             source: "".to_string(), is_debug: false,
             is_repl: true, extensions: vec!["color".to_string()],
-            name: "<stdin>".to_string()
+            name: "<stdin>".to_string(), format: false,
         }
     }
 }
@@ -144,6 +147,9 @@ fn get_args() -> Result<Arguments, bool> {
         } else if arg == "--no-color" {
             // Color is always the first argument
             args.extensions.remove(0);
+        } else if arg == "-f" || arg == "--format" {
+            // Format
+            args.format = true;
         } else if arg == "-d" || arg == "--debug" {
             // Debug
             args.is_debug = true;
@@ -160,6 +166,7 @@ fn get_args() -> Result<Arguments, bool> {
             println!("\t--use-X\tenables X feature");
             println!("\t--use-all\tenables all features");
             println!("\t- [command]\truns [command]");
+            println!("\t-f --format\tformat the file instead of running");
             println!("\t-d --debug\truns in debug mode");
             println!();
             println!(
@@ -210,8 +217,28 @@ fn main() {
     };
     // Run
     if args.is_repl {
+        if args.format {
+            print_err(
+                "formatting requires a file", ErrType::Err,
+                args.extensions.contains(&"color".to_string())
+            );
+            exit(1);
+        }
         // Repl
         repl(&mut args);
+    } else if args.format {
+        // Format
+        let Some(ast) = to_ast(&mut args) else {
+            exit(1);
+        };
+        if let Err(err) = format(ast, args.name) {
+            print_err(
+                format!("failed to format: {}", err.to_string()).as_str(),
+                ErrType::Err,
+                args.extensions.contains(&"color".to_string())
+            );
+            exit(1);
+        }
     } else {
         // Execute file
         let Some(ast) = to_ast(&mut args) else {
