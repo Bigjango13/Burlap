@@ -7,14 +7,14 @@ Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) progr
 ## Features
 - [x] Complete sack v0.0.5 support
 - [ ] Complete sack v1.0.0-beta support
-  - [ ] Variables
+  - [x] Variables
     - [x] Strings
     - [x] Number
     - [x] Decimal
     - [x] Bool
     - [x] None
     - [x] Lists **(New)**
-    - [ ] Byte **(New)**
+    - [x] Byte **(New)**
     - [x] Type function **(New)**
   - [x] Operators
     - [x] Logical operators (`&&`, `||`, `^^`, `!`)

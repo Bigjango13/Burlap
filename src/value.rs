@@ -10,6 +10,7 @@ pub enum Value {
     Int(i32),
     Float(f32),
     Bool(bool),
+    Byte(u8),
     List(IndexMap<String, Value>),
     None,
 
@@ -64,6 +65,7 @@ impl Value {
             Value::Int(i) => *i,
             Value::Float(f) => *f as i32,
             Value::Bool(b) => if *b { 1 } else { 0 },
+            Value::Byte(b) => *b as i32,
             _ => 0,
         };
     }
@@ -74,6 +76,7 @@ impl Value {
             Value::Int(i) => *i as f32,
             Value::Float(f) => *f,
             Value::Bool(b) => if *b { 1.0 } else { 0.0 },
+            Value::Byte(b) => *b as f32,
             _ => 0.0,
         };
     }
@@ -84,6 +87,13 @@ impl Value {
             Value::Int(i) => format!("{}", i),
             Value::Float(f) => format!("{:?}", f),
             Value::Bool(b) => format!("{}", b),
+            Value::Byte(b) => {
+                let mut ret = "0b".to_string();
+                for mask in (0..8).rev() {
+                    ret += if (*b & (1<<mask)) == 0 { "0" } else { "1" };
+                }
+                ret
+            }
             Value::List(l) => {
                 let mut ret = "[".to_string();
                 // Add each element
@@ -128,6 +138,7 @@ impl Value {
             Value::Int(_) => "Number",
             Value::Float(_) => "Decimal",
             Value::Bool(_) => "Bool",
+            Value::Byte(_) => "Byte",
             Value::List(_) => "List",
             Value::None => "None",
             // Internal types

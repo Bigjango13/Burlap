@@ -16,6 +16,8 @@ pub enum ASTNode {
     BoolExpr(bool),
     // None
     NoneExpr,
+    // Byte, (0b00000000)
+    ByteExpr(u8),
     // Var, (x)
     VarExpr(String),
     // Call, (print, [Number(7)])
@@ -346,6 +348,7 @@ fn parse_base_expr(parser: &mut Parser) -> Option<ASTNode> {
         Float(f)      => { parser.next(); Some(ASTNode::DecimalExpr(f)) },
         Bool(b)       => { parser.next(); Some(ASTNode::BoolExpr(b))    },
         None          => { parser.next(); Some(ASTNode::NoneExpr)       },
+        Byte(b)       => { parser.next(); Some(ASTNode::ByteExpr(b))    },
         // Lists
         Lbracket => parse_list(parser),
         // Nested expressions

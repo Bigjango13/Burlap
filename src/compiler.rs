@@ -231,6 +231,9 @@ fn compile_expr(program: &mut Program, node: &ASTNode) -> bool {
         NoneExpr => {
             program.push(Value::None);
         },
+        ByteExpr(val) => {
+            program.push(Value::Byte(*val));
+        },
         // Binop/unary
         BinopExpr(lhs, op, rhs) => {
             return compile_binop(program, lhs, op, rhs, false);

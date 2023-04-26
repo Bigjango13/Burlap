@@ -30,6 +30,16 @@ pub enum TokenType {
     Bool(bool),
     #[token("none")]
     None,
+    // Valid byte
+    #[regex(
+        "0b[01]([01]?){7}",
+        |lex| u8::from_str_radix(&lex.slice()[2..], 2).ok()
+    )]
+    // Invalid byte
+    #[regex(
+        "0b[01]{8}[01]+", |_| Err(())
+    )]
+    Byte(u8),
     // Misc
     #[token("(")]
     Lparan,
