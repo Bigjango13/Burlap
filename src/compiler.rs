@@ -104,13 +104,34 @@ fn compile_unary(
     return true;
 }
 
+fn compile_set(program: &mut Program, var: &ASTNode) -> bool {
+    // Recursively set
+    if let VarExpr(s) = var.clone() {
+        program.push(Value::Str(s));
+        program.ops.push(Opcode::SV as u8);
+    } else if let IndexExpr(list, index) = var.clone() {
+        if !compile_expr(program, &*list) {
+            return false;
+        }
+        if !compile_expr(program, &*index) {
+            return false;
+        }
+        program.ops.push(Opcode::SKY as u8);
+        // Indexes are attached to something, make sure it reattaches
+        if !compile_set(program, &*list) {
+            return false;
+        }
+    }
+    return true;
+}
+
 fn compile_binop(
     program: &mut Program,
     lhs: &Box<ASTNode>, op: &TokenType, rhs: &Box<ASTNode>,
     clean: bool
 ) -> bool {
     // Compile sides
-    if let TokenType::Equals = op {} else {
+    if op != &TokenType::Equals {
         // No need to compile the value if it will just be reassigned
         if !compile_expr(program, lhs) {
             return false;
@@ -177,10 +198,10 @@ fn compile_binop(
         | TokenType::TimesEquals | TokenType::DivEquals
         | TokenType::Equals = op.clone()
     {
-        if let VarExpr(s) = *lhs.clone() {
-            program.push(Value::Str(s));
-            program.ops.push(Opcode::SV as u8);
+        if !compile_set(program, lhs) {
+            return false;
         }
+
     } else if clean {
         // Clean up the stack
         program.ops.push(Opcode::DEL as u8);
@@ -268,7 +289,7 @@ fn _compile_body(
 ) -> bool {
     // Lower scope
     if !call {
-        program.ops.push(Opcode::LS as u8);
+        program.ops.push(Opcode::LEVI as u8);
     }
     // Compile all nodes
     for node in nodes {
@@ -446,7 +467,7 @@ fn compile_stmt(
             program.path = program.path.join(file);
             program.path.pop();
             // Compile
-            program.ops.push(Opcode::LS as u8);
+            program.ops.push(Opcode::LEVI as u8);
             if !compile(ast, args, program) {
                 return false;
             }

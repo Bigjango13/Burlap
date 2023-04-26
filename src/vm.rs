@@ -25,10 +25,11 @@ pub enum Opcode {
     // DELete head (value)
     DEL,
 
-    // Scope
-    // Raise/Lower Scope (Call scope is handled by CALL and RET)
+    // Scope (Call scope is handled by CALL and RET)
+    // Raise Scope
     RS,
-    LS,
+    // LowEr VarIable scope
+    LEVI,
 
     // Functions
     // declare FuNction (name, arg#)
@@ -57,6 +58,8 @@ pub enum Opcode {
     TITR,
     // NeXT (iter -> (iter, value, true) | (iter, false))
     NXT,
+    // Set KeY (value, list, key -> list)
+    SKY,
 
     // Math
     // ADD (value, value -> value)
@@ -563,7 +566,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         Opcode::RS => {
             vm.raise_scope()?;
         },
-        Opcode::LS => {
+        Opcode::LEVI => {
             vm.lower_scope(false);
         },
 
@@ -574,7 +577,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             };
             // Get the keys and values and put them into the list
             let mut list = IndexMap::<String, Value>::with_capacity(
-                size as usize
+                size as usize,
             );
             while size > 0 {
                 let Value::Str(key) = vm.pop() else {
@@ -615,6 +618,34 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 // End of list
                 vm.push(Value::Bool(false));
             }
+        },
+        Opcode::SKY => {
+            let key = vm.pop();
+            let vlist = vm.pop();
+            let val = vm.pop();
+            let Value::List(mut list) = vlist else {
+                return Err(format!(
+                    "failed to index {} with {}",
+                    vlist.to_string(), key.to_string()
+                ));
+            };
+            // Insert
+            if key.get_type() == "Number" {
+                let entry = list.entry(key.to_string())
+                    .and_modify(|s| *s = val.clone());
+                // Try to insert a new key
+                if key.to_int() != entry.index().try_into().unwrap_or(-1) {
+                    return Err(
+                        "cannot assign to out of bounds key".to_string()
+                    );
+                }
+                entry.or_insert(val);
+            } else {
+                // Add or create
+                let key = key.to_string();
+                list.entry(key).and_modify(|s| *s = val.clone()).or_insert(val);
+            }
+            vm.push(Value::List(list));
         },
 
         // Variables
@@ -803,6 +834,7 @@ pub fn run(vm: &mut Vm) -> bool {
         // Run
         if let Err(s) = exec_next(vm) {
             println!("Runtime Error: {}", s);
+            vm.at = vm.program.ops.len() - 1;
             return false;
         }
 

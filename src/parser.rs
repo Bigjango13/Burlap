@@ -250,11 +250,21 @@ fn parse_expr(parser: &mut Parser) -> Option<ASTNode> {
 // Special non-nesting binop
 fn parse_binop_set(parser: &mut Parser) -> Option<ASTNode> {
     // Setter binops, =, +=, -=, *=, /=
-    // Left must be identifier
-    if let Identifier(_) = parser.current() {
-        parse_binop_helper(parser, vec![
+    // Left must start with identifier
+    if let Identifier(..) = parser.current() {
+        let ret = parse_binop_helper(parser, vec![
             Equals, PlusEquals, MinusEquals, TimesEquals, DivEquals
-        ], &parse_binop_logic, false)
+        ], &parse_binop_logic, false)?;
+        let ASTNode::BinopExpr(ref rhs, _, _) = ret else {
+            return Some(ret);
+        };
+        // Check that arms are either Var or Index
+        if let ASTNode::VarExpr(..) | ASTNode::IndexExpr(..) = *rhs.clone() {
+            Some(ret)
+        } else {
+            error!(parser, "setters must be used on indexes or variables");
+            Option::None
+        }
     } else {
         parse_binop_logic(parser)
     }
