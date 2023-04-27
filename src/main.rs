@@ -5,14 +5,12 @@ use std::path::PathBuf;
 use std::process::exit;
 
 mod common;
-mod formatter;
 mod lexer;
 mod parser;
 mod value;
 mod compiler;
 mod vm;
 
-use crate::formatter::format;
 use crate::compiler::compile;
 use crate::common::{print_err, ErrType};
 use crate::lexer::lex;
@@ -166,7 +164,7 @@ fn get_args() -> Result<Arguments, bool> {
             println!("\t--use-X\tenables X feature");
             println!("\t--use-all\tenables all features");
             println!("\t- [command]\truns [command]");
-            println!("\t-f --format\tformat the file instead of running");
+            //println!("\t-f --format\tformat the file instead of running");
             println!("\t-d --debug\truns in debug mode");
             println!();
             println!(
@@ -226,7 +224,7 @@ fn main() {
         }
         // Repl
         repl(&mut args);
-    } else if args.format {
+    /*} else if args.format {
         // Format
         let Some(ast) = to_ast(&mut args) else {
             exit(1);
@@ -239,7 +237,7 @@ fn main() {
             );
             exit(1);
         }
-    } else {
+    */} else {
         // Execute file
         let Some(ast) = to_ast(&mut args) else {
             exit(1);

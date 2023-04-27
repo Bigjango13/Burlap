@@ -14,6 +14,8 @@ pub enum Value {
     List(IndexMap<String, Value>),
     None,
 
+    // FastList (used for lists with only number keys
+    FastList(Vec<Value>),
     // Iterator (used for iter based loops)
     Iter(Vec<Value>, i32),
     // RangeType (used for optimized ranges)
@@ -114,6 +116,19 @@ impl Value {
                 ret
             }
             Value::None => "none".to_string(),
+            Value::FastList(l) => {
+                let mut ret = "[".to_string();
+                // Add each element
+                for val in l {
+                    ret += &(val.to_string() + ", ");
+                }
+                // Remove trailing ", "
+                if ret.len() != 1 {
+                    ret.truncate(ret.len() - 2);
+                }
+                ret += "]";
+                ret
+            }
             // Internal types
             Value::Iter(_, _) => "__burlap_iter".to_string(),
             Value::RangeType(_, _, _) => "__burlap_rangetype".to_string(),
@@ -127,6 +142,7 @@ impl Value {
             Value::Float(f) => *f != 0.0,
             Value::Bool(b) => *b,
             Value::List(l) => !l.is_empty(),
+            Value::FastList(l) => !l.is_empty(),
             _ => false,
         };
     }
@@ -139,7 +155,7 @@ impl Value {
             Value::Float(_) => "Decimal",
             Value::Bool(_) => "Bool",
             Value::Byte(_) => "Byte",
-            Value::List(_) => "List",
+            Value::List(_) | Value::FastList(_) => "List",
             Value::None => "None",
             // Internal types
             Value::Iter(_, _) => "__burlap_iter",
@@ -150,6 +166,9 @@ impl Value {
     pub fn to_iter(&self) -> Result<Value, String> {
         if let Value::RangeType(_, _, _) | Value::Iter(_, _) = self {
             return Ok(self.clone());
+        }
+        if let Value::FastList(list) = self {
+            return Ok(Value::Iter(list.clone(), 0));
         }
         let Value::List(list) = self else {
             return Err(format!("Cannot iterate over {}", self.get_type()));
@@ -192,6 +211,14 @@ impl Value {
     }
     // Indexing
     pub fn index(&self, index: Value) -> Option<&Value> {
+        if let Value::FastList(list) = self {
+            // String indexing doesn't work
+            return if let Value::Str(_) = index {
+                None
+            } else {
+                list.get(index.to_int() as usize)
+            }
+        }
         let Value::List(l) = self else {
             // Not a list
             return None;
@@ -219,16 +246,11 @@ impl Value {
             },
             // none == ?
             Value::None => {
-                if let Value::None = right {
-                    // none == none
-                    true
-                } else {
-                    false
-                }
+                right == Value::None
             },
             // bool == ?
             Value::Bool(b) => {
-                // float == float
+                // bool == bool
                 if let Value::Bool(b_right) = right {
                     *b == b_right
                 } else {
@@ -260,27 +282,39 @@ impl Value {
                 }
             },
             // Lists
-            Value::List(lhs) => {
-                if let Value::List(rhs) = right {
-                    // This isn't spec defined, so may change in the future
-                    if lhs.len() != rhs.len() {
+            Value::List(_) | Value::FastList(_) => {
+                // This isn't spec defined, so may change in the future
+                let Some(rhs) = right.values() else {
+                    return false;
+                };
+                let Some(lhs) = self.values() else {
+                    return false;
+                };
+                if lhs.len() != rhs.len() {
+                    return false;
+                }
+                // Compare values
+                for ab in lhs.iter().zip(rhs.iter()) {
+                    let (a, b) = ab;
+                    if !a.eq(b.clone()) {
                         return false;
                     }
-                    // Compare values
-                    for ab in lhs.values().zip(rhs.values()) {
-                        let (a, b) = ab;
-                        if !a.eq(b.clone()) {
-                            return false;
-                        }
-                    }
-                    true
-                } else {
-                    false
                 }
+                true
             },
             // Anything else
             _ => false,
         };
+    }
+
+    fn values(&self) -> Option<Vec<Value>> {
+        if let Value::FastList(l) = self {
+            return Some(l.clone());
+        }
+        if let Value::List(l) = self {
+            return Some(l.values().map(|i|i.clone()).collect());
+        }
+        None
     }
 }
 

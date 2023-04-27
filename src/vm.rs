@@ -50,8 +50,10 @@ pub enum Opcode {
     DOS,
 
     // Lists
-    // Load list (size, keys-and-values -> list)
+    // Load List (size, keys-and-values -> list)
     LL,
+    // Load Fast List (size, values -> list)
+    LFL,
     // INdeX (list, key -> value)
     INX,
     // To ITeR (value -> iter)
@@ -458,6 +460,9 @@ fn sk_len(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         vm.bad_args(&"len".to_string(), args.len(), 1)?;
     }
     // Check that the type is a list
+    if let Value::FastList(l) = &args[0] {
+        return Ok(Value::Int(l.len() as i32));
+    }
     if let Value::List(l) = &args[0] {
         return Ok(Value::Int(l.len() as i32));
     }
@@ -475,13 +480,13 @@ fn sk_range(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     // Find out which way it's going
     let offset: i32 = if min > max { -1 } else { 1 };
     // Loop and get values
-    let mut ret = IndexMap::<String, Value>::new();
+    let mut ret = Vec::<Value>::new();
     while min != max {
-        ret.insert(min.to_string(), Value::Int(min));
+        ret.push(Value::Int(min));
         min += offset;
     }
-    ret.insert(min.to_string(), Value::Int(min));
-    return Ok(Value::List(ret));
+    ret.push(Value::Int(min));
+    return Ok(Value::FastList(ret));
 }
 
 // Casting
@@ -538,6 +543,66 @@ fn sk_print_stack(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     return Ok(Value::None);
 }
 
+// Sets a key in a list and returns it
+fn set_key(
+    vlist: Value, key: Value, val: Value
+) -> Result<Value, String> {
+    let Value::List(mut list) = vlist else {
+        let Value::FastList(mut list) = vlist else {
+            return Err(format!(
+                "failed to index {} with {}",
+                vlist.to_string(), key.to_string()
+            ));
+        };
+        // Push
+        let as_int = key.to_int();
+        if key.get_type() == "Number" && as_int >= 0 {
+            let as_uint = as_int as usize;
+            let entry = list.get_mut(as_uint)
+                .and_then(|s| Some(*s = val.clone()));
+            if entry.is_none() {
+                if as_uint != list.len() + 1 {
+                    list.push(val);
+                } else {
+                    return Err(
+                        "cannot assign to out of bounds key".to_string()
+                    );
+                }
+            }
+        } else {
+            // Convert to normal list
+            let mut slowlist = IndexMap::<String, Value>::with_capacity(
+                list.len()
+            );
+            let mut at = 0;
+            for i in list {
+                slowlist.insert(at.to_string(), i);
+                at += 1;
+            }
+            // Set
+            return set_key(Value::List(slowlist), key, val);
+        }
+        return Ok(Value::FastList(list));
+    };
+    // Insert
+    if key.get_type() == "Number" {
+        let entry = list.entry(key.to_string())
+            .and_modify(|s| *s = val.clone());
+        // Try to insert a new key
+        if key.to_int() != entry.index().try_into().unwrap_or(-1) {
+            return Err(
+                "cannot assign to out of bounds key".to_string()
+            );
+        }
+        entry.or_insert(val);
+    } else {
+        // Add or create
+        let key = key.to_string();
+        list.entry(key).and_modify(|s| *s = val.clone()).or_insert(val);
+    }
+    Ok(Value::List(list))
+}
+
 // The big switch, runs every instruction
 #[inline]
 fn exec_next(vm: &mut Vm) -> Result<(), String> {
@@ -590,6 +655,18 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             }
             vm.push(Value::List(list));
         },
+        Opcode::LFL => {
+            let Value::Int(mut size) = vm.pop() else {
+                return Err("Non-int list size".to_string());
+            };
+            // Get values
+            let mut list = Vec::<Value>::with_capacity(size as usize);
+            while size > 0 {
+                list.push(vm.pop());
+                size -= 1;
+            }
+            vm.push(Value::FastList(list));
+        },
         Opcode::INX => {
             let index = vm.pop();
             let list = vm.pop();
@@ -621,31 +698,9 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         },
         Opcode::SKY => {
             let key = vm.pop();
-            let vlist = vm.pop();
+            let list = vm.pop();
             let val = vm.pop();
-            let Value::List(mut list) = vlist else {
-                return Err(format!(
-                    "failed to index {} with {}",
-                    vlist.to_string(), key.to_string()
-                ));
-            };
-            // Insert
-            if key.get_type() == "Number" {
-                let entry = list.entry(key.to_string())
-                    .and_modify(|s| *s = val.clone());
-                // Try to insert a new key
-                if key.to_int() != entry.index().try_into().unwrap_or(-1) {
-                    return Err(
-                        "cannot assign to out of bounds key".to_string()
-                    );
-                }
-                entry.or_insert(val);
-            } else {
-                // Add or create
-                let key = key.to_string();
-                list.entry(key).and_modify(|s| *s = val.clone()).or_insert(val);
-            }
-            vm.push(Value::List(list));
+            vm.push(set_key(list, key, val)?)
         },
 
         // Variables

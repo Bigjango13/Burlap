@@ -28,8 +28,8 @@ pub enum ASTNode {
     UnaryExpr(TokenType, Box<ASTNode>),
     // Binop, (Number(2), "+", Number(2))
     BinopExpr(Box<ASTNode>, TokenType, Box<ASTNode>),
-    // List (keys["1", "e"], values[node, node])
-    ListExpr(Vec<String>, Vec<ASTNode>),
+    // List (keys["1", "e"], values[node, node], fast = false)
+    ListExpr(Vec<String>, Vec<ASTNode>, bool),
 
     // Statements
     // Body, ([Call(Var(print), [String("Hello World")])])
@@ -306,6 +306,7 @@ fn parse_list(parser: &mut Parser) -> Option<ASTNode> {
     let mut at: i32 = 0;
     let mut names: Vec<String> = vec![];
     let mut vals: Vec<ASTNode> = vec![];
+    let mut fastlist = true;
     while parser.current() != Rbracket {
         let (name, val) = parse_list_item(parser, at);
         // Invalid element
@@ -315,7 +316,10 @@ fn parse_list(parser: &mut Parser) -> Option<ASTNode> {
             return Option::None;
         }
         // Valid element
-        names.push(name);
+        names.push(name.clone());
+        if fastlist {
+            fastlist = name.as_bytes()[0].is_ascii_digit();
+        }
         vals.push(val?);
         // Eat comma
         if parser.current() == Comma {
@@ -335,7 +339,7 @@ fn parse_list(parser: &mut Parser) -> Option<ASTNode> {
         at += 1;
     }
     eat!(parser, Rbracket, "expecting ]")?;
-    return Some(ASTNode::ListExpr(names, vals));
+    return Some(ASTNode::ListExpr(names, vals, fastlist));
 }
 
 // Normal expressions

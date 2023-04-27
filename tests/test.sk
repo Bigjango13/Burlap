@@ -196,6 +196,10 @@ test("none -> int", int(none), 0);
 test("none -> float", float(none), 0.0);
 test("none -> str", string(none), "none");
 
+test("byte -> int", int(0b10101011), 171);
+test("byte -> float", float(0b10101011), 171.0);
+test("byte -> str", string(0b10101011), "0b10101011");
+
 # List tests
 print("*** List tests ***");
 let elm = 4;
@@ -205,6 +209,17 @@ test("len()", len(list), 5);
 test("number indexing", list[2], 4);
 test("key indexing", list['elm'], 4);
 test("var indexing", list[elm], 8);
+# Note: The following list features aren't explicitly in the spec
+test("comparing", range(0, 5), [0, 1, 2, 3, 4, 5]);
+test("comparing with keys", range(0, 5), [O: 0, I: 1, Z: 2, E: 3, A: 4, S: 5]);
+list[0] = 47;
+test("mutate existing int key", list[0], 47);
+list["x"] = "Foourty Seeeven!";
+test("mutate existing str key", list["x"], "Foourty Seeeven!");
+list[len(list)] = "append";
+test("mutate non-existing int key", list[len(list)-1], "append");
+list["old"] = "New And Groovy!";
+test("mutate non-existing str key", list["old"], "New And Groovy!");
 
 # If tests
 print("*** If tests ***");

@@ -254,7 +254,7 @@ fn compile_expr(program: &mut Program, node: &ASTNode) -> bool {
             program.ops.push(Opcode::CALL as u8);
         },
         // List
-        ListExpr(keys, values) => {
+        ListExpr(keys, values, fast) => {
             // Build the list
             let mut at = values.len();
             while at > 0 {
@@ -262,11 +262,17 @@ fn compile_expr(program: &mut Program, node: &ASTNode) -> bool {
                 if !compile_expr(program, &values[at]) {
                     return false;
                 }
-                program.push(Value::Str(keys[at].clone()));
+                if !*fast {
+                    program.push(Value::Str(keys[at].clone()));
+                }
             }
             // Push
             program.push(Value::Int(values.len() as i32));
-            program.ops.push(Opcode::LL as u8);
+            if *fast {
+                program.ops.push(Opcode::LFL as u8);
+            } else {
+                program.ops.push(Opcode::LL as u8);
+            }
         },
         // Indexes
         IndexExpr(val, index) => {
