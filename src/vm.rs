@@ -156,7 +156,7 @@ impl Vm {
         functies.insert("open".to_string(), sk_open as Functie);
         functies.insert("close".to_string(), sk_close as Functie);
         functies.insert("read".to_string(), sk_read as Functie);
-        //functies.insert("write".to_string(), sk_write as Functie);
+        functies.insert("write".to_string(), sk_write as Functie);
         functies.insert("flush".to_string(), sk_flush as Functie);
         // Casts
         functies.insert("int".to_string(), sk_int as Functie);
@@ -515,7 +515,8 @@ fn sk_open(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     let (infofile, mode) = match mode.as_str() {
         // Write
         "w" | "wb" => {(
-            OpenOptions::new().write(true).create(true).open(file.clone()),
+            OpenOptions::new().write(true).create(true).truncate(true)
+                .open(file.clone()),
             if mode == "w" {2} else {-2}
         )},
         // Read
@@ -576,7 +577,7 @@ fn sk_read(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
         return Err(format!("cannot read from closed file"));
     }
     if mode.abs() != 1 {
-        return Err(format!("can only read from 'r'/'rw'"));
+        return Err(format!("can only read from 'r'/'rb'"));
     }
     // Read the file
     let mut ret: Vec<u8> = vec![];
@@ -592,6 +593,31 @@ fn sk_read(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
         return Ok(Value::Str(string));
     }
     return Ok(Value::FastList(ret.iter().map(|i| Value::Byte(*i)).collect()));
+}
+
+fn sk_write(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 2 {
+        // Invalid args
+        vm.bad_args(&"write".to_string(), args.len(), 2)?;
+    }
+    let Value::File(_, mode, ref mut info) = args[0].clone() else {
+        return Err(format!("cannot write to {}", args[0].get_type()));
+    };
+    if info.borrow().closed {
+        return Err(format!("cannot write to closed file"));
+    }
+    if mode.abs() != 2 && mode != 0 {
+        return Err(format!("can only write to 'w'/'wb'/'a'"));
+    }
+    // Now check args
+    let Value::Str(ref str) = args[1] else {
+        return Err(format!("expected String got {}", args[1].get_type()));
+    };
+    if let Err(err) =
+        write!(info.borrow_mut().file.as_ref().unwrap(), "{}", str) {
+        return Err(err.to_string());
+    }
+    return Ok(Value::None);
 }
 
 // Casting

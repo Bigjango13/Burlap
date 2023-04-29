@@ -287,6 +287,15 @@ impl Value {
                     false
                 }
             },
+            // byte == ?
+            Value::Byte(b) => {
+                // byte == byte
+                if let Value::Byte(b_right) = right {
+                    *b == b_right
+                } else {
+                    false
+                }
+            },
             // Floats
             Value::Float(f) => {
                 if let Value::Float(f_right) = right {

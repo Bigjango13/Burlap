@@ -1,12 +1,12 @@
 # Burlap
-> A powerful and user-friendly sack interpreter, v1.1.0
+> A powerful and user-friendly sack interpreter, v1.1.1
 
-## What is burlap
-Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) programming language. It is written in Rust. It is designed for a high level of spec compliance, any sack program should be able to be run using burlap and if not then it's a bug.
+## What is Burlap?
+Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) programming language. It aims for a high level of spec compliance, any valid sack program should be able to be run using burlap (it does have a few minor variations from the spec, known differences are listed [here](docs/spec-diff.md))
 
 ## Features
 - [x] Complete sack v0.0.5 support
-- [ ] Complete sack v1.0.0-beta support
+- [x] Complete sack v1.0.0 support
   - [x] Variables
     - [x] Strings
     - [x] Number
@@ -45,6 +45,7 @@ Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) progr
 - [x] Runtime errors
 
 ## Building
+
 It's a normal rust project, so `cargo run` to run, `cargo build` to build, and `cargo build --release` to build in release mode (slower to build, a lot faster to run).
 
 If you want to install it, run `cargo install --git https://github.com/Bigjango13/Burlap`, now you can use `burlap` as a command!.
@@ -58,25 +59,24 @@ To run code in argv use `-`, for example: `burlap - "print('Hello world!');"`.
 
 To show help, run `burlap -h` or `burlap --help`.
 
-## Where's the C++ interpreter?
+## History
 
-It was removed, the last commit with it was `196539`, here are the benchmarks for both the Rust and C++ implementation at that time (made using [hyperfine](https://github.com/sharkdp/hyperfine)):
-| Interpreter | Mean | Min | Max |
-|:---|---:|---:|---:|
-| Rust cargo/--release `tests/speedtest.sk` | 5.582 | 5.415 | 5.779 |
-| C++ gcc/-O3 `tests/speedtest.sk` |  9.832 | 9.648 | 10.117 |
+Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
-As you can see, the Rust interpreter is a *lot* faster, it's also more maintainable.
+- 1.1.1: Added file IO
+- 1.1.0: Rewrote tree walking interpeter to a stack based VM
+- 1.0.0: Rewrote C++ to Rust. Lists, while loops, input, imports, and more have been added.
+- 0.0.1: C++ version works for Sack v0.0.5
+- Beta: I tried to make a Sack to Python transpiler using Python regexes
 
 ## Extensions
 
 Burlap has some extra features that aren't part of the sack language, there is a list in them [docs](docs/extensions.md).
 
 ## Goals/roadmap
-- Sack formatter, so all code can be formatted to fit the current sack spec.
-- Sack debugger, so you can see what your program is doing and why it sets x to `none` instead of `26`.
-- Transpiling to Python, transpiling sack to any different language will provide huge benefits such as calling python functions and using a wider range of tools.
-- Transpiling to JavaScript, this will also allow for using sack on the web. Running on the web will make it easier to create web-based sack playgrounds.
+- Autoformatter
+- Debugger
+- Transpiling to another programming language
 
 ## Alternatives
 

@@ -23,7 +23,7 @@ func testSummary() {
 }
 
 # Math ops tests
-print("*** Mathematical operators tests ***");
+print("*** Mathematical Operators Tests ***");
 test("2 + 3", 2 + 3, 5);
 test("2 + 3 + 4", 2 + 3 + 4, 9);
 
@@ -40,7 +40,7 @@ test("2 % 3", 2 % 3, 2);
 test("15 % 4", 15 % 4, 3);
 
 # Compare tests
-print("*** Comparison tests ***");
+print("*** Comparison Tests ***");
 test("2 > 2", 2 > 2, false);
 test("3 > 1", 3 > 1, true);
 test("1 > 3", 1 > 3, false);
@@ -69,7 +69,7 @@ test("1 != 3", 1 != 3, true);
 test('"E" != "E"', "E" != "E", false);
 test('"E" != "h"', "E" != "h", true);
 
-print("*** Boolean operator tests ***");
+print("*** Boolean Operator Tests ***");
 test("0 & 0", false && false, false);
 test("1 & 0", true && false, false);
 test("1 & 1", true && true, true);
@@ -86,7 +86,7 @@ test("!0", !false, true);
 test("!1", !true, false);
 
 # Add test
-print("*** Adding tests ***");
+print("*** Adding Tests ***");
 func add_things(a, b) {
     let c = a + b;
     return c;
@@ -100,7 +100,7 @@ test('1 + ":1"', add_things(1, ":1"), "1:1");
 test('3.14 + "~=pi"', add_things(3.14, "~=pi"), "3.14~=pi");
 
 # Setting operators
-print("*** Operator tests ***");
+print("*** Operator Tests ***");
 let x = 1;
 test("let", x, 1);
 x -= 1;
@@ -117,7 +117,7 @@ x = 1 - 1 - 1;
 test("associativity", x, -1);
 
 # Type tests
-print("*** Type tests ***");
+print("*** Type Tests ***");
 test("String", type("Hello"), "String");
 test("Number", type(0), "Number");
 test("Decimal", type(0.0), "Decimal");
@@ -125,7 +125,7 @@ test("Bool", type(false), "Bool");
 test("None", type(none), "None");
 
 # Factorial
-print("*** Factorial tests ***");
+print("*** Factorial Tests ***");
 func factorial(n) {
     if n < 0 {
         # factorial(x) is undefined when x < 0
@@ -141,7 +141,7 @@ test("factorial(0)", factorial(0), 1);
 test("factorial(-17)", factorial(-17), none);
 
 # String tests
-print("*** String tests ***");
+print("*** String Tests ***");
 let str = "Hello";
 test("let str", str, "Hello");
 str += " World";
@@ -152,7 +152,7 @@ str *= 3;
 test("str*", str, "EEE");
 
 # Iter loop tests
-print("*** Iter loop tests ***");
+print("*** Iter Loop Tests ***");
 let i = 0;
 loop (j in range(1, 10)) {
     ++i;
@@ -161,7 +161,7 @@ loop (j in range(1, 10)) {
 test("i == 10", i, 10);
 
 # While loop test
-print("*** While loop tests ***");
+print("*** While Loop Tests ***");
 i = 1;
 loop (while i < 6) {
     test("i < 6", i < 6, true);
@@ -170,12 +170,12 @@ loop (while i < 6) {
 test("i == 6", i, 6);
 
 # Import test
-print("*** Import tests ***");
+print("*** Import Tests ***");
 import ("import-test.sk");
 test("import func", ret4(), 4);
 
 # Casting tests
-print("*** Casting tests ***");
+print("*** Casting Tests ***");
 test("int -> int", int(42), 42);
 test("int -> float", float(42), 42.0);
 test("int -> str", string(0), "0");
@@ -201,7 +201,7 @@ test("byte -> float", float(0b10101011), 171.0);
 test("byte -> str", string(0b10101011), "0b10101011");
 
 # List tests
-print("*** List tests ***");
+print("*** List Tests ***");
 let elm = 4;
 let list = [1, "E>h", elm, x: 42, elm * 2];
 test("list -> str", string(list), '[1, E>h, elm: 4, x: 42, 8]');
@@ -222,7 +222,7 @@ list["old"] = "New And Groovy!";
 test("mutate non-existing str key", list["old"], "New And Groovy!");
 
 # If tests
-print("*** If tests ***");
+print("*** If Tests ***");
 let if_test = false;
 if 1 {
     if_test = true;
@@ -245,6 +245,29 @@ if 0 {
 } else {
     test("if 0 else", 1, 1);
 }
+
+# File tests
+print("*** File Tests ***");
+let filename = "tmp-filename-for-tests";
+# Write
+let file = open(filename, "w");
+write(file, "TEST");
+close(file);
+# Read
+file = open(filename, "r");
+test("r/w test", read(file), "TEST");
+close(file);
+# Append
+file = open(filename, "a");
+write(file, " OF DOOM");
+flush(file);
+close(file);
+# Read binary
+file = open(filename, "rb");
+let contents = read(file);
+test("rb/a test", contents[4], 0b00100000);
+test("rb/a test len", len(contents), 12);
+close(file);
 
 # End of tests
 testSummary();
