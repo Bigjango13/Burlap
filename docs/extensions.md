@@ -50,9 +50,13 @@ functi typed_eq(a, b) {
 }
 ```
 
-### `__burlap_print_stack()`
+### `__burlap_print(val)`
 
-Prints the stack, a debugging mechanism.
+Prints the burlap representation of `val`. For example:
+```
+// Prints 'Str("Test")'
+__burlap_print("Test");
+```
 
 ## Internal Types
 

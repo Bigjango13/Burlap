@@ -1,9 +1,12 @@
-use std::io::Write;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::fs::OpenOptions;
+use std::io::{Write, Read};
 use std::io;
 
 use crate::Arguments;
 use crate::compiler::Program;
-use crate::value::Value;
+use crate::value::{FileInfo, Value};
 
 use indexmap::map::IndexMap;
 use rustc_hash::FxHashMap;
@@ -149,6 +152,12 @@ impl Vm {
         functies.insert("type".to_string(), sk_type as Functie);
         functies.insert("len".to_string(), sk_len as Functie);
         functies.insert("range".to_string(), sk_range as Functie);
+        // File IO
+        functies.insert("open".to_string(), sk_open as Functie);
+        functies.insert("close".to_string(), sk_close as Functie);
+        functies.insert("read".to_string(), sk_read as Functie);
+        //functies.insert("write".to_string(), sk_write as Functie);
+        functies.insert("flush".to_string(), sk_flush as Functie);
         // Casts
         functies.insert("int".to_string(), sk_int as Functie);
         functies.insert("float".to_string(), sk_float as Functie);
@@ -161,7 +170,7 @@ impl Vm {
                 "__burlap_typed_eq".to_string(), sk_typed_eq as Functie
             );
             functies.insert(
-                "__burlap_print_stack".to_string(), sk_print_stack as Functie
+                "__burlap_print".to_string(), sk_real_print as Functie
             );
         }
         // I really wish Rust had defaults, but it doesn't
@@ -489,6 +498,102 @@ fn sk_range(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     return Ok(Value::FastList(ret));
 }
 
+// File IO
+fn sk_open(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 2 {
+        // Invalid args
+        vm.bad_args(&"open".to_string(), args.len(), 2)?;
+    }
+    let Value::Str(ref file) = args[0] else {
+        return Err("invalid file name".to_string());
+    };
+    let file = file.to_string();
+    let Value::Str(ref mode) = args[1] else {
+        return Err("invalid file mode".to_string());
+    };
+    // Open with mode
+    let (infofile, mode) = match mode.as_str() {
+        // Write
+        "w" | "wb" => {(
+            OpenOptions::new().write(true).create(true).open(file.clone()),
+            if mode == "w" {2} else {-2}
+        )},
+        // Read
+        "r" | "rb" => {(
+            OpenOptions::new().read(true).open(file.clone()),
+            if mode == "r" {1} else {-1}
+        )},
+        // Append
+        "a" => {(
+            OpenOptions::new().append(true).create(true).open(file.clone()),
+            0
+        )},
+        _ => return Err("invalid file mode".to_string()),
+    };
+    // Check
+    let Ok(fileinfo) = infofile else {
+        return Err("failed to open file".to_string());
+    };
+    // File info
+    let fi = Rc::new(RefCell::new(FileInfo{
+        closed: false,
+        file: Some(fileinfo)
+    }));
+    return Ok(Value::File(file, mode, fi));
+}
+
+fn sk_close(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 1 {
+        // Invalid args
+        vm.bad_args(&"close".to_string(), args.len(), 1)?;
+    }
+    let Value::File(_, _, ref mut info) = args[0] else {
+        return Err(format!("cannot close from {}", args[0].get_type()));
+    };
+    info.borrow_mut().closed = true;
+    info.borrow_mut().file = None;
+    Ok(Value::None)
+}
+
+fn sk_flush(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 1 {
+        // Invalid args
+        vm.bad_args(&"flush".to_string(), args.len(), 1)?;
+    }
+    // Burlap doesn't buffer file io
+    Ok(Value::None)
+}
+
+fn sk_read(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 1 {
+        // Invalid args
+        vm.bad_args(&"read".to_string(), args.len(), 1)?;
+    }
+    let Value::File(_, mode, ref mut info) = args[0] else {
+        return Err(format!("cannot read from {}", args[0].get_type()));
+    };
+    if info.borrow().closed {
+        return Err(format!("cannot read from closed file"));
+    }
+    if mode.abs() != 1 {
+        return Err(format!("can only read from 'r'/'rw'"));
+    }
+    // Read the file
+    let mut ret: Vec<u8> = vec![];
+    if let Err(e) = info.borrow_mut().file.as_ref().unwrap()
+        .read_to_end(&mut ret) {
+        return Err(e.to_string());
+    }
+    if mode == 1 {
+        // Return a string
+        let Ok(string) = String::from_utf8(ret) else {
+            return Err(format!("invalid string"));
+        };
+        return Ok(Value::Str(string));
+    }
+    return Ok(Value::FastList(ret.iter().map(|i| Value::Byte(*i)).collect()));
+}
+
 // Casting
 // Int
 fn sk_int(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
@@ -526,6 +631,15 @@ fn sk_typed_eq(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     return Ok(Value::Bool(args[0] == args[1]));
 }
 
+fn sk_real_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 1 {
+        // Invalid args
+        vm.bad_args(&"__burlap_print".to_string(), args.len(), 1)?;
+    }
+    println!("{:?}", args[0]);
+    return Ok(Value::None);
+}
+
 fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
         vm.bad_args(&"__burlap_range".to_string(), args.len(), 2)?;
@@ -533,14 +647,6 @@ fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     let (at, max) = (args[0].to_int(), args[1].to_int());
     let step = if max.gt(&at) {1} else {-1};
     return Ok(Value::RangeType(at, max, step));
-}
-
-fn sk_print_stack(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if !args.is_empty() {
-        vm.bad_args(&"__burlap_print_stack".to_string(), args.len(), 0)?;
-    }
-    println!("{:?}", vm.stack);
-    return Ok(Value::None);
 }
 
 // Sets a key in a list and returns it

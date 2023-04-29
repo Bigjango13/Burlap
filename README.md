@@ -34,10 +34,11 @@ Burlap is a interpreter for the [sack](https://github.com/RandomSoup/sack) progr
   - [x] Import
   - [x] Scope
   - [ ] File IO **(New)**
-    - [ ] Read **(New)**
+    - [x] Open **(New)**
+    - [x] Read **(New)**
     - [ ] Write **(New)**
-    - [ ] Close **(New)**
-    - [ ] Flush **(New)**
+    - [x] Close **(New)**
+    - [x] Flush **(New)**
 - [x] REPL
 - [x] Lexing errors
 - [x] Parsing errors

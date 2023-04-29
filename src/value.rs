@@ -1,5 +1,21 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::fs::File;
 use std::ops;
+
 use indexmap::map::IndexMap;
+
+#[derive(Debug)]
+pub struct FileInfo {
+    pub closed: bool,
+    pub file: Option<File>
+}
+
+impl PartialEq for FileInfo {
+    fn eq(&self, rhs: &FileInfo) -> bool {
+        return self.closed == rhs.closed;
+    }
+}
 
 // Value enum for variables
 // TODO: Speed up (pointer tagging?)
@@ -13,9 +29,11 @@ pub enum Value {
     Byte(u8),
     List(IndexMap<String, Value>),
     None,
+    File(String, i8, Rc<RefCell<FileInfo>>),
 
-    // FastList (used for lists with only number keys
+    // FastList (used for lists with only number keys)
     FastList(Vec<Value>),
+
     // Iterator (used for iter based loops)
     Iter(Vec<Value>, i32),
     // RangeType (used for optimized ranges)
@@ -116,6 +134,17 @@ impl Value {
                 ret
             }
             Value::None => "none".to_string(),
+            Value::File(filename, mode, _) => {
+                // TODO: Fix spec noncompliance
+                "File(".to_string() + filename + ", " + match mode {
+                    2 => "Write",
+                    1 => "Read",
+                    0 => "Append",
+                    -1 => "ReadBinary",
+                    -2 => "WriteBinary",
+                    _ => "InvalidMode",
+                } + ")"
+            },
             Value::FastList(l) => {
                 let mut ret = "[".to_string();
                 // Add each element
@@ -157,6 +186,7 @@ impl Value {
             Value::Byte(_) => "Byte",
             Value::List(_) | Value::FastList(_) => "List",
             Value::None => "None",
+            Value::File(..) => "File",
             // Internal types
             Value::Iter(_, _) => "__burlap_iter",
             Value::RangeType(_, _, _) => "__burlap_rangetype",
