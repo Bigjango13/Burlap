@@ -1,6 +1,3 @@
-use crate::lexer::TokenType;
-use TokenType::*;
-
 // Stream
 #[derive(Debug, Clone)]
 pub struct Stream {
@@ -10,8 +7,10 @@ pub struct Stream {
     pub str: String,
     // Line #
     pub line: usize,
-    // Char pos
-    pub at: usize
+    // Char pos in line
+    pub at: usize,
+    // Size of token
+    pub size: usize,
 }
 
 pub const IMPOSSIBLE_STATE: &str =
@@ -40,8 +39,7 @@ pub fn print_err(msg: &str, errtype: ErrType, color: bool) -> String {
     }
 }
 
-pub fn err(stream: &Stream, msg: &str, size: u8, errtype: ErrType, color: bool)
-{
+pub fn err(stream: &Stream, msg: &str, errtype: ErrType, color: bool) {
     // Print file name and line/char info ("test.sk:1:3: ")
     if color {
         print!("\x1b[1m{}:{}:{}:\x1b[0m ", stream.name, stream.line, stream.at);
@@ -52,44 +50,17 @@ pub fn err(stream: &Stream, msg: &str, size: u8, errtype: ErrType, color: bool)
     let color_code = print_err(msg, errtype, color);
     // Print the line ("    1 | print("Hello World!");")
     let line = format!("    {} | ", stream.line);
-    println!("{}{}", line, stream.str);
+    println!("{}{}", line, stream.str.replace("\t", "    "));
     // Print arrow ("      |   ^")
+    // Adjust for tabs
+    let at = stream.str[0..stream.at].matches('\t').count()*3 + stream.at;
     print!(
         "{}| {}",
-        " ".repeat(line.len() - 2), " ".repeat(stream.at)
+        " ".repeat(line.len() - 2), " ".repeat(at)
     );
     if color {
-        println!("{}{}\x1b[0m", color_code, "^".repeat(size.into()));
+        println!("{}{}\x1b[0m", color_code, "^".repeat(stream.size.into()));
     } else {
-        println!("{}", "^".repeat(size.into()));
-    }
-}
-
-// Token size finder
-pub fn get_len(token: &TokenType) -> u8 {
-    return match token {
-        Identifier(str) => str.len().try_into().unwrap_or(1),
-        Str(str) => str.len().try_into().unwrap_or(0) + 2,
-        Int(num) => num.to_string().len().try_into().unwrap_or(1),
-        Float(num) => num.to_string().len().try_into().unwrap_or(1),
-        Bool(val) => if *val { 4 } else { 5 },
-        None => 4,
-        // Keywords
-        Func(true) => 6,
-        Func(false) => 4,
-        Let => 3,
-        Return => 6,
-        In => 2,
-        If => 2,
-        Else => 4,
-        Loop => 4,
-        Import => 6,
-        // Size two ops
-        PlusPlus | MinusMinus | PlusEquals | MinusEquals | TimesEquals |
-        DivEquals | EqualsEquals | NotEquals | LtEquals | GtEquals => {
-            2
-        }
-        // Anything else
-        _ => 1
+        println!("{}", "^".repeat(stream.size.into()));
     }
 }

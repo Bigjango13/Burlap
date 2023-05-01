@@ -151,17 +151,18 @@ pub fn lex(args: &Arguments) -> Vec<Token> {
     }
     // Stream (for errors)
     let mut stream = Stream{
-        name: args.name.clone(), at: 0, line: 1, str: lines[0].to_string()
+        name: args.name.clone(), at: 0, line: 1,
+        str: lines[0].to_string(), size: 0,
     };
     let mut lastat = 0;
 
     let mut tok = lex.next();
     while tok != None {
+        stream.size = lex.span().end - lex.span().start;
         stream.at = lex.span().start - lastat;
         if let Err(_) = tok.clone().unwrap() {
-            let size = lex.span().end - lex.span().start;
             err(
-                &stream, "failure to lex", size as u8, ErrType::Err,
+                &stream, "failure to lex", ErrType::Err,
                 args.extensions.contains(&"color".to_string())
             );
             return vec![];
@@ -174,7 +175,7 @@ pub fn lex(args: &Arguments) -> Vec<Token> {
                     None => ""
                 }.to_string();
                 stream.line += 1;
-                lastat = lex.span().start;
+                lastat = lex.span().start + 1;
             }
             ret.push(Token{token, stream: stream.clone()});
         }

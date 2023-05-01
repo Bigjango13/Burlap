@@ -1,5 +1,5 @@
 use crate::Arguments;
-use crate::common::{err, ErrType, get_len, IMPOSSIBLE_STATE};
+use crate::common::{err, ErrType, IMPOSSIBLE_STATE};
 use crate::lexer::{Token, TokenType};
 use TokenType::*;
 
@@ -95,16 +95,14 @@ macro_rules! error {
     ($parser:expr, $msg:expr) => (
         $parser.has_err = true;
         err(
-            &$parser.tokens[$parser.at].stream, $msg,
-            get_len(&$parser.tokens[$parser.at].token), ErrType::Err,
+            &$parser.tokens[$parser.at].stream, $msg, ErrType::Err,
             $parser.extensions.contains(&"color".to_string())
         );
     );
     // DO NOT USE WITH ErrType::Err
     ($parser:expr, $msg:expr, $err_type:expr) => (
         err(
-            &$parser.tokens[$parser.at].stream, $msg,
-            get_len(&$parser.tokens[$parser.at].token), $err_type,
+            &$parser.tokens[$parser.at].stream, $msg, $err_type,
             $parser.extensions.contains(&"color".to_string())
         );
     )
@@ -713,8 +711,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         error!(parser, "expected '{' to start function body");
         err(
             &parser.tokens[parser.at].stream,
-            "forward declaration isn't supported",
-            1, ErrType::Hint,
+            "forward declaration isn't supported", ErrType::Hint,
             parser.extensions.contains(&"color".to_string())
         );
         return Option::None;
