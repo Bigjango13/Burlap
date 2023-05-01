@@ -256,9 +256,7 @@ fn compile_expr(program: &mut Program, node: &ASTNode) -> bool {
         // List
         ListExpr(keys, values, fast) => {
             // Build the list
-            let mut at = values.len();
-            while at > 0 {
-                at -= 1;
+            for at in 0..values.len() {
                 if !compile_expr(program, &values[at]) {
                     return false;
                 }
@@ -385,12 +383,18 @@ fn compile_stmt(
             program.ops.push(0);
             let offpos = program.ops.len();
 
+            // Lower scope
+            program.ops.push(Opcode::LEVI as u8);
+
             // Set the loop var
             program.push(Value::Str(var.to_string()));
             program.ops.push(Opcode::DOS as u8);
 
             // Body
-            compile_body(program, args, body, false);
+            compile_body(program, args, body, true);
+
+            // Raise scope
+            program.ops.push(Opcode::RS as u8);
 
             // Backwards jump
             program.ops.push(Opcode::JMPB as u8);

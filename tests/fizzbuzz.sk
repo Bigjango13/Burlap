@@ -1,0 +1,24 @@
+# FizzBuzz, direct copy from specification
+func checker ( num ) {
+  let a = num % 15;
+  let b = num % 5;
+  let c = num % 3;
+  if a == 0 {
+    print ( "FizzBuzz" );
+  }
+  else if b == 0 {
+    print ( "Fizz" );
+  }
+  else if c == 0 {
+    print ( "Buzz" );
+  }
+  else {
+    print( num );
+  }
+}
+
+loop ( num in range( 1, 100 ) ) {
+
+	checker ( num );
+
+}

@@ -785,6 +785,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 list.insert(key, val);
                 size -= 1;
             }
+            list.reverse();
             vm.push(Value::List(list));
         },
         Opcode::LFL => {
@@ -797,6 +798,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 list.push(vm.pop());
                 size -= 1;
             }
+            list.reverse();
             vm.push(Value::FastList(list));
         },
         Opcode::INX => {

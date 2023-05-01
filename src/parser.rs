@@ -257,11 +257,16 @@ fn parse_binop_set(parser: &mut Parser) -> Option<ASTNode> {
         let ret = parse_binop_helper(parser, vec![
             Equals, PlusEquals, MinusEquals, TimesEquals, DivEquals
         ], &parse_binop_logic, false)?;
-        let ASTNode::BinopExpr(ref rhs, _, _) = ret else {
+        let ASTNode::BinopExpr(rhs, op, _) = ret.clone() else {
             return Some(ret);
         };
+        // Check that the binop is a setter
+        if let Equals | PlusEquals | MinusEquals | TimesEquals | DivEquals =
+            op {} else {
+            return Some(ret);
+        }
         // Check that arms are either Var or Index
-        if let ASTNode::VarExpr(..) | ASTNode::IndexExpr(..) = *rhs.clone() {
+        if let ASTNode::VarExpr(..) | ASTNode::IndexExpr(..) = *rhs {
             Some(ret)
         } else {
             error!(parser, "setters must be used on indexes or variables");
