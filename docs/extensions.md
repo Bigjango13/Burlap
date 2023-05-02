@@ -70,9 +70,25 @@ if really_important_function() == false {
 print("It worked!");
 ```
 
+### `__burlap_load_library(libname)`
+
+Try to load the library `libname` (raises an error on failure) and returns a (`__burlap_ptr`) handle to it. Used for FFI with other programming languages. It internally uses `dlopen` to load libraries. 
+
+### `__burlap_load_functi(libhandle, name)`
+
+Trys to find the symbol called `name` in the library with handle `libhandle` (raises an error on failure). Internally uses `dlsym` to find symbols.
+
+### `__burlap_ptr(x)`
+
+The casting function for the `__burlap_ptr` type, see below.
+
 ## Internal Types
 
 These types are internal to burlap, and shouldn't be seen by the average user.
+
+### `__burlap_ptr`
+
+A pointer type, unlike other internal types, `__burlap_ptr` is meant to be interacted with. As such, it can be used with equivalence operators, has a cast (`__burlap_ptr(x)`), and is returned from (extended) functions.
 
 ### `__burlap_iter`
 

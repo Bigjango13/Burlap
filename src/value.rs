@@ -34,11 +34,15 @@ pub enum Value {
     // FastList (used for lists with only number keys)
     FastList(Vec<Value>),
 
+    // Ptr, used for ffi
+    Ptr(usize),
+
     // Iterator (used for iter based loops)
     Iter(Vec<Value>, i32),
     // RangeType (used for optimized ranges)
     RangeType(i32, i32, i32),
 }
+
 // Helper for ops
 macro_rules! do_op {
     ($left:expr, $right:expr, $op:tt, $errval:expr) => {
@@ -86,6 +90,7 @@ impl Value {
             Value::Float(f) => *f as i32,
             Value::Bool(b) => if *b { 1 } else { 0 },
             Value::Byte(b) => *b as i32,
+            Value::Ptr(ptr) => *ptr as i32,
             _ => 0,
         };
     }
@@ -159,8 +164,9 @@ impl Value {
                 ret
             }
             // Internal types
-            Value::Iter(_, _) => "__burlap_iter".to_string(),
-            Value::RangeType(_, _, _) => "__burlap_rangetype".to_string(),
+            Value::Ptr(ptr) => format!("__burlap_ptr(0x{:X})", ptr),
+            Value::Iter(..) => "__burlap_iter".to_string(),
+            Value::RangeType(..) => "__burlap_rangetype".to_string(),
         };
     }
     // Truthy conversion
@@ -172,6 +178,7 @@ impl Value {
             Value::Bool(b) => *b,
             Value::List(l) => !l.is_empty(),
             Value::FastList(l) => !l.is_empty(),
+            Value::Ptr(ptr) => *ptr != 0,
             _ => false,
         };
     }
@@ -188,13 +195,14 @@ impl Value {
             Value::None => "None",
             Value::File(..) => "File",
             // Internal types
-            Value::Iter(_, _) => "__burlap_iter",
-            Value::RangeType(_, _, _) => "__burlap_rangetype",
+            Value::Ptr(_) => "__burlap_ptr",
+            Value::Iter(..) => "__burlap_iter",
+            Value::RangeType(..) => "__burlap_rangetype",
         }.to_string();
     }
     // Iterators
     pub fn to_iter(&self) -> Result<Value, String> {
-        if let Value::RangeType(_, _, _) | Value::Iter(_, _) = self {
+        if let Value::RangeType(..) | Value::Iter(..) = self {
             return Ok(self.clone());
         }
         if let Value::FastList(list) = self {
@@ -316,6 +324,14 @@ impl Value {
                 } else if let Value::Int(i_right) = right {
                     // Two ints
                     i == &i_right
+                } else {
+                    false
+                }
+            },
+            // Pointers
+            Value::Ptr(p) => {
+                if let Value::Ptr(p_right) = right {
+                    *p == p_right
                 } else {
                     false
                 }

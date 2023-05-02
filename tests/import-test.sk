@@ -1,5 +1,5 @@
 # Test file for importing
-func ret4() {
+functi ret4() {
     return 4;
 }
 let myCoolVar = 7;

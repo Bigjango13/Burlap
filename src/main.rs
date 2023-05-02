@@ -4,6 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::exit;
 
+mod cffi;
 mod common;
 mod lexer;
 mod parser;

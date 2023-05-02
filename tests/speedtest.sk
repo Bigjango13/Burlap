@@ -1,5 +1,5 @@
 # Math and recursion
-func fib(n) {
+functi fib(n) {
     if n < 2 {
         return n;
     }

@@ -5,6 +5,7 @@ use std::io::{Write, Read};
 use std::io;
 
 use crate::Arguments;
+use crate::cffi::{load_functi, load_library};
 use crate::compiler::Program;
 use crate::value::{FileInfo, Value};
 
@@ -174,6 +175,15 @@ impl Vm {
             );
             functies.insert(
                 "__burlap_throw".to_string(), sk_throw as Functie
+            );
+            functies.insert(
+                "__burlap_load_lib".to_string(), sk_libload as Functie
+            );
+            functies.insert(
+                "__burlap_load_functi".to_string(), sk_functiload as Functie
+            );
+            functies.insert(
+                "__burlap_ptr".to_string(), sk_ptr as Functie
             );
         }
         // I really wish Rust had defaults, but it doesn't
@@ -651,6 +661,22 @@ fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     return Ok(Value::Str(args[0].to_string()));
 }
 
+// Pointer
+fn sk_ptr(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 1 {
+        // Invalid args
+        vm.bad_args(&"__burlap_ptr".to_string(), args.len(), 1)?;
+    }
+    if let Value::Ptr(_) = args[0].clone() {
+        return Ok(args[0].clone());
+    }
+    let num = args[0].to_int();
+    if num < 0 {
+        return Err("Pointers can't be negative".to_string());
+    }
+    return Ok(Value::Ptr(num as usize));
+}
+
 // Internal functies
 fn sk_typed_eq(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
@@ -676,11 +702,30 @@ fn sk_throw(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     Err(args[0].to_string())
 }
 
+fn sk_libload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 1 {
+        vm.bad_args(&"__burlap_load_library".to_string(), args.len(), 1)?;
+    }
+    return Ok(Value::Ptr(load_library(args[0].to_string())?))
+}
+
+fn sk_functiload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 2 {
+        vm.bad_args(&"__burlap_load_functi".to_string(), args.len(), 2)?;
+    }
+    // First arg must be library handle
+    let Value::Ptr(handle) = args[0] else {
+        return Err("First argument must be library handle".to_string());
+    };
+    return Ok(Value::Ptr(load_functi(handle, args[1].to_string())?));
+}
+
 fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
         vm.bad_args(&"__burlap_range".to_string(), args.len(), 2)?;
     }
     let (at, max) = (args[0].to_int(), args[1].to_int());
+    // For (0, 100) step is 1, for (100, 0) it's -1, etc..
     let step = if max.gt(&at) {1} else {-1};
     return Ok(Value::RangeType(at, max, step));
 }

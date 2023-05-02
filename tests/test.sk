@@ -1,7 +1,7 @@
 # Meta testing stuff
 let testTotal = 0;
 let testBad = 0;
-func test(msg, val, goodVal) {
+functi test(msg, val, goodVal) {
     let status_msg = "";
     testTotal += 1;
     if val == goodVal && type(val) == type(goodVal) {
@@ -14,7 +14,7 @@ func test(msg, val, goodVal) {
     print(status_msg + goodVal + " == " + val);
 }
 
-func testSummary() {
+functi testSummary() {
     print("");
     print("SUMMARY: " + (testTotal-testBad) + " out of " + testTotal + " tests passed");
     if testBad == 0 {
@@ -87,7 +87,7 @@ test("!1", !true, false);
 
 # Add test
 print("*** Adding Tests ***");
-func add_things(a, b) {
+functi add_things(a, b) {
     let c = a + b;
     return c;
 }
@@ -126,7 +126,7 @@ test("None", type(none), "None");
 
 # Factorial
 print("*** Factorial Tests ***");
-func factorial(n) {
+functi factorial(n) {
     if n < 0 {
         # factorial(x) is undefined when x < 0
         return none;
@@ -172,7 +172,7 @@ test("i == 6", i, 6);
 # Import test
 print("*** Import Tests ***");
 import ("import-test.sk");
-test("import func", ret4(), 4);
+test("import functi", ret4(), 4);
 
 # Casting tests
 print("*** Casting Tests ***");

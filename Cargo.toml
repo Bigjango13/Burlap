@@ -16,3 +16,5 @@ indexmap = "1.9.2"
 rustyline = "10.1.0"
 # For lexing
 logos = "0.13.0"
+# For C ffi
+libc = "0.2.142"
