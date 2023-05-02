@@ -172,6 +172,9 @@ impl Vm {
             functies.insert(
                 "__burlap_print".to_string(), sk_real_print as Functie
             );
+            functies.insert(
+                "__burlap_throw".to_string(), sk_throw as Functie
+            );
         }
         // I really wish Rust had defaults, but it doesn't
         Vm {
@@ -664,6 +667,13 @@ fn sk_real_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     }
     println!("{:?}", args[0]);
     return Ok(Value::None);
+}
+
+fn sk_throw(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 1 {
+        vm.bad_args(&"__burlap_throw".to_string(), args.len(), 1)?;
+    }
+    Err(args[0].to_string())
 }
 
 fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {

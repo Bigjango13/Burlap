@@ -58,6 +58,18 @@ Prints the burlap representation of `val`. For example:
 __burlap_print("Test");
 ```
 
+### `__burlap_throw(err)`
+
+Converts `err` to a string a uses it as an error
+```
+if really_important_function() == false {
+    // Causes a run time error
+    __burlap_throw("failed to do important thing!");
+}
+// Carry on
+print("It worked!");
+```
+
 ## Internal Types
 
 These types are internal to burlap, and shouldn't be seen by the average user.
