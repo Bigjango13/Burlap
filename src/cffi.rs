@@ -34,15 +34,35 @@ pub fn load_functi(handle: usize, symname: String) -> Result<usize, String> {
     Ok(sym as usize)
 }
 
-fn get_c_type(val: &Value) -> Option<Type> {
+fn get_val_c_type(val: &Value) -> Option<Type> {
     Some(match val {
         // char* and void*
         // Value::Str(_) |
         Value::Ptr(_) => Type::pointer(),
         // Int is i32
         Value::Int(_) => Type::i32(),
+        // Float is i32
+        Value::Float(_) => Type::f32(),
         // Bool and byte are u8
         Value::Bool(_) | Value::Byte(_) => Type::u8(),
+        // Anything else doesn't map
+        _ => return None,
+    })
+}
+
+fn get_str_c_type(val: String) -> Option<Type> {
+    Some(match val.as_str() {
+        // char* and void*
+        //"String" |
+        "__burlap_ptr" => Type::pointer(),
+        // Int is i32
+        "Number" => Type::i32(),
+        // Float is f32
+        "Decimal" => Type::f32(),
+        // Bool and byte are u8
+        "Bool" | "Byte" => Type::u8(),
+        // Void
+        "" | "None" => Type::void(),
         // Anything else doesn't map
         _ => return None,
     })
@@ -55,6 +75,8 @@ fn val_to_c(val: &Value) -> Arg {
         Value::Ptr(p) => Arg::new(p),
         // Int is i32
         Value::Int(i) => Arg::new(i),
+        // Float is f32
+        Value::Float(f) => Arg::new(f),
         // Bool and byte are u8
         Value::Bool(b) => Arg::new(b),
         Value::Byte(b) => Arg::new(b),
@@ -63,13 +85,13 @@ fn val_to_c(val: &Value) -> Arg {
     }
 }
 
-pub fn call(ptr: usize, args: Vec<Value>) -> Result<(), String> {
+pub fn call(ptr: usize, args: Vec<Value>, ret: String) -> Result<Value, String> {
     // Get the args
     let mut arg_types: Vec<Type> = Vec::with_capacity(args.len());
     let mut c_args: Vec<Arg> = Vec::with_capacity(args.len());
     for arg in args {
         // Get type
-        let Some(atype) = get_c_type(&arg) else {
+        let Some(atype) = get_val_c_type(&arg) else {
             return Err(
                 format!("Cannot convert {} to C argument", arg.get_type())
             );
@@ -78,12 +100,34 @@ pub fn call(ptr: usize, args: Vec<Value>) -> Result<(), String> {
         // Convert args to C equivalent
         c_args.push(val_to_c(&arg))
     }
+    // Get the return type
+    let Some(ret_t) = get_str_c_type(ret.clone()) else {
+        return Err(format!("Invalid C type: {}", ret));
+    };
     // Get signature
-    let cif = Cif::new(arg_types.into_iter(), Type::void());
-    unsafe {
-       cif.call::<()>(CodePtr(ptr as *mut _), c_args.as_slice());
-    }
-    Ok(())
+    let cif = Cif::new(arg_types.into_iter(), ret_t);
+    // Call and return
+    return Ok(unsafe { match ret.as_str() {
+        "__burlap_ptr" => {Value::Ptr(
+            cif.call(CodePtr(ptr as *mut _), c_args.as_slice())
+        )},
+        "Number" => Value::Int(
+            cif.call(CodePtr(ptr as *mut _), c_args.as_slice())
+        ),
+        "Decimal" => Value::Float(
+            cif.call(CodePtr(ptr as *mut _), c_args.as_slice())
+        ),
+        "Bool" => Value::Bool(
+            cif.call::<u8>(CodePtr(ptr as *mut _), c_args.as_slice()) == 0
+        ),
+        "Byte" => Value::Byte(
+            cif.call(CodePtr(ptr as *mut _), c_args.as_slice())
+        ),
+        _ => {
+            cif.call::<()>(CodePtr(ptr as *mut _), c_args.as_slice());
+            Value::None
+        }
+    }});
 }
 
 extern "C" {

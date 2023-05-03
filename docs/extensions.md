@@ -78,24 +78,28 @@ Try to load the library `libname` (raises an error on failure) and returns a (`_
 
 Trys to find the symbol called `name` in the library with handle `libhandle` (raises an error on failure). Internally uses `dlsym` to find symbols.
 
-### `__burlap_ffi_call(func_ptr, args)`
+### `__burlap_ffi_call(func_ptr, args, ret_type)`
 
-Calls `func_ptr` with the C equivalent of `args`, returns `none`.
+Calls `func_ptr` with the C equivalent of `args`, returns the return value as `ret_type`.
 
-Currently the members of `args` can be any of the following:
-- Number
-- Decimal
-- Byte
-- `__burlap_ptr`
+Currently the members of `args` and the value of `ret_type` can be any of the following:
+- Number (`int32_t`)
+- Decimal (`float`)
+- Byte (`uint8_t`)
+- Bool (`_Bool`)
+- None or an empty string (`void`, only valid for return types)
+- `__burlap_ptr` (`void*`)
+
+`ret_type` is intentionally set up so that it can use the return value of `type`
 
 For example:
-
 mylib.c
 ```c
 #include <stdio.h>
 
-void print_num(int n) {
+int double_num(int n) {
     printf("N is: %i\n", n);
+    return n * 2;
 }
 ```
 and compile with `<compiler> -shared -fPIC mylib.c -o mylib.so`
@@ -103,9 +107,11 @@ and compile with `<compiler> -shared -fPIC mylib.c -o mylib.so`
 Sack:
 ```
 let handle = __burlap_load_lib("mylib.so");
-let print_n = __burlap_load_functi(handle, "print_n");
+let print_n = __burlap_load_functi(handle, "double_num");
 // Should print "N is: 47"
-__burlap_ffi_call(print_n, [47])
+let mynum = __burlap_ffi_call(print_n, [47], "Number")
+// Should print "Doubled num: 94"
+print("Doubled num: " + mynum)
 ```
 
 ### `__burlap_ptr(x)`

@@ -725,8 +725,8 @@ fn sk_functiload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 }
 
 fn sk_call_c(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if args.len() != 2 {
-        vm.bad_args(&"__burlap_ffi_call".to_string(), args.len(), 2)?;
+    if args.len() != 3 {
+        vm.bad_args(&"__burlap_ffi_call".to_string(), args.len(), 3)?;
     }
     // First arg must be function pointer
     let Value::Ptr(func) = args[0] else {
@@ -736,8 +736,13 @@ fn sk_call_c(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     let Some(c_args) = args[1].values() else {
         return Err("Second argument must be list".to_string());
     };
-    ffi_call(func, c_args)?;
-    return Ok(Value::None);
+    // Third arg must be return value
+    let Value::Str(ret_type) = args[2].clone() else {
+        return Err(
+            "Third argument must be string (try using `type()`?)".to_string()
+        );
+    };
+    return ffi_call(func, c_args, ret_type);
 }
 
 fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
