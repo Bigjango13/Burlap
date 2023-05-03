@@ -725,14 +725,18 @@ fn sk_functiload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 }
 
 fn sk_call_c(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if args.len() != 1 {
-        vm.bad_args(&"__burlap_ffi_call".to_string(), args.len(), 1)?;
+    if args.len() != 2 {
+        vm.bad_args(&"__burlap_ffi_call".to_string(), args.len(), 2)?;
     }
     // First arg must be function pointer
     let Value::Ptr(func) = args[0] else {
         return Err("First argument must be function pointer".to_string());
     };
-    ffi_call(func);
+    // Second arg must be list
+    let Some(c_args) = args[1].values() else {
+        return Err("Second argument must be list".to_string());
+    };
+    ffi_call(func, c_args)?;
     return Ok(Value::None);
 }
 

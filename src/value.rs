@@ -200,6 +200,16 @@ impl Value {
             Value::RangeType(..) => "__burlap_rangetype",
         }.to_string();
     }
+    // Lists
+    pub fn values(&self) -> Option<Vec<Value>> {
+        if let Value::FastList(l) = self {
+            return Some(l.clone());
+        }
+        if let Value::List(l) = self {
+            return Some(l.values().map(|i|i.clone()).collect());
+        }
+        None
+    }
     // Iterators
     pub fn to_iter(&self) -> Result<Value, String> {
         if let Value::RangeType(..) | Value::Iter(..) = self {
@@ -360,16 +370,6 @@ impl Value {
             // Anything else
             _ => false,
         };
-    }
-
-    fn values(&self) -> Option<Vec<Value>> {
-        if let Value::FastList(l) = self {
-            return Some(l.clone());
-        }
-        if let Value::List(l) = self {
-            return Some(l.values().map(|i|i.clone()).collect());
-        }
-        None
     }
 }
 

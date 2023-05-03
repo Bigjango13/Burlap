@@ -78,9 +78,35 @@ Try to load the library `libname` (raises an error on failure) and returns a (`_
 
 Trys to find the symbol called `name` in the library with handle `libhandle` (raises an error on failure). Internally uses `dlsym` to find symbols.
 
-### `__burlap_ffi_call(func_ptr)`
+### `__burlap_ffi_call(func_ptr, args)`
 
-Calls `func_ptr`, returns `none`.
+Calls `func_ptr` with the C equivalent of `args`, returns `none`.
+
+Currently the members of `args` can be any of the following:
+- Number
+- Decimal
+- Byte
+- `__burlap_ptr`
+
+For example:
+
+mylib.c
+```c
+#include <stdio.h>
+
+void print_num(int n) {
+    printf("N is: %i\n", n);
+}
+```
+and compile with `<compiler> -shared -fPIC mylib.c -o mylib.so`
+
+Sack:
+```
+let handle = __burlap_load_lib("mylib.so");
+let print_n = __burlap_load_functi(handle, "print_n");
+// Should print "N is: 47"
+__burlap_ffi_call(print_n, [47])
+```
 
 ### `__burlap_ptr(x)`
 
