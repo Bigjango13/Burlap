@@ -78,6 +78,10 @@ Try to load the library `libname` (raises an error on failure) and returns a (`_
 
 Trys to find the symbol called `name` in the library with handle `libhandle` (raises an error on failure). Internally uses `dlsym` to find symbols.
 
+### `__burlap_ffi_call(func_ptr)`
+
+Calls `func_ptr`, returns `none`.
+
 ### `__burlap_ptr(x)`
 
 The casting function for the `__burlap_ptr` type, see below.

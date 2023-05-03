@@ -1,6 +1,10 @@
 use std::ffi;
 use libc;
 
+use libffi::middle::{Type, Cif, CodePtr};
+
+//use crate::value::Value;
+
 unsafe fn ptr_to_string(input: *mut libc::c_char) -> String {
     ffi::CStr::from_ptr(input).to_str().unwrap_or("").to_string()
 }
@@ -27,6 +31,26 @@ pub fn load_functi(handle: usize, symname: String) -> Result<usize, String> {
         return unsafe{Err(ptr_to_string(dlerror()))};
     }
     Ok(sym as usize)
+}
+
+/*pub fn get_c_type(val: &Value) -> Option<Type> {
+    Some(match val {
+        // char* and void*
+        Value::Str(_) | Value::Ptr(_) => Type::pointer(),
+        // Int is i32
+        Value::Int(_) => Type::i32(),
+        // Bool and byte are u8
+        Value::Bool(_) | Value::Byte(_) => Type::u8(),
+        // Anything else doesn't map
+        _ => return None,
+    })
+}*/
+
+pub fn call(ptr: usize) {
+    let cif = Cif::new(vec![].into_iter(), Type::void());
+    unsafe {
+        cif.call::<()>(CodePtr(ptr as *mut _), &[])
+    };
 }
 
 extern "C" {

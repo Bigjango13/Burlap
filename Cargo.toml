@@ -18,3 +18,4 @@ rustyline = "10.1.0"
 logos = "0.13.0"
 # For C ffi
 libc = "0.2.142"
+libffi = "3.2.0"

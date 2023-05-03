@@ -6,6 +6,7 @@ use std::io;
 
 use crate::Arguments;
 use crate::cffi::{load_functi, load_library};
+use crate::cffi::call as ffi_call;
 use crate::compiler::Program;
 use crate::value::{FileInfo, Value};
 
@@ -181,6 +182,9 @@ impl Vm {
             );
             functies.insert(
                 "__burlap_load_functi".to_string(), sk_functiload as Functie
+            );
+            functies.insert(
+                "__burlap_ffi_call".to_string(), sk_call_c as Functie
             );
             functies.insert(
                 "__burlap_ptr".to_string(), sk_ptr as Functie
@@ -718,6 +722,18 @@ fn sk_functiload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         return Err("First argument must be library handle".to_string());
     };
     return Ok(Value::Ptr(load_functi(handle, args[1].to_string())?));
+}
+
+fn sk_call_c(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 1 {
+        vm.bad_args(&"__burlap_ffi_call".to_string(), args.len(), 1)?;
+    }
+    // First arg must be function pointer
+    let Value::Ptr(func) = args[0] else {
+        return Err("First argument must be function pointer".to_string());
+    };
+    ffi_call(func);
+    return Ok(Value::None);
 }
 
 fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
