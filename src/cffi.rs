@@ -37,8 +37,7 @@ pub fn load_functi(handle: usize, symname: String) -> Result<usize, String> {
 fn get_val_c_type(val: &Value) -> Option<Type> {
     Some(match val {
         // char* and void*
-        //Value::Str(_) |
-        Value::Ptr(_) => Type::pointer(),
+        Value::Str(_) | Value::Ptr(_) => Type::pointer(),
         // Int is i32
         Value::Int(_) => Type::i32(),
         // Float is i32
@@ -53,8 +52,7 @@ fn get_val_c_type(val: &Value) -> Option<Type> {
 fn get_str_c_type(val: String) -> Option<Type> {
     Some(match val.as_str() {
         // char* and void*
-        "String" |
-        "__burlap_ptr" => Type::pointer(),
+        "String" | "__burlap_ptr" => Type::pointer(),
         // Int is i32
         "Number" => Type::i32(),
         // Float is f32
@@ -68,10 +66,10 @@ fn get_str_c_type(val: String) -> Option<Type> {
     })
 }
 
-fn val_to_c(val: &Value) -> Arg {
-    match val {
+fn val_to_c(val: &Value) -> Result<Arg, CString> {
+    return Ok(match val {
         // char* and void*
-        //Value::Str(ref s) => return Err(CString::new(s.clone()).unwrap()),
+        Value::Str(ref s) => return Err(CString::new(s.clone()).unwrap()),
         Value::Ptr(ref p) => Arg::new(p),
         // Int is i32
         Value::Int(ref i) => Arg::new(i),
@@ -82,7 +80,7 @@ fn val_to_c(val: &Value) -> Arg {
         Value::Byte(ref b) => Arg::new(b),
         // Anything else doesn't map
         _ => panic!("{}", IMPOSSIBLE_STATE),
-    }
+    });
 }
 
 pub fn call(
@@ -91,6 +89,7 @@ pub fn call(
     // Get the args
     let mut arg_types: Vec<Type> = Vec::with_capacity(args.len());
     let mut c_args: Vec<Arg> = Vec::with_capacity(args.len());
+    let mut strings: Vec<CString> = vec![];
     for at in 0..args.len() {
         let arg = args.get(at).unwrap();
         // Get type
@@ -101,7 +100,13 @@ pub fn call(
         };
         arg_types.push(atype);
         // Convert arg to C equivalent
-        c_args.push(val_to_c(arg));
+        match val_to_c(arg) {
+            Ok(a) => c_args.push(a),
+            Err(cstr) => {
+                strings.push(cstr);
+                c_args.push(Arg::new(&strings.last().unwrap().as_ptr()));
+            }
+        }
     }
     // Get the return type
     let Some(ret_t) = get_str_c_type(ret.clone()) else {
