@@ -87,8 +87,9 @@ Currently the members of `args` and the value of `ret_type` can be any of the fo
 - Decimal (`float`)
 - Byte (`uint8_t`)
 - Bool (`_Bool`)
-- None or an empty string (`void`, only valid for return types)
 - `__burlap_ptr` (`void*`)
+- None or an empty string (`void`, only valid for return types)
+- String (currently only valid for return type)
 
 `ret_type` is intentionally set up so that it can use the return value of `type`
 
