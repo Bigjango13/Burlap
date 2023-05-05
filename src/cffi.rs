@@ -104,7 +104,7 @@ pub fn call(
             Ok(a) => c_args.push(a),
             Err(cstr) => {
                 strings.push(cstr);
-                c_args.push(Arg::new(&strings.last().unwrap().as_ptr()));
+                c_args.push(Arg::new(strings.last().unwrap()));
             }
         }
     }
@@ -129,7 +129,7 @@ pub fn call(
             cif.call(CodePtr(ptr as *mut _), c_args.as_slice())
         ),
         "Bool" => Value::Bool(
-            cif.call::<u8>(CodePtr(ptr as *mut _), c_args.as_slice()) == 0
+            cif.call::<u8>(CodePtr(ptr as *mut _), c_args.as_slice()) != 0
         ),
         "Byte" => Value::Byte(
             cif.call(CodePtr(ptr as *mut _), c_args.as_slice())

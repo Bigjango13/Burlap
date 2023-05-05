@@ -480,11 +480,9 @@ fn compile_stmt(
             program.path = program.path.join(file);
             program.path.pop();
             // Compile
-            program.ops.push(Opcode::LEVI as u8);
             if !compile(ast, args, program) {
                 return false;
             }
-            program.ops.push(Opcode::RS as u8);
             program.path = old_path;
         },
         Nop => {
