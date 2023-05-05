@@ -43,6 +43,11 @@ Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) progr
 - [x] Lexing errors
 - [x] Parsing errors
 - [x] Runtime errors
+- [x] Extra features
+  - [x] C interop for all number types
+  - [x] C interop for strings
+  - [x] Custom error messages
+  - [x] And [more](docs/extensions.md)!
 
 ## Building
 
@@ -63,7 +68,7 @@ To show help, run `burlap -h` or `burlap --help`.
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
-- 1.1.2: Added C iterop and `__burlap_throw`
+- 1.1.2: Added C iterop, `__burlap_throw`, and fixed global variables for imports.
 - 1.1.1: Added file IO
 - 1.1.0: Rewrote tree walking interpeter to a stack based VM
 - 1.0.0: Rewrote C++ to Rust. Lists, while loops, input, imports, and more have been added.
