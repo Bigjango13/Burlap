@@ -36,7 +36,7 @@ pub enum ASTNode {
     BodyStmt(Vec<ASTNode>),
     // Function, (foobar, [a, b, c], Body(...))
     FunctiStmt(String, Vec<String>, Box<ASTNode>),
-    // If/else if, (Binop(x == 1), Body(trueBody), Body(falseBody or none))
+    // If/else if, (Binop(x == 1), Body(trueBody), Body(falseBody or nop))
     IfStmt(Box<ASTNode>, Box<ASTNode>, Box<ASTNode>),
     // Let, (x, 47)
     LetStmt(String, Box<ASTNode>),
@@ -454,6 +454,7 @@ fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
     eat!(parser, Lbrace, "expected { to start body")?;
     // Middle
     let mut body: Vec<ASTNode> = vec![];
+    let mut err = false;
     loop {
         // Exit loop on } or EOF
         if let Rbrace | Eof = parser.current() {
@@ -464,7 +465,8 @@ fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
             if Eof == parser.current() && !parser.has_err {
                 break;
             }
-            return Option::None;
+            err = true;
+            continue;
         };
         if stmt != ASTNode::Nop {
             body.push(stmt);
@@ -472,6 +474,9 @@ fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
     }
     // End
     eat!(parser, Rbrace, "expected } to end body, not EOF")?;
+    if err {
+        return Option::None;
+    }
     if body.len() == 0 {
         // {} is a nop
         return Some(ASTNode::Nop);

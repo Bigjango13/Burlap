@@ -1,5 +1,5 @@
 # Burlap
-> A powerful and user-friendly sack interpreter, v1.1.2
+> A powerful and user-friendly sack interpreter, v1.1.3
 
 ## What is Burlap?
 Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) programming language. It aims for a high level of spec compliance, any valid sack program should be able to be run using burlap (it does have a few minor variations from the spec, known differences are listed [here](docs/spec-diff.md))
