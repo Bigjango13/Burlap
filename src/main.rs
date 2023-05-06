@@ -19,6 +19,10 @@ use crate::parser::{parse, ASTNode};
 use crate::vm::{run, Vm};
 
 #[macro_use] extern crate impl_ops;
+#[cfg(feature = "fancyrepl")]
+use rustyline::validate::MatchingBracketValidator;
+#[cfg(feature = "fancyrepl")]
+use rustyline::{Completer, Helper, Highlighter, Hinter, Validator};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use home::home_dir;
@@ -61,10 +65,22 @@ pub fn to_ast(args: &mut Arguments) -> Option<Vec<ASTNode>> {
     return Some(ast);
 }
 
+// The repl struct
+#[cfg(feature = "fancyrepl")]
+#[derive(Completer, Helper, Highlighter, Hinter, Validator)]
+struct FancyRepl {
+    #[rustyline(Validator)]
+    brackets: MatchingBracketValidator,
+}
+
 fn repl(args: &mut Arguments) {
     // Print welcome msg
     println!("Burlap v{}", env!("CARGO_PKG_VERSION"));
-    let mut rl = Editor::<()>::new().unwrap();
+    let mut rl = Editor::new().unwrap();
+    #[cfg(feature = "fancyrepl")]
+    rl.set_helper(Some(FancyRepl{
+        brackets: MatchingBracketValidator::new(),
+    }));
     // Try to get the home dir
     let hist_file = match home_dir() {
         Some(path) =>

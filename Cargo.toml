@@ -13,9 +13,14 @@ rustc-hash = "1.1.0"
 # For lists
 indexmap = "1.9.2"
 # For REPL
-rustyline = "10.1.0"
+rustyline = "11.0.0"
+#rustyline-derive = { version = "0.7.0", optional = true }
 # For lexing
 logos = "0.13.0"
 # For C ffi
 libc = "0.2.142"
 libffi = "3.2.0"
+
+[features]
+default = ["fancyrepl"]
+fancyrepl = ["rustyline/custom-bindings", "rustyline/derive"]
