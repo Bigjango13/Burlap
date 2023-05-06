@@ -68,6 +68,7 @@ To show help, run `burlap -h` or `burlap --help`.
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
+- 1.1.3: Make errors less noisy, add multiline editing and highlighting to the REPL
 - 1.1.2: Added C iterop, `__burlap_throw`, and fixed global variables for imports.
 - 1.1.1: Added file IO
 - 1.1.0: Rewrote tree walking interpeter to a stack based VM

@@ -1,31 +1,25 @@
 #![allow(clippy::needless_return, clippy::print_literal)]
-use std::env;
+#[macro_use] extern crate impl_ops;
 use std::fs;
+use std::env;
 use std::path::PathBuf;
 use std::process::exit;
 
 mod cffi;
 mod common;
+mod compiler;
 mod lexer;
 mod parser;
+mod repl;
 mod value;
-mod compiler;
 mod vm;
 
 use crate::compiler::compile;
 use crate::common::{print_err, ErrType};
 use crate::lexer::lex;
 use crate::parser::{parse, ASTNode};
+use crate::repl::repl;
 use crate::vm::{run, Vm};
-
-#[macro_use] extern crate impl_ops;
-#[cfg(feature = "fancyrepl")]
-use rustyline::validate::MatchingBracketValidator;
-#[cfg(feature = "fancyrepl")]
-use rustyline::{Completer, Helper, Highlighter, Hinter, Validator};
-use rustyline::error::ReadlineError;
-use rustyline::Editor;
-use home::home_dir;
 
 #[derive(Clone)]
 pub struct Arguments {
@@ -49,7 +43,10 @@ impl Arguments {
 
 pub fn to_ast(args: &mut Arguments) -> Option<Vec<ASTNode>> {
     // Lex
-    let tokens = lex(args);
+    let tokens = lex(
+        &args.source, args.name.clone(), true,
+        args.extensions.contains(&"color".to_string()),
+    );
     if tokens.is_empty() {
         return None;
     }
@@ -63,76 +60,6 @@ pub fn to_ast(args: &mut Arguments) -> Option<Vec<ASTNode>> {
         println!("Ast: {:?}", ast);
     }
     return Some(ast);
-}
-
-// The repl struct
-#[cfg(feature = "fancyrepl")]
-#[derive(Completer, Helper, Highlighter, Hinter, Validator)]
-struct FancyRepl {
-    #[rustyline(Validator)]
-    brackets: MatchingBracketValidator,
-}
-
-fn repl(args: &mut Arguments) {
-    // Print welcome msg
-    println!("Burlap v{}", env!("CARGO_PKG_VERSION"));
-    let mut rl = Editor::new().unwrap();
-    #[cfg(feature = "fancyrepl")]
-    rl.set_helper(Some(FancyRepl{
-        brackets: MatchingBracketValidator::new(),
-    }));
-    // Try to get the home dir
-    let hist_file = match home_dir() {
-        Some(path) =>
-            path.into_os_string().into_string().unwrap() + "/.burlap_history",
-        None => "".to_string(),
-    };
-    // Load history
-    if hist_file != "" && rl.load_history(&hist_file).is_err() {
-        let color = args.extensions.contains(&"color".to_string());
-        print_err("failed to open history file", ErrType::Warn, color);
-        print_err(
-            "create `~/.burlap_history` if you want history to save.",
-            ErrType::Hint, color
-        );
-    };
-    // REPL loop
-    let mut vm = Vm::new(args.clone());
-    loop {
-        // Get input
-        let readline = rl.readline(">> ");
-        // C-d to exit
-        if let Err(ReadlineError::Eof) = readline {
-            break;
-        }
-        // Input
-        if let Ok(line) = readline {
-            // Add to history
-            rl.add_history_entry(line.clone());
-            args.source = line + ";";
-            // Gen ast
-            let Some(ast) = to_ast(args) else {
-                continue;
-            };
-            args.source = "".to_string();
-            // Compile
-            if !compile(ast, args, &mut vm.program) {
-                continue;
-            }
-            // Run
-            if vm.at != 0 {
-                vm.at += 1;
-            }
-            run(&mut vm);
-        }
-    }
-    // Save history
-    if hist_file != "" && rl.save_history(&hist_file).is_err() {
-        print_err(
-            "failed to save history", ErrType::Warn,
-            args.extensions.contains(&"color".to_string())
-        );
-    }
 }
 
 fn get_args() -> Result<Arguments, bool> {
@@ -241,20 +168,7 @@ fn main() {
         }
         // Repl
         repl(&mut args);
-    /*} else if args.format {
-        // Format
-        let Some(ast) = to_ast(&mut args) else {
-            exit(1);
-        };
-        if let Err(err) = format(ast, args.name) {
-            print_err(
-                format!("failed to format: {}", err.to_string()).as_str(),
-                ErrType::Err,
-                args.extensions.contains(&"color".to_string())
-            );
-            exit(1);
-        }
-    */} else {
+    } else {
         // Execute file
         let Some(ast) = to_ast(&mut args) else {
             exit(1);

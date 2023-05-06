@@ -70,7 +70,7 @@ impl Parser {
     // Current token
     fn current(&mut self) -> TokenType {
         let mut ret = self.tokens[self.at].token.clone();
-        while ret == Newline {
+        while let Newline | Skipped = ret {
             // Skip the newlines
             self.at += 1;
             ret = self.tokens[self.at].token.clone();
@@ -366,10 +366,10 @@ fn parse_base_expr(parser: &mut Parser) -> Option<ASTNode> {
             Some(ret)
         },
         // Operators in the wrong spot
-        EqualsEquals | NotEquals | Lt | Gt | LtEquals | GtEquals |
-        PlusEquals | MinusEquals | TimesEquals | DivEquals |
-        Plus | Minus | Times | Div | Modulo |
-        PlusPlus | MinusMinus | Not => {
+        EqualsEquals | NotEquals | Lt | Gt | LtEquals | GtEquals
+        | PlusEquals | MinusEquals | TimesEquals | DivEquals
+        | Plus | Minus | Times | Div | Modulo | And | Or | Xor
+        | PlusPlus | MinusMinus | Not => {
             error!(
                 parser,
                 "invalid use of operator, did you forgot something before/after?"

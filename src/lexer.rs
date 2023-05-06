@@ -1,23 +1,27 @@
 use logos::Logos;
 
-use crate::Arguments;
 use crate::common::{err, ErrType, Stream};
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(subpattern numbers = r"[0-9]((_?[0-9])*)?")]
 // Skips (whitespace/comments)
-#[logos(skip r"#[^\n]*")]
-#[logos(skip r"[ \t\f]+")]
+//#[logos(skip r"#[^\n]*")]
+//#[logos(skip r"[ \t\f]+")]
 // The token enum
 pub enum TokenType {
     // Special tokens
+    #[regex(r"(#[^\n]*)|([ \t\f]+)")]
+    Skipped,
+    Invalid,
     Eof,
     #[token("\n")]
     Newline,
     // Literals/data types
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_string())]
     Identifier(String),
-    #[regex("'[^']*'", |lex| lex.slice()[1..lex.slice().len()-1].to_string())]
+    #[regex(
+        "'[^']*'", |lex| lex.slice()[1..lex.slice().len()-1].to_string())
+    ]
     #[regex(
         "\"[^\"]*\"", |lex| lex.slice()[1..lex.slice().len()-1].to_string()
     )]
@@ -132,7 +136,8 @@ pub enum TokenType {
 #[derive(Clone)]
 pub struct Token {
     pub stream: Stream,
-    pub token: TokenType
+    pub token: TokenType,
+    pub str: String,
 }
 
 impl std::fmt::Debug for Token {
@@ -141,30 +146,38 @@ impl std::fmt::Debug for Token {
     }
 }
 
-pub fn lex(args: &Arguments) -> Vec<Token> {
-    let mut lex = TokenType::lexer(args.source.as_str());
+pub fn lex(
+    src: &String, name: String, print_err: bool, color: bool
+) -> Vec<Token> {
+    let mut lex = TokenType::lexer(src.as_str());
     let mut ret: Vec<Token> = vec![];
-    // Empty file
-    let lines = args.source.lines().collect::<Vec<&str>>();
+    // Lines
+    let lines = src.lines().collect::<Vec<&str>>();
     if lines.is_empty() {
         return vec![];
     }
     // Stream (for errors)
     let mut stream = Stream{
-        name: args.name.clone(), at: 0, line: 1,
+        name: name, at: 0, line: 1,
         str: lines[0].to_string(), size: 0,
     };
     let mut lastat = 0;
-
     let mut tok = lex.next();
     while tok != None {
         stream.size = lex.span().end - lex.span().start;
         stream.at = lex.span().start - lastat;
         if let Err(_) = tok.clone().unwrap() {
-            err(
-                &stream, "failure to lex", ErrType::Err,
-                args.extensions.contains(&"color".to_string())
-            );
+            if !print_err {
+                // The REPL lexes for highlighting, not syntax
+                ret.push(Token{
+                    token: TokenType::Invalid,
+                    stream: stream.clone(),
+                    str: lex.slice().to_string()
+                });
+                tok = lex.next();
+                continue;
+            }
+            err(&stream, "failure to lex", ErrType::Err, color);
             return vec![];
         } else {
             let token = tok.unwrap().unwrap();
@@ -177,13 +190,17 @@ pub fn lex(args: &Arguments) -> Vec<Token> {
                 stream.line += 1;
                 lastat = lex.span().start + 1;
             }
-            ret.push(Token{token, stream: stream.clone()});
+            ret.push(Token{
+                token, stream: stream.clone(),
+                str: lex.slice().to_string()
+            });
         }
         tok = lex.next();
     }
     ret.push(Token{
         token: TokenType::Eof,
-        stream: stream
+        stream: stream,
+        str: "".to_string(),
     });
     return ret;
 }

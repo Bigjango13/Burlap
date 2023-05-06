@@ -10,7 +10,7 @@ color brightyellow "\<(if|else|loop|in|while)\>"
 color magenta "\<(return)\>"
 
 # Comments
-color brightblue "(^|[[:blank:]])#.*"
+color brightblue "#.*"
 
 # Strings
 color brightyellow "'([^'])*'"
