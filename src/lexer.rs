@@ -4,16 +4,13 @@ use crate::common::{err, ErrType, Stream};
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(subpattern numbers = r"[0-9]((_?[0-9])*)?")]
-// Skips (whitespace/comments)
-//#[logos(skip r"#[^\n]*")]
-//#[logos(skip r"[ \t\f]+")]
 // The token enum
 pub enum TokenType {
     // Special tokens
-    #[regex(r"(#[^\n]*)|([ \t\f]+)")]
-    Skipped,
     Invalid,
     Eof,
+    #[regex(r"(#[^\n]*)|([ \t\f]+)")]
+    Skipped,
     #[token("\n")]
     Newline,
     // Literals/data types
@@ -158,15 +155,16 @@ pub fn lex(
     }
     // Stream (for errors)
     let mut stream = Stream{
-        name: name, at: 0, line: 1,
+        name, rat: 0, at: 0, line: 1,
         str: lines[0].to_string(), size: 0,
     };
     let mut lastat = 0;
     let mut tok = lex.next();
-    while tok != None {
+    while tok.is_some() {
         stream.size = lex.span().end - lex.span().start;
+        stream.rat = lex.span().start;
         stream.at = lex.span().start - lastat;
-        if let Err(_) = tok.clone().unwrap() {
+        if tok.clone().unwrap().is_err() {
             if !print_err {
                 // The REPL lexes for highlighting, not syntax
                 ret.push(Token{
@@ -190,6 +188,12 @@ pub fn lex(
                 stream.line += 1;
                 lastat = lex.span().start + 1;
             }
+            if let TokenType::Newline | TokenType::Skipped = token {
+                if print_err {
+                    tok = lex.next();
+                    continue;
+                }
+            }
             ret.push(Token{
                 token, stream: stream.clone(),
                 str: lex.slice().to_string()
@@ -199,7 +203,7 @@ pub fn lex(
     }
     ret.push(Token{
         token: TokenType::Eof,
-        stream: stream,
+        stream,
         str: "".to_string(),
     });
     return ret;

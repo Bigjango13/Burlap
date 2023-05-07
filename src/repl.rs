@@ -1,4 +1,5 @@
 use crate::vm::{run, Vm};
+#[cfg(feature = "fancyrepl")]
 use crate::lexer::{lex, TokenType};
 use crate::compiler::compile;
 use crate::common::{print_err, ErrType};
@@ -7,18 +8,22 @@ use crate::{Arguments, to_ast};
 #[cfg(feature = "fancyrepl")]
 use rustyline::validate::MatchingBracketValidator;
 #[cfg(feature = "fancyrepl")]
-use rustyline::{Completer, Helper, Hinter, Validator};
+use rustyline::{Helper, Hinter, Validator};
 use rustyline::error::ReadlineError;
+#[cfg(feature = "fancyrepl")]
 use rustyline::Editor;
+#[cfg(not(feature = "fancyrepl"))]
+use rustyline::DefaultEditor;
 use home::home_dir;
 
 #[cfg(feature = "fancyrepl")]
-#[derive(Completer, Helper, Hinter, Validator)]
+#[derive(Helper, Hinter, Validator)]
 struct FancyRepl {
     #[rustyline(Validator)]
     brackets: MatchingBracketValidator,
     color: bool,
     name: String,
+    symbols: Vec<String>
 }
 
 #[cfg(feature = "fancyrepl")]
@@ -26,10 +31,15 @@ impl rustyline::highlight::Highlighter for FancyRepl {
     fn highlight<'a>(
         &self, line: &'a str, _pos: usize
     ) -> std::borrow::Cow<'a, str> {
+        // Don't use color if there isn't any
+        if !self.color {
+            return std::borrow::Cow::Borrowed(line);
+        }
+        // Lex
         let tokens = lex(
             &line.to_string(), self.name.clone(), false, self.color
         );
-        if tokens.len() == 0 {
+        if tokens.is_empty() {
             return std::borrow::Cow::Borrowed(line);
         }
         let mut ret = String::new();
@@ -77,6 +87,7 @@ impl rustyline::highlight::Highlighter for FancyRepl {
                 | TokenType::Rbracket | TokenType::Semicolon
                 | TokenType::Comma | TokenType::Identifier(_) => None,
             };
+            // Add the color
             if let Some(c) = color {
                 ret += c;
                 ret += &token.str;
@@ -93,15 +104,81 @@ impl rustyline::highlight::Highlighter for FancyRepl {
     }
 }
 
+// Completion
+#[cfg(feature = "fancyrepl")]
+// Wrapper around String because it implements traits)
+struct Candidate {
+    str: String
+}
+#[cfg(feature = "fancyrepl")]
+impl rustyline::completion::Candidate for Candidate {
+    fn display(&self) -> &str {
+        self.str.as_str()
+    }
+
+    fn replacement(&self) -> &str {
+        self.str.as_str()
+    }
+}
+
+#[cfg(feature = "fancyrepl")]
+impl rustyline::completion::Completer for FancyRepl {
+    type Candidate = Candidate;
+    fn complete(
+        &self, line: &str, pos: usize, _ctx: &rustyline::Context<'_>
+    ) -> rustyline::Result<(usize, Vec<Candidate>)> {
+        let tokens = lex(
+            &line.to_string(), self.name.clone(), false, self.color
+        );
+        let mut target: Option<String> = None;
+        let mut start = 0;
+        for token in tokens {
+            if token.stream.rat + token.str.len() < pos {
+                // Keep going
+                continue;
+            } else if token.stream.rat >= pos {
+                // Went too far
+                break;
+            }
+            // At the correct token
+            start = token.stream.rat;
+            if let TokenType::Identifier(mut str) = token.token {
+                // Truncate so 'pr_int' is 'pr' and 'print_' is 'print', etc..
+                str.truncate(pos - token.stream.rat);
+                target = Some(str);
+            }
+            break;
+        }
+        let mut matched: Vec<Candidate> = vec![];
+        let Some(target) = target else {
+            // No match
+            return Ok((0, matched));
+        };
+        // Check symbols for matches
+        for i in &self.symbols {
+            if i.starts_with(&target) {
+                matched.push(Candidate{str: i.clone()});
+            }
+        }
+        return Ok((start, matched));
+    }
+}
+
 pub fn repl(args: &mut Arguments) {
     // Print welcome msg
     println!("Burlap v{}", env!("CARGO_PKG_VERSION"));
-    let mut rl = Editor::new().unwrap();
+    let mut vm = Vm::new(args.clone());
     #[cfg(feature = "fancyrepl")]
+    let mut rl = Editor::new().unwrap();
+    #[cfg(not(feature = "fancyrepl"))]
+    let mut rl = DefaultEditor::new().unwrap();
+    #[cfg(feature = "fancyrepl")]
+    // Helpers
     rl.set_helper(Some(FancyRepl{
         brackets: MatchingBracketValidator::new(),
         name: args.name.clone(),
         color: args.extensions.contains(&"color".to_string()),
+        symbols: vm.get_symbols(true)
     }));
     // Try to get the home dir
     let hist_file = match home_dir() {
@@ -110,7 +187,7 @@ pub fn repl(args: &mut Arguments) {
         None => "".to_string(),
     };
     // Load history
-    if hist_file != "" && rl.load_history(&hist_file).is_err() {
+    if !hist_file.is_empty() && rl.load_history(&hist_file).is_err() {
         let color = args.extensions.contains(&"color".to_string());
         print_err("failed to open history file", ErrType::Warn, color);
         print_err(
@@ -119,7 +196,6 @@ pub fn repl(args: &mut Arguments) {
         );
     };
     // REPL loop
-    let mut vm = Vm::new(args.clone());
     loop {
         // Get input
         let readline = rl.readline(">> ");
@@ -147,10 +223,15 @@ pub fn repl(args: &mut Arguments) {
                 vm.at += 1;
             }
             run(&mut vm);
+            // Update symbols
+            #[cfg(feature = "fancyrepl")]
+            {
+                rl.helper_mut().unwrap().symbols = vm.get_symbols(true);
+            }
         }
     }
     // Save history
-    if hist_file != "" && rl.save_history(&hist_file).is_err() {
+    if !hist_file.is_empty() && rl.save_history(&hist_file).is_err() {
         print_err(
             "failed to save history", ErrType::Warn,
             args.extensions.contains(&"color".to_string())

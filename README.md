@@ -39,10 +39,14 @@ Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) progr
     - [x] Write **(New)**
     - [x] Close **(New)**
     - [x] Flush **(New)**
-- [x] REPL
 - [x] Lexing errors
 - [x] Parsing errors
 - [x] Runtime errors
+- [x] REPL
+  - [x] Tab-completion
+  - [x] Colors
+  - [x] History
+  - [x] Multiline editing
 - [x] Extra features
   - [x] C interop for all number types
   - [x] C interop for strings
@@ -68,13 +72,13 @@ To show help, run `burlap -h` or `burlap --help`.
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
-- 1.1.3: Make errors less noisy, add multiline editing and highlighting to the REPL
-- 1.1.2: Added C iterop, `__burlap_throw`, and fixed global variables for imports.
+- 1.1.3: Make errors less noisy, add multiline editing, highlighting, and tab-completion to the REPL
+- 1.1.2: Added C iterop, `__burlap_throw`, and fixed global variables for imports
 - 1.1.1: Added file IO
-- 1.1.0: Rewrote tree walking interpeter to a stack based VM
-- 1.0.0: Rewrote C++ to Rust. Lists, while loops, input, imports, and more have been added.
+- 1.1.0: Rewrote tree walking interpreter to a stack based VM
+- 1.0.0: Rewrote C++ to Rust. Lists, while loops, input, imports, and more have been added
 - 0.0.1: C++ version works for Sack v0.0.5
-- Beta: I tried to make a Sack to Python transpiler using Python regexes
+- Beta: I tried to make a Sack to Python transpiler in Python using regexes
 
 ## Extensions
 

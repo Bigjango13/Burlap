@@ -9,6 +9,8 @@ pub struct Stream {
     pub line: usize,
     // Char pos in line
     pub at: usize,
+    // Real AT, the position in the source
+    pub rat: usize,
     // Size of token
     pub size: usize,
 }
@@ -50,7 +52,7 @@ pub fn err(stream: &Stream, msg: &str, errtype: ErrType, color: bool) {
     let color_code = print_err(msg, errtype, color);
     // Print the line ("    1 | print("Hello World!");")
     let line = format!("    {} | ", stream.line);
-    println!("{}{}", line, stream.str.replace("\t", "    "));
+    println!("{}{}", line, stream.str.replace('\t', "    "));
     // Print arrow ("      |   ^")
     // Adjust for tabs
     let at = stream.str[0..stream.at].matches('\t').count()*3 + stream.at;
@@ -59,8 +61,8 @@ pub fn err(stream: &Stream, msg: &str, errtype: ErrType, color: bool) {
         " ".repeat(line.len() - 2), " ".repeat(at)
     );
     if color {
-        println!("{}{}\x1b[0m", color_code, "^".repeat(stream.size.into()));
+        println!("{}{}\x1b[0m", color_code, "^".repeat(stream.size));
     } else {
-        println!("{}", "^".repeat(stream.size.into()));
+        println!("{}", "^".repeat(stream.size));
     }
 }

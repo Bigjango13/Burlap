@@ -76,7 +76,7 @@ Try to load the library `libname` (raises an error on failure) and returns a (`_
 
 ### `__burlap_load_functi(libhandle, name)`
 
-Trys to find the symbol called `name` in the library with handle `libhandle` (raises an error on failure). Internally uses `dlsym` to find symbols.
+Tries to find the symbol called `name` in the library with handle `libhandle` (raises an error on failure). Internally uses `dlsym` to find symbols.
 
 ### `__burlap_ffi_call(func_ptr, args, ret_type)`
 

@@ -1,5 +1,5 @@
 use std::ffi::{CString, CStr};
-use libc;
+
 
 use libffi::middle::{Arg, Cif, CodePtr, Type};
 

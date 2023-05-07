@@ -200,6 +200,33 @@ impl Vm {
         }
     }
 
+    // Get a vec of all symbol names
+    #[cfg(feature = "fancyrepl")]
+    pub fn get_symbols(&self, add_keywords: bool) -> Vec<String> {
+        // Globals
+        let mut ret: Vec<String>
+            = self.globals.keys().cloned().collect();
+        // Functies
+        ret.extend(
+            self.functies.keys().cloned().collect::<Vec<String>>()
+        );
+        // Functions
+        ret.extend(
+            self.program.functis.keys().cloned()
+            .collect::<Vec<String>>()
+        );
+        // Locals
+        ret.extend(self.var_names.clone());
+        // Keywords
+        if add_keywords {
+            ret.extend(vec![
+                "true", "false", "none", "functi", "let", "return", "in",
+                "if", "else", "loop", "while", "import",
+            ].iter().map(|i| i.to_string()).collect::<Vec<String>>());
+        }
+        return ret;
+    }
+
     // Getting vars
     fn get_local(&self, name: &String) -> Result<Value, String> {
         // Gets a local var
@@ -591,10 +618,10 @@ fn sk_read(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
         return Err(format!("cannot read from {}", args[0].get_type()));
     };
     if info.borrow().closed {
-        return Err(format!("cannot read from closed file"));
+        return Err("cannot read from closed file".to_string());
     }
     if mode.abs() != 1 {
-        return Err(format!("can only read from 'r'/'rb'"));
+        return Err("can only read from 'r'/'rb'".to_string());
     }
     // Read the file
     let mut ret: Vec<u8> = vec![];
@@ -605,7 +632,7 @@ fn sk_read(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
     if mode == 1 {
         // Return a string
         let Ok(string) = String::from_utf8(ret) else {
-            return Err(format!("invalid string"));
+            return Err("invalid string".to_string());
         };
         return Ok(Value::Str(string));
     }
@@ -621,10 +648,10 @@ fn sk_write(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         return Err(format!("cannot write to {}", args[0].get_type()));
     };
     if info.borrow().closed {
-        return Err(format!("cannot write to closed file"));
+        return Err("cannot write to closed file".to_string());
     }
     if mode.abs() != 2 && mode != 0 {
-        return Err(format!("can only write to 'w'/'wb'/'a'"));
+        return Err("can only write to 'w'/'wb'/'a'".to_string());
     }
     // Now check args
     let Value::Str(ref str) = args[1] else {
@@ -771,7 +798,7 @@ fn set_key(
         if key.get_type() == "Number" && as_int >= 0 {
             let as_uint = as_int as usize;
             let entry = list.get_mut(as_uint)
-                .and_then(|s| Some(*s = val.clone()));
+                .map(|s| *s = val.clone());
             if entry.is_none() {
                 if as_uint != list.len() + 1 {
                     list.push(val);

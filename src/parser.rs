@@ -62,25 +62,12 @@ struct Parser {
     at: usize,
     in_func: bool,
     has_err: bool,
-    // Compressed line numbers
-    lines: Vec<u32>,
 }
 
 impl Parser {
     // Current token
     fn current(&mut self) -> TokenType {
-        let mut ret = self.tokens[self.at].token.clone();
-        while let Newline | Skipped = ret {
-            // Skip the newlines
-            self.at += 1;
-            ret = self.tokens[self.at].token.clone();
-            // Push the line
-            self.lines.push(
-                self.lines.len() as u32 - self.lines.last().unwrap_or(&0)
-            );
-        }
-        // Return
-        ret
+        self.tokens[self.at].token.clone()
     }
 
     // Advance and return token
@@ -313,7 +300,7 @@ fn parse_list(parser: &mut Parser) -> Option<ASTNode> {
     while parser.current() != Rbracket {
         let (name, val) = parse_list_item(parser, at);
         // Invalid element
-        if val == Option::None {
+        if val.is_none() {
             // Parse until the end of the list so there aren't trailing errors
             while parser.next() != Semicolon {}
             return Option::None;
@@ -477,7 +464,7 @@ fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
     if err {
         return Option::None;
     }
-    if body.len() == 0 {
+    if body.is_empty() {
         // {} is a nop
         return Some(ASTNode::Nop);
     }
@@ -528,7 +515,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     let mut iter = parse_expr(parser)?;
     // Range optimization
     if let ASTNode::CallExpr(name, args) = iter.clone() {
-        if name == "range".to_string() {
+        if name == *"range" {
             if args.len() != 2 {
                 // Arg check
                 error!(
@@ -735,7 +722,7 @@ pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Vec<ASTNode> {
     let mut parser = Parser{
         tokens, extensions: args.extensions.clone(),
         at: 0, has_err: false, in_func: false,
-        ast: vec![], lines: vec![]
+        ast: vec![]
     };
     // Parse
     while parser.current() != Eof {

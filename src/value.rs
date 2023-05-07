@@ -172,7 +172,7 @@ impl Value {
     // Truthy conversion
     pub fn is_truthy(&self) -> bool {
         return match self {
-            Value::Str(s) => s != "",
+            Value::Str(s) => !s.is_empty(),
             Value::Int(i) => *i != 0,
             Value::Float(f) => *f != 0.0,
             Value::Bool(b) => *b,
@@ -206,7 +206,7 @@ impl Value {
             return Some(l.clone());
         }
         if let Value::List(l) = self {
-            return Some(l.values().map(|i|i.clone()).collect());
+            return Some(l.values().cloned().collect());
         }
         None
     }
@@ -221,7 +221,7 @@ impl Value {
         let Value::List(list) = self else {
             return Err(format!("Cannot iterate over {}", self.get_type()));
         };
-        return Ok(Value::Iter(list.values().map(|i| i.clone()).collect(), 0));
+        return Ok(Value::Iter(list.values().cloned().collect(), 0));
     }
     pub fn iter_next(&mut self) -> Result<Option<Value>, String> {
         // Must be an iter or rangetype

@@ -110,15 +110,15 @@ fn compile_set(program: &mut Program, var: &ASTNode) -> bool {
         program.push(Value::Str(s));
         program.ops.push(Opcode::SV as u8);
     } else if let IndexExpr(list, index) = var.clone() {
-        if !compile_expr(program, &*list) {
+        if !compile_expr(program, &list) {
             return false;
         }
-        if !compile_expr(program, &*index) {
+        if !compile_expr(program, &index) {
             return false;
         }
         program.ops.push(Opcode::SKY as u8);
         // Indexes are attached to something, make sure it reattaches
-        if !compile_set(program, &*list) {
+        if !compile_set(program, &list) {
             return false;
         }
     }
@@ -513,7 +513,7 @@ pub fn compile(
     }
     // Compile
     for node in &ast[..ast.len()-1] {
-        if !compile_stmt(program, args, &node, false) {
+        if !compile_stmt(program, args, node, false) {
             return false;
         }
     }

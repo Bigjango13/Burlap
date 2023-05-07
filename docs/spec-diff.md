@@ -10,4 +10,4 @@ This is a list of known differences between Burlap and the current Sack spec.
 - Burlap does not buffer file IO, so `flush` simply returns none.
 - Burlap lets functions access variables declared after them.
 - Burlap allows comments at the end of files.
-- Burlap converts files to strings diffrently.
+- Burlap converts files to strings differently.
