@@ -146,6 +146,12 @@ impl rustyline::completion::Completer for FancyRepl {
                 // Truncate so 'pr_int' is 'pr' and 'print_' is 'print', etc..
                 str.truncate(pos - token.stream.rat);
                 target = Some(str);
+            } else {
+                // Tab was pressed not on an identifier, so insert 4 spaces
+                return Ok((
+                    start + 1,
+                    vec![Candidate{str: "    ".to_string()}]
+                ));
             }
             break;
         }
