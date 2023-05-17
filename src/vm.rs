@@ -515,9 +515,10 @@ fn sk_len(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     // Check that the type is a list
     if let Value::FastList(l) = &args[0] {
         return Ok(Value::Int(l.len() as i32));
-    }
-    if let Value::List(l) = &args[0] {
+    } else if let Value::List(l) = &args[0] {
         return Ok(Value::Int(l.len() as i32));
+    } else if let Value::Str(s) = &args[0] {
+        return Ok(Value::Int(s.chars().count() as i32));
     }
     return Err("len() argument 1 must be a list".to_string());
 }
@@ -912,7 +913,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             let index = vm.pop();
             let list = vm.pop();
             match list.index(index.clone()) {
-                 Some(x) => vm.push(x.clone()),
+                 Some(x) => vm.push(x),
                  _ => return Err(format!(
                     "failed to index {} with {}",
                     list.to_string(), index.to_string()

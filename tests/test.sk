@@ -146,10 +146,13 @@ let str = "Hello";
 test("let str", str, "Hello");
 str += " World";
 test("str+", str, "Hello World");
-str = "E";
-test("str=", str, "E");
+str = "E?";
+test("str=", str, "E?");
 str *= 3;
-test("str*", str, "EEE");
+test("str*", str, "E?E?E?");
+test("str[0]", str[1], "?");
+test("str len", len(str), 6);
+
 
 # Iter loop tests
 print("*** Iter Loop Tests ***");

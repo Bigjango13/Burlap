@@ -258,13 +258,23 @@ impl Value {
         }
     }
     // Indexing
-    pub fn index(&self, index: Value) -> Option<&Value> {
-        if let Value::FastList(list) = self {
+    pub fn index(&self, index: Value) -> Option<Value> {
+        if let Value::Str(str) = self {
+            return if let Value::Int(i) = index {
+                if i >= 0 {
+                    Some(Value::Str(str.chars().nth(i as usize)?.to_string()))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else if let Value::FastList(list) = self {
             // String indexing doesn't work
             return if let Value::Str(_) = index {
                 None
             } else {
-                list.get(index.to_int() as usize)
+                list.get(index.to_int() as usize).cloned()
             }
         }
         let Value::List(l) = self else {
@@ -273,12 +283,12 @@ impl Value {
         };
         // String indexing (keys)
         if let Value::Str(s) = index {
-          return l.get(&s);
+          return l.get(&s).cloned();
         }
         // Number indexing
         return match l.get_index(index.to_int() as usize) {
             // Remove the key
-            Some((_, v)) => Some(v),
+            Some((_, v)) => Some(v.clone()),
             None => None
         };
     }
