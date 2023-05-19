@@ -512,15 +512,21 @@ fn sk_len(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         // Invalid args
         vm.bad_args(&"len".to_string(), args.len(), 1)?;
     }
-    // Check that the type is a list
-    if let Value::FastList(l) = &args[0] {
-        return Ok(Value::Int(l.len() as i32));
+    // Get the len
+    let real_len: i32 = if let Value::FastList(l) = &args[0] {
+        l.len()
     } else if let Value::List(l) = &args[0] {
-        return Ok(Value::Int(l.len() as i32));
+        l.len()
     } else if let Value::Str(s) = &args[0] {
-        return Ok(Value::Int(s.chars().count() as i32));
+        s.chars().count()
+    } else {
+        return Err("len() argument 1 must be a list".to_string());
+    } as i32;
+    // Return
+    if real_len == 0 {
+        return Ok(Value::None);
     }
-    return Err("len() argument 1 must be a list".to_string());
+    return Ok(Value::Int(real_len - 1));
 }
 
 // Range

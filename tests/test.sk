@@ -151,7 +151,7 @@ test("str=", str, "E?");
 str *= 3;
 test("str*", str, "E?E?E?");
 test("str[0]", str[1], "?");
-test("str len", len(str), 6);
+test("str len", len(str), 5);
 
 
 # Iter loop tests
@@ -208,7 +208,7 @@ print("*** List Tests ***");
 let elm = 4;
 let list = [1, "E>h", elm, x: 42, elm * 2];
 test("list -> str", string(list), '[1, E>h, elm: 4, x: 42, 8]');
-test("len()", len(list), 5);
+test("len()", len(list), 4);
 test("number indexing", list[2], 4);
 test("key indexing", list['elm'], 4);
 test("var indexing", list[elm], 8);
@@ -219,8 +219,8 @@ list[0] = 47;
 test("mutate existing int key", list[0], 47);
 list["x"] = "Foourty Seeeven!";
 test("mutate existing str key", list["x"], "Foourty Seeeven!");
-list[len(list)] = "append";
-test("mutate non-existing int key", list[len(list)-1], "append");
+list[len(list)+1] = "append";
+test("mutate non-existing int key", list[len(list)], "append");
 list["old"] = "New And Groovy!";
 test("mutate non-existing str key", list["old"], "New And Groovy!");
 
@@ -269,7 +269,7 @@ close(file);
 file = open(filename, "rb");
 let contents = read(file);
 test("rb/a test", contents[4], 0b00100000);
-test("rb/a test len", len(contents), 12);
+test("rb/a test len", len(contents), 11);
 close(file);
 
 # End of tests

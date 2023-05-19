@@ -1,5 +1,5 @@
 # Burlap
-> A powerful and user-friendly sack interpreter, v1.1.3
+> A powerful and user-friendly sack interpreter, v1.1.4
 
 ## What is Burlap?
 Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) programming language. It aims for a high level of spec compliance, any valid sack program should be able to be run using burlap (it does have a few minor variations from the spec, known differences are listed [here](docs/spec-diff.md))
@@ -72,6 +72,7 @@ To show help, run `burlap -h` or `burlap --help`.
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
+- 1.1.4: Make len zero indexed, add string indexing
 - 1.1.3: Make errors less noisy, add multiline editing, highlighting, and tab-completion to the REPL
 - 1.1.2: Added C iterop, `__burlap_throw`, and fixed global variables for imports
 - 1.1.1: Added file IO
