@@ -45,9 +45,9 @@ impl Program {
         } else if index > u8::MAX.into() {
             // The len is too big for one byte, so push 3
             self.ops.push(Opcode::PUSH3 as u8);
-            self.ops.push((index & 255) as u8);
-            self.ops.push(((index >> 8) & 255) as u8);
             self.ops.push(((index >> 16) & 255) as u8);
+            self.ops.push(((index >> 8) & 255) as u8);
+            self.ops.push((index & 255) as u8);
         } else {
             self.ops.push(Opcode::PUSH as u8);
             self.ops.push(index as u8);

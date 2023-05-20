@@ -30,16 +30,16 @@ Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) progr
   - [x] Loops
     - [x] Range loops
     - [x] While loops **(New)**
-  - [ ] Casting
+  - [x] Casting
   - [x] Import
   - [x] Scope
   - [x] File IO **(New)**
     - [x] Open **(New)**
     - [x] Read **(New)**
-    - [ ] Write **(New)**
+    - [x] Write **(New)**
     - [x] Close **(New)**
     - [x] Flush **(New)**
-    - [ ] Seek **(New)**
+    - [x] Seek **(New)**
 - [x] Lexing errors
 - [x] Parsing errors
 - [x] Runtime errors
@@ -73,11 +73,15 @@ To show help, run `burlap -h` or `burlap --help`.
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
-- 1.1.4: W.I.P.
+- 1.1.4: Byte and file update
     - Add string indexing
     - Add string iterating
-    - Make `len()` zero indexed
+    - Add `seek(file, pos)`
+    - Add `byte(x)` function
+    - Make `write` not truncate
+    - Make `len` zero indexed
     - Allow string casts to fail
+    - Fixed compiler bug with the `PUSH3` instruction
 - 1.1.3: REPL Update
     - Make block errors less noisy
     - Add multiline editing, highlighting, and tab-completion to the REPL

@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::fs::OpenOptions;
-use std::io::{Write, Read};
+use std::io::{Write, Read, Seek, SeekFrom};
 use std::io;
 
 use crate::Arguments;
@@ -159,11 +159,13 @@ impl Vm {
         functies.insert("close".to_string(), sk_close as Functie);
         functies.insert("read".to_string(), sk_read as Functie);
         functies.insert("write".to_string(), sk_write as Functie);
+        functies.insert("seek".to_string(), sk_seek as Functie);
         functies.insert("flush".to_string(), sk_flush as Functie);
         // Casts
         functies.insert("int".to_string(), sk_int as Functie);
         functies.insert("float".to_string(), sk_float as Functie);
         functies.insert("string".to_string(), sk_string as Functie);
+        functies.insert("byte".to_string(), sk_byte as Functie);
         // Non-togglable internals
         functies.insert("__burlap_range".to_string(), sk_fastrange as Functie);
         // Burlap internal functies
@@ -646,11 +648,44 @@ fn sk_read(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
     return Ok(Value::FastList(ret.iter().map(|i| Value::Byte(*i)).collect()));
 }
 
+fn sk_seek(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 2 {
+        // Invalid args
+        vm.bad_args(&"seek".to_string(), args.len(), 2)?;
+    }
+    // Check and get file
+    let Value::File(_, mode, ref mut info) = args[0].clone() else {
+        return Err(format!("cannot seek on {}", args[0].get_type()));
+    };
+    if info.borrow().closed {
+        return Err("cannot seek on closed file".to_string());
+    }
+    if mode.abs() != 2 && mode != 0 {
+        return Err("can only seek on 'w'/'wb'".to_string());
+    }
+    // Get position
+    let pos = args[1].to_int();
+    if pos < 0 {
+        return Err("position cannot be negative".to_string());
+    }
+    let max = info.borrow_mut().file.as_ref().unwrap()
+        .seek(SeekFrom::End(0)).unwrap();
+    let pos: u64 = pos.try_into().unwrap();
+    if pos > max {
+        return Err("cannot seek to position larger than file".to_string());
+    }
+    // Seek
+    info.borrow_mut().file.as_ref().unwrap()
+        .seek(SeekFrom::Start(pos)).unwrap();
+    Ok(Value::None)
+}
+
 fn sk_write(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
         // Invalid args
         vm.bad_args(&"write".to_string(), args.len(), 2)?;
     }
+    // Now check args
     let Value::File(_, mode, ref mut info) = args[0].clone() else {
         return Err(format!("cannot write to {}", args[0].get_type()));
     };
@@ -660,7 +695,6 @@ fn sk_write(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if mode.abs() != 2 && mode != 0 {
         return Err("can only write to 'w'/'wb'/'a'".to_string());
     }
-    // Now check args
     let Value::Str(ref str) = args[1] else {
         return Err(format!("expected String got {}", args[1].get_type()));
     };
@@ -697,7 +731,40 @@ fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         // Invalid args
         vm.bad_args(&"string".to_string(), args.len(), 1)?;
     }
-    return Ok(Value::Str(args[0].to_string()?));
+    // Bytes are a special case
+    return Ok(Value::Str(if let Value::Byte(byte) = args[0] {
+        (byte as char).to_string()
+    } else {
+        args[0].to_string()?
+    }));
+}
+
+
+// Byte
+fn sk_byte(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 1 {
+        // Invalid args
+        vm.bad_args(&"byte".to_string(), args.len(), 1)?;
+    }
+    Ok(match &args[0] {
+        // Strings
+        Value::Str(s) if s.chars().count() == 1 =>
+            Value::Byte(s.chars().nth(0).unwrap() as u8),
+        Value::Str(s) if s.chars().count() > 1 => {
+            let mut ret: Vec<Value> = vec![];
+            for chr in s.chars() {
+                ret.push(Value::Byte(chr as u8));
+            }
+            Value::FastList(ret)
+        }
+        Value::Str(_) =>
+            return Err("cannot convert empty strint to bytes".to_string()),
+        // Int and identity
+        Value::Int(i) => Value::Byte((*i % 256).try_into().unwrap()),
+        Value::Byte(b) => Value::Byte(*b),
+        // Anything else
+        e => return Err(format!("cannot convert {} to byte", e.get_type())),
+    })
 }
 
 // Pointer
