@@ -7,7 +7,7 @@ Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) progr
 ## Features
 - [x] Complete sack v0.0.5 support
 - [x] Complete sack v1.0.0 support
-  - [x] Variables
+  - [x] Types
     - [x] Strings
     - [x] Number
     - [x] Decimal
@@ -15,7 +15,7 @@ Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) progr
     - [x] None
     - [x] Lists **(New)**
     - [x] Byte **(New)**
-    - [x] Type function **(New)**
+    - [x] `type` function **(New)**
   - [x] Operators
     - [x] Logical operators (`&&`, `||`, `^^`, `!`)
     - [x] Comparison operators (`>`, `<`, `>=`, `<=`, `==`, `!=`)
@@ -30,15 +30,16 @@ Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) progr
   - [x] Loops
     - [x] Range loops
     - [x] While loops **(New)**
-  - [x] Casting
+  - [ ] Casting
   - [x] Import
   - [x] Scope
   - [x] File IO **(New)**
     - [x] Open **(New)**
     - [x] Read **(New)**
-    - [x] Write **(New)**
+    - [ ] Write **(New)**
     - [x] Close **(New)**
     - [x] Flush **(New)**
+    - [ ] Seek **(New)**
 - [x] Lexing errors
 - [x] Parsing errors
 - [x] Runtime errors
@@ -72,12 +73,25 @@ To show help, run `burlap -h` or `burlap --help`.
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
-- 1.1.4: Make len zero indexed, add string indexing
-- 1.1.3: Make errors less noisy, add multiline editing, highlighting, and tab-completion to the REPL
-- 1.1.2: Added C iterop, `__burlap_throw`, and fixed global variables for imports
-- 1.1.1: Added file IO
-- 1.1.0: Rewrote tree walking interpreter to a stack based VM
-- 1.0.0: Rewrote C++ to Rust. Lists, while loops, input, imports, and more have been added
+- 1.1.4: W.I.P.
+    - Add string indexing
+    - Add string iterating
+    - Make `len()` zero indexed
+    - Allow string casts to fail
+- 1.1.3: REPL Update
+    - Make block errors less noisy
+    - Add multiline editing, highlighting, and tab-completion to the REPL
+- 1.1.2: C update
+    - Added C iterop
+    - `__burlap_throw`
+    - Fixed global variables for imports
+- 1.1.1: File IO
+    - Read, write, open, and flush
+- 1.1.0: VM update
+    - Rewrite tree walking interpreter into a stack based VM
+- 1.0.0: Rust Evangelism Strike Force update
+    - Deside to RIIR
+    - Lists, while loops, input, imports, and more!
 - 0.0.1: C++ version works for Sack v0.0.5
 - Beta: I tried to make a Sack to Python transpiler in Python using regexes
 

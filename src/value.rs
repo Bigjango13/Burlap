@@ -106,8 +106,8 @@ impl Value {
         };
     }
     // String conversion
-    pub fn to_string(&self) -> String {
-        return match self {
+    pub fn to_string(&self) -> Result<String, String> {
+        Ok(match self {
             Value::Str(s) => s.clone(),
             Value::Int(i) => format!("{}", i),
             Value::Float(f) => format!("{:?}", f),
@@ -128,7 +128,7 @@ impl Value {
                         ret += val.0;
                         ret += ": ";
                     }
-                    ret += &val.1.to_string();
+                    ret += &val.1.to_string()?;
                     ret += ", ";
                 }
                 // Remove trailing ", "
@@ -138,23 +138,11 @@ impl Value {
                 ret += "]";
                 ret
             }
-            Value::None => "none".to_string(),
-            Value::File(filename, mode, _) => {
-                // TODO: Fix spec noncompliance
-                "File(".to_string() + filename + ", " + match mode {
-                    2 => "Write",
-                    1 => "Read",
-                    0 => "Append",
-                    -1 => "ReadBinary",
-                    -2 => "WriteBinary",
-                    _ => "InvalidMode",
-                } + ")"
-            },
             Value::FastList(l) => {
                 let mut ret = "[".to_string();
                 // Add each element
                 for val in l {
-                    ret += &(val.to_string() + ", ");
+                    ret += &(val.to_string()? + ", ");
                 }
                 // Remove trailing ", "
                 if ret.len() != 1 {
@@ -163,11 +151,13 @@ impl Value {
                 ret += "]";
                 ret
             }
-            // Internal types
-            Value::Ptr(ptr) => format!("__burlap_ptr(0x{:X})", ptr),
-            Value::Iter(..) => "__burlap_iter".to_string(),
-            Value::RangeType(..) => "__burlap_rangetype".to_string(),
-        };
+            // TODO: fix spec noncompliance
+            Value::None => "none".to_string(),
+            // Anything else
+            _ => return Err(
+                format!("Failed to convert {} to string", self.get_type())
+            ),
+        })
     }
     // Truthy conversion
     pub fn is_truthy(&self) -> bool {
@@ -217,6 +207,11 @@ impl Value {
         }
         if let Value::FastList(list) = self {
             return Ok(Value::Iter(list.clone(), 0));
+        }
+        if let Value::Str(str) = self {
+            return Ok(Value::Iter(
+                str.lines().map(|s| Value::Str(s.to_string())).collect(), 0
+            ));
         }
         let Value::List(list) = self else {
             return Err(format!("Cannot iterate over {}", self.get_type()));
@@ -386,12 +381,12 @@ impl Value {
 // Add
 impl_op_ex!(+ |left: Value, right: Value| -> Result<Value, String> {
     if let Value::Str(s) = right {
-        return Ok(Value::Str(left.to_string() + &s));
+        return Ok(Value::Str(left.to_string()? + &s));
     }
     return match left {
         // str + anything is a string
         Value::Str(s) => {
-            Ok(Value::Str(s + &right.to_string()))
+            Ok(Value::Str(s + &right.to_string()?))
         },
         Value::Bool(b) => {
             if let Value::Bool(b_right) = right {

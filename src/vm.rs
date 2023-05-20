@@ -467,7 +467,7 @@ fn sk_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if vm.args.extensions.contains(&"va-print".to_string()) {
         // VA print extension
         for i in args {
-            print!("{} ", i.to_string());
+            print!("{} ", i.to_string()?);
         }
         println!();
     } else if args.len() != 1 {
@@ -475,7 +475,7 @@ fn sk_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         vm.bad_args(&"print".to_string(), args.len(), 1)?;
     } else {
         // Normal printing
-        println!("{}", args[0].to_string());
+        println!("{}", args[0].to_string()?);
     }
     return Ok(Value::None);
 }
@@ -487,7 +487,7 @@ fn sk_input(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         vm.bad_args(&"input".to_string(), args.len(), 1)?;
     }
     // Print the prompt
-    print!("{}", args[0].to_string());
+    print!("{}", args[0].to_string()?);
     let _ = std::io::stdout().flush();
     // Get input
     let mut buffer = String::new();
@@ -566,7 +566,7 @@ fn sk_open(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     let (infofile, mode) = match mode.as_str() {
         // Write
         "w" | "wb" => {(
-            OpenOptions::new().write(true).create(true).truncate(true)
+            OpenOptions::new().write(true).create(true).truncate(false)
                 .open(file.clone()),
             if mode == "w" {2} else {-2}
         )},
@@ -665,7 +665,8 @@ fn sk_write(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         return Err(format!("expected String got {}", args[1].get_type()));
     };
     if let Err(err) =
-        write!(info.borrow_mut().file.as_ref().unwrap(), "{}", str) {
+        write!(info.borrow_mut().file.as_ref().unwrap(), "{}", str)
+    {
         return Err(err.to_string());
     }
     return Ok(Value::None);
@@ -696,7 +697,7 @@ fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         // Invalid args
         vm.bad_args(&"string".to_string(), args.len(), 1)?;
     }
-    return Ok(Value::Str(args[0].to_string()));
+    return Ok(Value::Str(args[0].to_string()?));
 }
 
 // Pointer
@@ -737,14 +738,14 @@ fn sk_throw(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         vm.bad_args(&"__burlap_throw".to_string(), args.len(), 1)?;
     }
-    Err(args[0].to_string())
+    Err(args[0].to_string()?)
 }
 
 fn sk_libload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         vm.bad_args(&"__burlap_load_library".to_string(), args.len(), 1)?;
     }
-    return Ok(Value::Ptr(load_library(args[0].to_string())?))
+    return Ok(Value::Ptr(load_library(args[0].to_string()?)?))
 }
 
 fn sk_functiload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
@@ -755,7 +756,7 @@ fn sk_functiload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     let Value::Ptr(handle) = args[0] else {
         return Err("First argument must be library handle".to_string());
     };
-    return Ok(Value::Ptr(load_functi(handle, args[1].to_string())?));
+    return Ok(Value::Ptr(load_functi(handle, args[1].to_string()?)?));
 }
 
 fn sk_call_c(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
@@ -797,7 +798,7 @@ fn set_key(
         let Value::FastList(mut list) = vlist else {
             return Err(format!(
                 "failed to index {} with {}",
-                vlist.to_string(), key.to_string()
+                vlist.to_string()?, key.to_string()?
             ));
         };
         // Push
@@ -832,7 +833,7 @@ fn set_key(
     };
     // Insert
     if key.get_type() == "Number" {
-        let entry = list.entry(key.to_string())
+        let entry = list.entry(key.to_string()?)
             .and_modify(|s| *s = val.clone());
         // Try to insert a new key
         if key.to_int() != entry.index().try_into().unwrap_or(-1) {
@@ -844,7 +845,7 @@ fn set_key(
     } else {
         // Add or create
         let key = key.to_string();
-        list.entry(key).and_modify(|s| *s = val.clone()).or_insert(val);
+        list.entry(key?).and_modify(|s| *s = val.clone()).or_insert(val);
     }
     Ok(Value::List(list))
 }
@@ -922,7 +923,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                  Some(x) => vm.push(x),
                  _ => return Err(format!(
                     "failed to index {} with {}",
-                    list.to_string(), index.to_string()
+                    list.to_string()?, index.to_string()?
                 )),
             }
         },
@@ -1157,7 +1158,9 @@ pub fn run(vm: &mut Vm) -> bool {
             if vm.args.is_repl && !vm.stack.is_empty() {
                 // Print the result
                 if vm.stack[0] != Value::None {
-                    println!("{}", vm.stack[0].to_string());
+                    print!("{}", vm.stack[0].to_string()
+                        .and_then(|x| Ok(x + "\n")).unwrap_or("".to_string())
+                    );
                 }
             }
             break;
