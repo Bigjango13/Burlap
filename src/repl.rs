@@ -38,7 +38,7 @@ impl rustyline::highlight::Highlighter for FancyRepl {
         // Lex
         let tokens = lex(
             &line.to_string(), self.name.clone(), false, self.color
-        );
+        ).unwrap_or(vec![]);
         if tokens.is_empty() {
             return std::borrow::Cow::Borrowed(line);
         }
@@ -129,7 +129,7 @@ impl rustyline::completion::Completer for FancyRepl {
     ) -> rustyline::Result<(usize, Vec<Candidate>)> {
         let tokens = lex(
             &line.to_string(), self.name.clone(), false, self.color
-        );
+        ).unwrap_or(vec![]);
         let mut target: Option<String> = None;
         let mut start = 0;
         for token in tokens {

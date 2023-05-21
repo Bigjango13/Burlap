@@ -716,7 +716,10 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
 }
 
 // Main parsing
-pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Vec<ASTNode> {
+pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Option<Vec<ASTNode>> {
+    if tokens.is_empty() {
+        return Some(vec![]);
+    }
     // Set up
     // TODO: Line numbers
     let mut parser = Parser{
@@ -746,7 +749,7 @@ pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Vec<ASTNode> {
     }
     // Return
     if parser.has_err {
-        return vec![];
+        return Option::None;
     }
-    return parser.ast;
+    return Some(parser.ast);
 }

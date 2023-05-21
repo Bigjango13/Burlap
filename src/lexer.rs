@@ -145,18 +145,18 @@ impl std::fmt::Debug for Token {
 
 pub fn lex(
     src: &String, name: String, print_err: bool, color: bool
-) -> Vec<Token> {
+) -> Option<Vec<Token>> {
     let mut lex = TokenType::lexer(src.as_str());
     let mut ret: Vec<Token> = vec![];
     // Lines
     let lines = src.lines().collect::<Vec<&str>>();
     if lines.is_empty() {
-        return vec![];
+        return Some(vec![]);
     }
     // Stream (for errors)
     let mut stream = Stream{
         name, rat: 0, at: 0, line: 1,
-        str: lines[0].to_string(), size: 0,
+        str: lines.get(0).unwrap_or(&"").to_string(), size: 0,
     };
     let mut lastat = 0;
     let mut tok = lex.next();
@@ -176,7 +176,7 @@ pub fn lex(
                 continue;
             }
             err(&stream, "failure to lex", ErrType::Err, color);
-            return vec![];
+            return None;
         } else {
             let token = tok.unwrap().unwrap();
             if token == TokenType::Newline {
@@ -206,5 +206,5 @@ pub fn lex(
         stream,
         str: "".to_string(),
     });
-    return ret;
+    return Some(ret);
 }

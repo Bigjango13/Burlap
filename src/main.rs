@@ -43,18 +43,16 @@ impl Arguments {
 
 pub fn to_ast(args: &mut Arguments) -> Option<Vec<ASTNode>> {
     // Lex
-    let tokens = lex(
+    let Some(tokens) = lex(
         &args.source, args.name.clone(), true,
         args.extensions.contains(&"color".to_string()),
-    );
-    if tokens.is_empty() {
+    ) else {
         return None;
-    }
+    };
     // Parse
-    let ast = parse(tokens, args);
-    if ast.is_empty() {
+    let Some(ast) = parse(tokens, args) else {
         return None;
-    }
+    };
     if args.is_debug {
         // Debug print ast
         println!("Ast: {:?}", ast);
