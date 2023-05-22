@@ -211,9 +211,9 @@ fn parse_binop_helper(
 }
 
 fn parse_binop_math(parser: &mut Parser) -> Option<ASTNode> {
-    // Math binops, +, -, *, /, %
+    // Math binops, +, -, *, /, %, in
     parse_binop_helper(parser, vec![
-        Plus, Minus, Times, Div, Modulo
+        Plus, Minus, Times, Div, Modulo, In
     ], &parse_unary, true)
 }
 fn parse_binop_cmp(parser: &mut Parser) -> Option<ASTNode> {

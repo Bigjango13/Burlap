@@ -1,0 +1,5 @@
+if len(args()) == 0 {
+    print("Usage: burlap tests/greet.sk <name>");
+} else {
+    print("Hello " + args()[1] + "!");
+}

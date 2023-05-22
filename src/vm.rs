@@ -79,6 +79,8 @@ pub enum Opcode {
     DIV,
     // MODulo (value, value -> value)
     MOD,
+    // IN (value, value -> value)
+    IN,
 
     // Boolean
     // AND (value, value -> value)
@@ -1103,6 +1105,17 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             let lhs = vm.pop();
             vm.push((lhs % rhs)?);
         },
+        Opcode::IN => {
+            let rhs = vm.pop();
+            let lhs = vm.pop();
+            if let Some(b) = rhs.contains(lhs.clone()) {
+                vm.push(Value::Bool(b));
+            } else {
+                return Err(
+                    format!("Cannot use in on {:?} and {:?}", lhs.get_type(), rhs.get_type())
+                );
+            }
+        },
         Opcode::EQ => {
             let rhs = vm.pop();
             let lhs = vm.pop();
@@ -1216,6 +1229,9 @@ pub fn run(vm: &mut Vm) -> bool {
         return true;
     }
     vm.stack = vec![];
+    if vm.args.is_debug {
+        println!("Ops: {:?}", vm.program.ops);
+    }
     loop {
         if vm.args.is_debug {
             // Print debugging info

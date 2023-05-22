@@ -252,6 +252,21 @@ impl Value {
             return Ok(None);
         }
     }
+    // Contains
+    pub fn contains(&self, val: Value) -> Option<bool> {
+        if let Some(vals) = self.values() {
+            return Some(vals.iter().any(|i| i.eq(val.clone())));
+        } else if let Value::Str(str) = self {
+            if let Value::Str(vstr) = val {
+                return Some(str.contains(&vstr));
+            } else if let Value::Byte(byte) = val {
+                return Some(str.contains(
+                    &(byte as char).to_string()
+                ));
+            }
+        }
+        return None;
+    }
     // Indexing
     pub fn index(&self, index: Value) -> Option<Value> {
         if let Value::Str(str) = self {

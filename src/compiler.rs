@@ -185,6 +185,9 @@ fn compile_binop(
         TokenType::EqualsEquals => {
             program.ops.push(Opcode::EQ as u8);
         },
+        TokenType::In => {
+            program.ops.push(Opcode::IN as u8);
+        },
         // Harder ones that don't have a single instruction
         TokenType::NotEquals => {
             program.ops.push(Opcode::EQ as u8);
@@ -369,7 +372,7 @@ fn compile_stmt(
             program.ops.push(0);
             // Compile true part
             compile_body(program, args, body, false);
-            program.fill_jmp(pos, program.ops.len() - pos + 2);
+            program.fill_jmp(pos, program.ops.len() - pos - 2);
 
             // The else
             if **else_part != Nop {

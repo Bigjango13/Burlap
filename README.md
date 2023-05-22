@@ -81,6 +81,7 @@ Burlap started because I wanted to learn how to create a programming language. I
 
 - 1.1.5: Self host speedrun
     - Add `args()`
+    - Add `in` as a binop
     - Fix major bug with jumping instructions
     - Fix empty import bug
     - Make `str` return none on failure
