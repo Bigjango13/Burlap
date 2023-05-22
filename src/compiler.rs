@@ -372,10 +372,11 @@ fn compile_stmt(
             program.ops.push(0);
             // Compile true part
             compile_body(program, args, body, false);
-            program.fill_jmp(pos, program.ops.len() - pos - 2);
+            let offset = program.ops.len() - pos - 2;
 
             // The else
             if **else_part != Nop {
+                program.fill_jmp(pos, offset + 4);
                 // Prep exit offset
                 program.ops.push(Opcode::JMPU as u8);
                 let pos = program.ops.len();
@@ -385,6 +386,8 @@ fn compile_stmt(
                 // Compile else part
                 compile_stmt(program, args, else_part, false);
                 program.fill_jmp(pos, 0);
+            } else {
+                program.fill_jmp(pos, offset);
             }
         },
         LoopStmt(var, iter, body) => {
