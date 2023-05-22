@@ -1140,15 +1140,15 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
 
         // Jumps
         Opcode::JMPU => {
-            let offset = vm.read(1);
+            let offset = vm.read(3);
             vm.jump(offset);
         },
         Opcode::JMPB => {
-            let offset = vm.read(1);
+            let offset = vm.read(3);
             vm.jump(-offset);
         },
         Opcode::JMPNT => {
-            let offset = vm.read(1);
+            let offset = vm.read(3);
             let cond = vm.pop();
             // Check if it should jump
             if !cond.is_truthy() {
@@ -1165,7 +1165,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 return Err("Non-int arg number".to_string());
             };
             // Add the function
-            vm.program.functis.insert(name, (vm.at + 3, args_num));
+            vm.program.functis.insert(name, (vm.at + 5, args_num));
         }
 
         Opcode::CALL => {
@@ -1215,7 +1215,6 @@ pub fn run(vm: &mut Vm) -> bool {
     if vm.program.ops.is_empty() {
         return true;
     }
-    //vm.at = 0;
     vm.stack = vec![];
     loop {
         if vm.args.is_debug {

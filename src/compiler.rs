@@ -53,6 +53,15 @@ impl Program {
             self.ops.push(index as u8);
         }
     }
+
+    pub fn fill_jmp(&mut self, start: usize, mut i: usize) {
+        if i == 0 {
+            i = self.ops.len() - start - 2;
+        }
+        self.ops[start] = ((i >> 16) & 255) as u8;
+        self.ops[start + 1] = ((i >> 8) & 255) as u8;
+        self.ops[start + 2] = (i & 255) as u8;
+    }
 }
 
 fn compile_unary(
@@ -342,33 +351,37 @@ fn compile_stmt(
                 program.ops.push(Opcode::NOT as u8);
                 // Push the jump offset (which will be filled later)
                 program.ops.push(Opcode::JMPNT as u8);
+                let pos = program.ops.len();
+                program.ops.push(0);
+                program.ops.push(0);
                 program.ops.push(0);
                 // Compile body
-                let pos = program.ops.len();
                 compile_stmt(program, args, else_part, false);
-                program.ops[pos - 1] = (program.ops.len() - pos + 1)
-                    as u8;
-                return true
+                program.fill_jmp(pos, 0);
+                return true;
             }
 
             // Push the jump offset (which will be filled later)
             program.ops.push(Opcode::JMPNT as u8);
-            program.ops.push(0);
             let pos = program.ops.len();
+            program.ops.push(0);
+            program.ops.push(0);
+            program.ops.push(0);
             // Compile true part
             compile_body(program, args, body, false);
-            program.ops[pos - 1] = (program.ops.len() - pos + 1) as u8;
+            program.fill_jmp(pos, program.ops.len() - pos + 2);
 
             // The else
             if **else_part != Nop {
                 // Prep exit offset
-                program.ops[pos - 1] += 2;
                 program.ops.push(Opcode::JMPU as u8);
-                program.ops.push(0);
                 let pos = program.ops.len();
+                program.ops.push(0);
+                program.ops.push(0);
+                program.ops.push(0);
                 // Compile else part
                 compile_stmt(program, args, else_part, false);
-                program.ops[pos - 1] = (program.ops.len() - pos + 1) as u8;
+                program.fill_jmp(pos, 0);
             }
         },
         LoopStmt(var, iter, body) => {
@@ -380,8 +393,10 @@ fn compile_stmt(
 
             // Exit jump
             program.ops.push(Opcode::JMPNT as u8);
-            program.ops.push(0);
             let offpos = program.ops.len();
+            program.ops.push(0);
+            program.ops.push(0);
+            program.ops.push(0);
 
             // Lower scope
             program.ops.push(Opcode::LEVI as u8);
@@ -398,26 +413,34 @@ fn compile_stmt(
 
             // Backwards jump
             program.ops.push(Opcode::JMPB as u8);
-            program.ops.push((program.ops.len() - pos) as u8);
+            program.ops.push(0);
+            program.ops.push(0);
+            program.ops.push(0);
+            program.fill_jmp(program.ops.len() - 3, program.ops.len() - pos - 1);
             // Clean up the iter
+            program.fill_jmp(offpos, 0);
             program.ops.push(Opcode::DEL as u8);
-            program.ops[offpos - 1] = (program.ops.len() - offpos) as u8;
         },
         WhileStmt(cond, body) => {
             // Start, exit jump + cond
             let pos = program.ops.len();
             compile_expr(program, cond);
             program.ops.push(Opcode::JMPNT as u8);
-            program.ops.push(0);
             let offpos = program.ops.len();
+            program.ops.push(0);
+            program.ops.push(0);
+            program.ops.push(0);
 
             // Compile body
             compile_body(program, args, body, false);
 
             // Backwards jump
             program.ops.push(Opcode::JMPB as u8);
-            program.ops.push((program.ops.len() - pos) as u8);
-            program.ops[offpos - 1] = (program.ops.len() - offpos + 1) as u8;
+            program.ops.push(0);
+            program.ops.push(0);
+            program.ops.push(0);
+            program.fill_jmp(program.ops.len() - 3, program.ops.len() - pos - 1);
+            program.fill_jmp(offpos, 0);
         },
         BodyStmt(nodes) => return _compile_body(program, args, nodes, false),
         FunctiStmt(name, fargs, body) => {
@@ -427,8 +450,10 @@ fn compile_stmt(
             program.ops.push(Opcode::FN as u8);
             // Jump around function
             program.ops.push(Opcode::JMPU as u8);
-            program.ops.push(0);
             let pos = program.ops.len();
+            program.ops.push(0);
+            program.ops.push(0);
+            program.ops.push(0);
             // Load args
             for arg in fargs {
                 program.push(Value::Str(arg.to_string()));
@@ -440,7 +465,7 @@ fn compile_stmt(
             program.push(Value::None);
             program.ops.push(Opcode::RET as u8);
             // Fill jump
-            program.ops[pos - 1] = (program.ops.len() - pos + 1) as u8;
+            program.fill_jmp(pos, 0);
         },
         ReturnStmt(ret) => {
             // Compile return value

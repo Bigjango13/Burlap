@@ -81,6 +81,7 @@ Burlap started because I wanted to learn how to create a programming language. I
 
 - 1.1.5: Self host speedrun
     - Add `args()`
+    - Fix major bug with jumping instructions
     - Fix empty import bug
     - Make `str` return none on failure
     - Remove boolean and none math
