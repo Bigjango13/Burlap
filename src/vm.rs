@@ -132,6 +132,7 @@ pub struct Vm {
     var_min: usize,
     // Scope
     scope: Vec<(usize, usize, u8)>,
+    call_frames: Vec<Vec<Value>>,
 
     // The program
     pub program: Program,
@@ -193,12 +194,11 @@ impl Vm {
                 "__burlap_ptr".to_string(), sk_ptr as Functie
             );
         }
-        // I really wish Rust had defaults, but it doesn't
         Vm {
             args, has_err: false, in_func: false, functies,
             is_global: true, globals: FxHashMap::default(),
-            var_names: Vec::new(), var_vals: Vec::new(),
-            var_min: 0, stack: Vec::new(), scope: Vec::new(),
+            var_names: vec![], var_vals: vec![], var_min: 0,
+            stack: vec![], scope: vec![], call_frames: vec![],
             program: Program::new(), jump: false, at: 0
         }
     }
@@ -377,8 +377,7 @@ impl Vm {
     ) -> Result<(), String> {
 
         // Non-builtin functions
-        let Some((pos, arg_num)) = self.program.functis.get(name) else
-        {
+        let Some((pos, arg_num)) = self.program.functis.get(name) else {
             // Builtin functions
             if let Some(functie) = self.functies.get(name) {
                 // Reverse (normally the vm pops the args in reverse)
@@ -389,6 +388,7 @@ impl Vm {
             }
             return Err(format!("no function called \"{}\"", name));
         };
+        self.call_frames.push(args.clone());
         // Dereference
         let (pos, arg_num) = (*pos, *arg_num);
         // Check args
@@ -558,6 +558,11 @@ fn sk_args(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         // Invalid args
         vm.bad_args(&"args".to_string(), args.len(), 0)?;
     }
+    // In a function
+    if vm.call_frames.len() != 0 {
+        return Ok(Value::FastList(vm.call_frames.last().unwrap().clone()));
+    }
+    // Global
     return Ok(Value::FastList(
         vm.args.program_args.iter().map(|x| Value::Str(x.clone())).collect()
     ));
@@ -1196,6 +1201,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 }
                 vm.raise_scope()?;
             }
+            vm.call_frames.pop();
             // Move
             vm.at = pos as usize + 1;
             vm.jump = true;
