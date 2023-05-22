@@ -217,6 +217,14 @@ test("len()", len(list), 4);
 test("number indexing", list[2], 4);
 test("key indexing", list['elm'], 4);
 test("var indexing", list[elm], 8);
+# Adding
+test("FL + FL", string([1, 2, 3] + [4, 5]), "[1, 2, 3, 4, 5]");
+test("FL + SL", string([1, 2, 3] + [f: 4, v: 5]), "[1, 2, 3, 4, 5]");
+test("SL + FL", string([i: 1, 2, 3] + [4, 5]), "[i: 1, 2, 3, 4, 5]");
+test("SL + SL", string([i: 1, 2, 3] + [f: 4, v: 5]), "[i: 1, 2, 3, 4, 5]");
+test("List + Value", string([1] + 2), "[1, 2]");
+test("List + [Value]", string([1] + [2]), "[1, 2]");
+test("List + [List]", string([1] + [[2]]), "[1, [2]]");
 # Note: The following list features aren't explicitly in the spec
 test("comparing", range(0, 5), [0, 1, 2, 3, 4, 5]);
 test("comparing with keys", range(0, 5), [O: 0, I: 1, Z: 2, E: 3, A: 4, S: 5]);

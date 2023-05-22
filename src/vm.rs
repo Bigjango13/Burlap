@@ -51,7 +51,7 @@ pub enum Opcode {
     DV,
     // Set Variable ("name", value)
     SV,
-    // Declare Or Set ariable ("name", value)
+    // Declare Or Set variable ("name", value)
     DOS,
 
     // Lists

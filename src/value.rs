@@ -380,15 +380,38 @@ impl Value {
 
 // Add
 impl_op_ex!(+ |left: Value, right: Value| -> Result<Value, String> {
+    // Lists
+    if let Value::List(mut list) = left {
+        if let Some(vals) = right.values() {
+            // Concat
+            for val in vals {
+                list.insert(list.len().to_string(), val);
+            }
+        } else {
+            // Append
+            list.insert(list.len().to_string(), right);
+        }
+        return Ok(Value::List(list));
+    } else if let Value::FastList(mut list) = left {
+        if let Some(mut vals) = right.values() {
+            // Concat
+            list.append(&mut vals);
+        } else {
+            // Append
+            list.push(right);
+        }
+        return Ok(Value::FastList(list));
+    };
+    // Strings
     if let Value::Str(s) = right {
-        Ok(Value::Str(left.to_string()? + &s))
+        return Ok(Value::Str(left.to_string()? + &s));
     } else if let Value::Str(s) = left {
-        Ok(Value::Str(s + &right.to_string()?))
-    } else {
-        do_op!(left, right, +, Err(
-            format!("Cannot add {} and {}", left.get_type(), right.get_type())
-        ))
+        return Ok(Value::Str(s + &right.to_string()?));
     }
+    // Anything else
+    return do_op!(left, right, +, Err(
+        format!("Cannot add {} and {}", left.get_type(), right.get_type())
+    ))
 });
 
 // Subtract
