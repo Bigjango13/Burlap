@@ -388,7 +388,7 @@ impl Vm {
             }
             return Err(format!("no function called \"{}\"", name));
         };
-        self.call_frames.push(args.clone());
+        self.call_frames.push(args.clone().into_iter().rev().collect());
         // Dereference
         let (pos, arg_num) = (*pos, *arg_num);
         // Check args
