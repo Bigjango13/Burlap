@@ -28,7 +28,8 @@ pub struct Arguments {
     is_debug: bool,
     is_repl: bool,
     format: bool,
-    extensions: Vec<String>
+    extensions: Vec<String>,
+    program_args: Vec<String>
 }
 
 impl Arguments {
@@ -37,6 +38,7 @@ impl Arguments {
             source: "".to_string(), is_debug: false,
             is_repl: true, extensions: vec!["color".to_string()],
             name: "<stdin>".to_string(), format: false,
+            program_args: vec![]
         }
     }
 }
@@ -63,17 +65,17 @@ pub fn to_ast(args: &mut Arguments) -> Option<Vec<ASTNode>> {
 fn get_args() -> Result<Arguments, bool> {
     let mut args = Arguments::new();
     let mut file: String = "".to_string();
-    let mut cmd_from_cli: bool = false;
-    // [1..] to skip the first arg
-    for arg in &env::args().collect::<Vec<String>>()[1..] {
-        if cmd_from_cli {
-            args.source = arg.to_string();
-            cmd_from_cli = false;
-        } else if !arg.starts_with('-') && file.is_empty() {
+    let mut cli_args = env::args()
+        .collect::<Vec<String>>().into_iter();
+    // Skip first arg
+    cli_args.next();
+    while let Some(arg) = cli_args.next() {
+        if !arg.starts_with('-') && file.is_empty() {
             // Files
             file = arg.to_string();
             args.name = arg.to_string();
             args.is_repl = false;
+            break;
         } else if arg.starts_with("--use-") {
             // Extensions
             let extension = arg[6..].to_string();
@@ -98,7 +100,7 @@ fn get_args() -> Result<Arguments, bool> {
             println!("Burlap v{}", env!("CARGO_PKG_VERSION"));
             println!();
             println!("Usage:");
-            println!("burlap <args> <file>");
+            println!("burlap <args> <file> <args for file>");
             println!();
             println!("Args:");
             println!("\t-h --help\tprints help");
@@ -115,11 +117,20 @@ fn get_args() -> Result<Arguments, bool> {
                 env!("CARGO_PKG_REPOSITORY")
             );
             return Err(true);
-        } else if arg == "-" {
+        } else if arg == "-" && file.is_empty() {
             // Read source from command line
-            args.name = "<cli>".to_string();
-            cmd_from_cli = file.is_empty();
             args.is_repl = false;
+            args.name = "<cli>".to_string();
+            let Some(src) = cli_args.next() else {
+                print_err(
+                    "'-' is missing option source", ErrType::Err,
+                    args.extensions.contains(&"color".to_string())
+                );
+                return Err(false);
+            };
+            args.source = src.to_string();
+        } else if arg == "--" {
+            break;
         } else {
             // Anything else
             print_err(
@@ -127,6 +138,11 @@ fn get_args() -> Result<Arguments, bool> {
                 args.extensions.contains(&"color".to_string())
             );
         }
+    }
+    // Get the args to the program
+    args.program_args.push(args.name.clone());
+    for arg in cli_args {
+        args.program_args.push(arg.to_string());
     }
     // Don't open files if source is filled or REPL
     if args.is_repl || !args.source.is_empty() {

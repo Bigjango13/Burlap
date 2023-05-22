@@ -154,6 +154,7 @@ impl Vm {
         functies.insert("type".to_string(), sk_type as Functie);
         functies.insert("len".to_string(), sk_len as Functie);
         functies.insert("range".to_string(), sk_range as Functie);
+        functies.insert("args".to_string(), sk_args as Functie);
         // File IO
         functies.insert("open".to_string(), sk_open as Functie);
         functies.insert("close".to_string(), sk_close as Functie);
@@ -551,6 +552,17 @@ fn sk_range(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     return Ok(Value::FastList(ret));
 }
 
+// Args
+fn sk_args(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 0 {
+        // Invalid args
+        vm.bad_args(&"args".to_string(), args.len(), 0)?;
+    }
+    return Ok(Value::FastList(
+        vm.args.program_args.iter().map(|x| Value::Str(x.clone())).collect()
+    ));
+}
+
 // File IO
 fn sk_open(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
@@ -735,7 +747,11 @@ fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     return Ok(Value::Str(if let Value::Byte(byte) = args[0] {
         (byte as char).to_string()
     } else {
-        args[0].to_string()?
+        let Ok(str) = args[0].to_string() else {
+            // Failed casts return none
+            return Ok(Value::None);
+        };
+        str
     }));
 }
 

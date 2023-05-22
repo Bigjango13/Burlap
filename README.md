@@ -1,5 +1,5 @@
 # Burlap
-> A powerful and user-friendly sack interpreter, v1.1.4
+> A powerful and user-friendly sack interpreter, v1.1.5
 
 ## What is Burlap?
 Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) programming language. It aims for a high level of spec compliance, any valid sack program should be able to be run using burlap (it does have a few minor variations from the spec, known differences are listed [here](docs/spec-diff.md))
@@ -24,6 +24,7 @@ Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) progr
   - [x] Print
   - [x] Input **(New)**
   - [x] Len **(New)**
+  - [x] Args **(New)**
   - [x] If/if else/else
   - [x] Return
   - [x] Functions
@@ -64,8 +65,13 @@ If you want to install it, run `cargo install --git https://github.com/Bigjango1
 
 If you don't use any arguments burlap will enter REPL mode, to exit use Ctrl-D.
 If you want to run a file just pass the file name as the argument.
+For example: `burlap tests/test.sk`
 
-To run code in argv use `-`, for example: `burlap - "print('Hello world!');"`.
+You can pass arguments by putting things after the file, for example: `burlap tests/greet.sk Bob`.
+
+To run code from argv using `-`, for example: `burlap - "print('Hello world!');"`.
+
+To pass arguments to code in argv or the REPL use `--`, for example: `burlap -- --some-flag`
 
 To show help, run `burlap -h` or `burlap --help`.
 
@@ -73,6 +79,10 @@ To show help, run `burlap -h` or `burlap --help`.
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
+- 1.1.5: Self host speedrun
+    - Add `args()`
+    - Fix empty import bug
+    - Make `str` return none on failure
 - 1.1.4: Byte and file update
     - Add string indexing
     - Add string iterating
@@ -94,7 +104,7 @@ Burlap started because I wanted to learn how to create a programming language. I
 - 1.1.0: VM update
     - Rewrite tree walking interpreter into a stack based VM
 - 1.0.0: Rust Evangelism Strike Force update
-    - Deside to RIIR
+    - Decide to RIIR
     - Lists, while loops, input, imports, and more!
 - 0.0.1: C++ version works for Sack v0.0.5
 - Beta: I tried to make a Sack to Python transpiler in Python using regexes

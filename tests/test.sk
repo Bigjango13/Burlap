@@ -277,5 +277,10 @@ test("rb/a test", contents[4], 0b00100000);
 test("rb/a test len", len(contents), 11);
 close(file);
 
+# Args test
+print("*** Args Tests ***");
+test("args len", len(args()), 0);
+test("args[0]", args()[0], "tests/test.sk");
+
 # End of tests
 testSummary();
