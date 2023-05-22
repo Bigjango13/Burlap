@@ -381,48 +381,21 @@ impl Value {
 // Add
 impl_op_ex!(+ |left: Value, right: Value| -> Result<Value, String> {
     if let Value::Str(s) = right {
-        return Ok(Value::Str(left.to_string()? + &s));
-    }
-    return match left {
-        // str + anything is a string
-        Value::Str(s) => {
-            Ok(Value::Str(s + &right.to_string()?))
-        },
-        Value::Bool(b) => {
-            if let Value::Bool(b_right) = right {
-                // bool and a bool is only false is both are false.
-                Ok(Value::Bool(b || b_right))
-            } else {
-                // bool is converted to an int
-                Value::Int(b as i32) * right
-            }
-        },
-        Value::None => Ok(Value::None),
-        _ => do_op!(left, right, +, Err(
+        Ok(Value::Str(left.to_string()? + &s))
+    } else if let Value::Str(s) = left {
+        Ok(Value::Str(s + &right.to_string()?))
+    } else {
+        do_op!(left, right, +, Err(
             format!("Cannot add {} and {}", left.get_type(), right.get_type())
-        )),
+        ))
     }
 });
 
 // Subtract
 impl_op_ex!(- |left: Value, right: Value| -> Result<Value, String> {
-    return match left {
-        // str - anything is invalid
-        Value::Str(_) => {
-            Err(format!("Cannot subtract {} and {}", left.get_type(), right.get_type()))
-        },
-        Value::Bool(b) => {
-            if let Value::Bool(b_right) = right {
-                // Bools and a bool
-                Ok(Value::Bool(b != b_right))
-            } else {
-                // bool is converted to an int
-                Value::Int(b as i32) - right
-            }
-        },
-        Value::None => Ok(Value::None),
-        _ => do_op!(left, right, -, Ok(Value::None)),
-    }
+    do_op!(left, right, -,
+        Err(format!("Cannot subtract {} and {}", left.get_type(), right.get_type()))
+    )
 });
 
 // Multiply
@@ -440,16 +413,6 @@ impl_op_ex!(* |left: Value, right: Value| -> Result<Value, String> {
                 Err(format!("Cannot multiply {} and {}", left.get_type(), right.get_type()))
             }
         },
-        Value::Bool(b) => {
-            if let Value::Bool(b_right) = right {
-                // bool and a bool is only false if both are false.
-                Ok(Value::Bool(b || b_right))
-            } else {
-                // bool is converted to an int
-                Value::Int(b as i32) * right
-            }
-        },
-        Value::None => Ok(Value::None),
         _ => do_op!(left, right, *,
             Err(format!("Cannot multiply {} and {}", left.get_type(), right.get_type()))
         ),
@@ -458,40 +421,31 @@ impl_op_ex!(* |left: Value, right: Value| -> Result<Value, String> {
 
 // Div
 impl_op_ex!(/ |left: Value, right: Value| -> Result<Value, String> {
-    return match left {
-        // str / anything is invalid
-        Value::Str(_) => {
-            Err(format!("Cannot divide {} and {}", left.get_type(), right.get_type()))
-        },
-        // bool and int are converted to floats
-        Value::Bool(b) => {
-            Value::Float(b as i32 as f32) / right
-        },
-        Value::Int(i) => {
-            Value::Float(i as f32) / right
-        },
-        // none / anything is none
-        Value::None => Ok(Value::None),
-        _ => do_op!(left, right, /,
-            Err(format!("Cannot divide {} and {}", left.get_type(), right.get_type()))
-        ),
+    match left {
+        Value::Int(i) => Value::Float(i as f32) / right,
+        _ => do_op!(
+            left, right, /,
+            Err(
+                format!(
+                    "Cannot modulo {} and {}",
+                    left.get_type(),
+                    right.get_type()
+                )
+            )
+        )
     }
 });
 
 // Modulo
 impl_op_ex!(% |left: Value, right: Value| -> Result<Value, String> {
-    return match left {
-        // str % anything is invalid
-        Value::Str(_) => {
-            Err(format!("Cannot modulo {} and {}", left.get_type(), right.get_type()))
-        },
-        Value::Bool(b) => {
-            // bool is converted to an int
-            Value::Int(b as i32) % right
-        },
-        Value::None => Ok(Value::None),
-        _ => do_op!(left, right, %,
-            Err(format!("Cannot divide {} and {}", left.get_type(), right.get_type()))
+    do_op!(
+        left, right, %,
+        Err(
+            format!(
+                "Cannot modulo {} and {}",
+                left.get_type(),
+                right.get_type()
+            )
         )
-    }
+    )
 });

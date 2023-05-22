@@ -83,6 +83,7 @@ Burlap started because I wanted to learn how to create a programming language. I
     - Add `args()`
     - Fix empty import bug
     - Make `str` return none on failure
+    - Remove boolean and none math
 - 1.1.4: Byte and file update
     - Add string indexing
     - Add string iterating
