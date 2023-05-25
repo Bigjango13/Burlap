@@ -41,6 +41,8 @@ pub enum Opcode {
     FN,
     // CALL function (name, arg#, args...)
     CALL,
+    // Tail Call ([u24], args...)
+    TCO,
     // RETurn (ret)
     RET,
 
@@ -79,8 +81,6 @@ pub enum Opcode {
     DIV,
     // MODulo (value, value -> value)
     MOD,
-    // IN (value, value -> value)
-    IN,
 
     // Boolean
     // AND (value, value -> value)
@@ -99,13 +99,15 @@ pub enum Opcode {
     GT,
     // Less Than (value, value -> value)
     LT,
+    // IN (value, value -> value)
+    IN,
 
     // Jumps
-    // JuMP Unconditionally ([u8])
+    // JuMP Unconditionally ([u24])
     JMPU,
-    // JuMP Backward, unconditionally ([u8])
+    // JuMP Backward, unconditionally ([u24])
     JMPB,
-    // JuMP if NoT ([u8], offset)
+    // JuMP if NoT ([u24], offset)
     JMPNT,
 }
 
@@ -1196,6 +1198,32 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             }
             // Call
             vm.call(&name, &args)?;
+        },
+
+        Opcode::TCO => {
+            // Clear scope
+            loop {
+                let Some((_, _, c)) = vm.scope.last() else {
+                    break;
+                };
+                if *c == 0 {
+                    // Clean scope
+                    vm.raise_scope()?;
+                    vm.lower_scope(true);
+                    break;
+                }
+                vm.raise_scope()?;
+            }
+            // Set args
+            let arg_num = vm.call_frames.pop().unwrap().len();
+            let stack_len = vm.stack.len();
+            vm.call_frames.push(
+                vm.stack[stack_len-arg_num .. stack_len].iter()
+                    .map(|x| x.clone()).rev().collect()
+            );
+            // Jump
+            let offset = vm.read(3);
+            vm.jump(-offset);
         },
 
         Opcode::RET => {

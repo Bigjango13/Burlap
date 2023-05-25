@@ -79,13 +79,14 @@ To show help, run `burlap -h` or `burlap --help`.
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
-- 1.1.5: Self host speedrun
+- 1.1.5: "Self host speedrun"
     - Add `args()`
     - Add `in` as a binop
+    - Remove boolean and none math
+    - Add guaranteed tail recursion
+    - Make `str` return none on failure
     - Fix major bug with jumping instructions
     - Fix empty import bug
-    - Make `str` return none on failure
-    - Remove boolean and none math
 - 1.1.4: Byte and file update
     - Add string indexing
     - Add string iterating
@@ -100,7 +101,7 @@ Burlap started because I wanted to learn how to create a programming language. I
     - Add multiline editing, highlighting, and tab-completion to the REPL
 - 1.1.2: C update
     - Added C iterop
-    - `__burlap_throw`
+    - Add `__burlap_throw`
     - Fixed global variables for imports
 - 1.1.1: File IO
     - Read, write, open, and flush

@@ -20,15 +20,19 @@ pub struct Program {
     pub functis: FxHashMap<String, (usize, i32)>,
     // Import dir
     pub path: PathBuf,
+    // Compiler info
+    // The functi being compiled (name, args, address)
+    functi: (String, u8, u32)
 }
 
 impl Program {
     // Init
     pub fn new() -> Program {
         Program{
-            ops: Vec::new(), consts: Vec::new(),
+            ops: vec![], consts: vec![],
             functis: FxHashMap::default(),
-            path: PathBuf::from(".")
+            path: PathBuf::from("."),
+            functi: ("".to_string(), 0, 0),
         }
     }
 
@@ -460,6 +464,10 @@ fn compile_stmt(
             program.ops.push(0);
             program.ops.push(0);
             program.ops.push(0);
+            // Update compiler state
+            program.functi = (
+                name.clone(), fargs.len() as u8, program.ops.len() as u32
+            );
             // Load args
             for arg in fargs {
                 program.push(Value::Str(arg.to_string()));
@@ -474,8 +482,33 @@ fn compile_stmt(
             program.fill_jmp(pos, 0);
         },
         ReturnStmt(ret) => {
-            // Compile return value
-            compile_expr(program, ret);
+            match *ret.clone() {
+                CallExpr(name, args) if (
+                    name == program.functi.0
+                    && args.len() == program.functi.1 as usize
+                ) => {
+                    // Tail call
+                    for ref arg in args.iter().rev() {
+                        if !compile_expr(program, arg) {
+                            return false;
+                        }
+                    }
+                    program.ops.push(Opcode::TCO as u8);
+                    program.ops.push(0);
+                    program.ops.push(0);
+                    program.ops.push(0);
+                    program.fill_jmp(
+                        program.ops.len() - 3,
+                        program.ops.len() - program.functi.2 as usize - 1
+                    );
+                }
+                // Compile return value
+                _ => {
+                    if !compile_expr(program, ret) {
+                        return false;
+                    }
+                }
+            };
             // Return return value
             program.ops.push(Opcode::RET as u8);
         },
