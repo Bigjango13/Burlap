@@ -22,7 +22,9 @@ pub struct Program {
     pub path: PathBuf,
     // Compiler info
     // The functi being compiled (name, args, address)
-    functi: (String, u8, u32)
+    functi: (String, u8, u32),
+    // If RS and LEVI are needed
+    needs_scope: bool
 }
 
 impl Program {
@@ -32,6 +34,7 @@ impl Program {
             ops: vec![], consts: vec![],
             functis: FxHashMap::default(),
             path: PathBuf::from("."),
+            needs_scope: false,
             functi: ("".to_string(), 0, 0),
         }
     }
@@ -308,11 +311,14 @@ fn compile_expr(program: &mut Program, node: &ASTNode) -> bool {
 
 fn _compile_body(
     program: &mut Program, args: &mut Arguments,
-    nodes: &Vec<ASTNode>, call: bool
+    nodes: &Vec<ASTNode>, manual_scope: bool
 ) -> bool {
     // Lower scope
-    if !call {
-        program.ops.push(Opcode::LEVI as u8);
+    let scope_pos = program.ops.len();
+    let old_needs_scope = program.needs_scope;
+    program.needs_scope = false;
+    if !manual_scope {
+        program.ops.push(Opcode::NOP as u8);
     }
     // Compile all nodes
     for node in nodes {
@@ -322,13 +328,15 @@ fn _compile_body(
         }
     }
     // Raise scope
-    if !call {
+    if !manual_scope && program.needs_scope {
         program.ops.push(Opcode::RS as u8);
+        program.ops[scope_pos] = Opcode::LEVI as u8;
     }
+    program.needs_scope = old_needs_scope;
     return true;
 }
 fn compile_body(
-    program: &mut Program, args: &mut Arguments, node: &ASTNode, call: bool
+    program: &mut Program, args: &mut Arguments, node: &ASTNode, manual_scope: bool
 ) -> bool {
     let BodyStmt(nodes) = node else {
         if *node == Nop {
@@ -336,7 +344,7 @@ fn compile_body(
         }
         panic!("compile_body got non-body node!");
     };
-    return _compile_body(program, args, nodes, call);
+    return _compile_body(program, args, nodes, manual_scope);
 }
 
 fn compile_stmt(
@@ -348,6 +356,7 @@ fn compile_stmt(
             compile_expr(program, val);
             program.push(Value::Str(name.to_string()));
             program.ops.push(Opcode::DV as u8);
+            program.needs_scope = true;
         },
         IfStmt(cond, body, else_part) => {
             // The condition must be a expr, so no need to match against stmts
