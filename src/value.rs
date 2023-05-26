@@ -14,8 +14,8 @@ pub struct FileInfo {
 }
 
 impl PartialEq for FileInfo {
-    fn eq(&self, rhs: &FileInfo) -> bool {
-        return self.closed == rhs.closed;
+    fn eq(&self, _: &FileInfo) -> bool {
+        return false;
     }
 }
 
@@ -54,10 +54,10 @@ macro_rules! do_op {
             Value::Float(f) => {
                 if let Value::Float(f_right) = $right {
                     // Two floats are easy!
-                    Ok(Value::Float(f $op &f_right))
+                    Ok(Value::Float(*f $op *f_right))
                 } else if let Value::Int(i_right) = $right {
                     // A float and an int are easier
-                    Ok(Value::Float(f $op &(i_right as f32)))
+                    Ok(Value::Float(*f $op (*i_right as f32)))
                 } else {
                     $errval
                 }
@@ -66,16 +66,15 @@ macro_rules! do_op {
             Value::Int(i) => {
                 if let Value::Float(f_right) = $right {
                     // Int and float -> float and float
-                    Ok(Value::Float((i as f32) $op f_right))
+                    Ok(Value::Float((*i as f32) $op *f_right))
                 } else if let Value::Int(i_right) = $right {
                     // Two ints
-                    Ok(Value::Int(i $op &i_right))
+                    Ok(Value::Int(*i $op *i_right))
                 } else {
                     $errval
                 }
             },
-            // Strings, bools, and nones aren't usable in ops
-            // They must be handled separately
+            // Anything else
             _ => {
                 $errval
             },
@@ -155,7 +154,6 @@ impl Value {
                 ret += "]";
                 ret
             }
-            // TODO: fix spec noncompliance
             Value::None => "none".to_string(),
             // Anything else
             _ => return Err(
@@ -259,26 +257,26 @@ impl Value {
         }
     }
     // Contains
-    pub fn contains(&self, val: Value) -> Option<bool> {
+    pub fn contains(&self, val: &Value) -> Option<bool> {
         if let Some(vals) = self.values() {
-            return Some(vals.iter().any(|i| i.eq(val.clone())));
+            return Some(vals.iter().any(|i| i.eq(val)));
         } else if let Value::Str(str) = self {
             if let Value::Str(vstr) = val {
-                return Some(str.contains(&vstr));
+                return Some(str.contains(vstr));
             } else if let Value::Byte(byte) = val {
                 return Some(str.contains(
-                    &(byte as char).to_string()
+                    &(*byte as char).to_string()
                 ));
             }
         }
         return None;
     }
     // Indexing
-    pub fn index(&self, index: Value) -> Option<Value> {
+    pub fn index(&self, index: &Value) -> Option<Value> {
         if let Value::Str(str) = self {
             return if let Value::Int(i) = index {
-                if i >= 0 {
-                    Some(Value::Str(str.chars().nth(i as usize)?.to_string()))
+                if *i >= 0 {
+                    Some(Value::Str(str.chars().nth(*i as usize)?.to_string()))
                 } else {
                     None
                 }
@@ -299,7 +297,7 @@ impl Value {
         };
         // String indexing (keys)
         if let Value::Str(s) = index {
-          return l.get(&s).cloned();
+            return l.get(s).cloned();
         }
         // Number indexing
         return match l.get_index(index.to_int() as usize) {
@@ -309,24 +307,26 @@ impl Value {
         };
     }
     // ==
-    pub fn eq(&self, right: Value) -> bool {
+    pub fn eq(&self, right: &Value) -> bool {
         return match self {
             // str == ?
             Value::Str(s) => {
                 if let Value::Str(s_right) = right {
                     // str == str
-                    s == &s_right
-                } else { false }
+                    s == s_right
+                } else {
+                    false
+                }
             },
             // none == ?
             Value::None => {
-                right == Value::None
+                right == &Value::None
             },
             // bool == ?
             Value::Bool(b) => {
                 // bool == bool
                 if let Value::Bool(b_right) = right {
-                    *b == b_right
+                    b == b_right
                 } else {
                     false
                 }
@@ -335,7 +335,7 @@ impl Value {
             Value::Byte(b) => {
                 // byte == byte
                 if let Value::Byte(b_right) = right {
-                    *b == b_right
+                    b == b_right
                 } else {
                     false
                 }
@@ -344,10 +344,10 @@ impl Value {
             Value::Float(f) => {
                 if let Value::Float(f_right) = right {
                     // Two floats are easy!
-                    f == &f_right
+                    f == f_right
                 } else if let Value::Int(i_right) = right {
                     // A float and an int also easy
-                    f == &(i_right as f32)
+                    *f == *i_right as f32
                 } else {
                     false
                 }
@@ -356,10 +356,10 @@ impl Value {
             Value::Int(i) => {
                 if let Value::Float(f_right) = right {
                     // Int and float -> float and float
-                    (*i as f32) == f_right
+                    *i as f32 == *f_right
                 } else if let Value::Int(i_right) = right {
                     // Two ints
-                    i == &i_right
+                    i == i_right
                 } else {
                     false
                 }
@@ -388,7 +388,7 @@ impl Value {
                 // Compare values
                 for ab in lhs.iter().zip(rhs.iter()) {
                     let (a, b) = ab;
-                    if !a.eq(b.clone()) {
+                    if !a.eq(&b) {
                         return false;
                     }
                 }
@@ -401,26 +401,32 @@ impl Value {
 }
 
 // Add
-impl_op_ex!(+ |left: Value, right: Value| -> Result<Value, String> {
+impl_op_ex!(+ |left: &Value, right: &Value| -> Result<Value, String> {
     // Lists
-    if let Value::List(mut list) = left {
+    if let Value::List(_) = left {
+        let Value::List(mut list) = left.clone() else {
+            panic!("impossible");
+        };
         if let Some(vals) = right.values() {
             // Concat
-            for val in vals {
+            for val in vals.clone() {
                 list.insert(list.len().to_string(), val);
             }
         } else {
             // Append
-            list.insert(list.len().to_string(), right);
+            list.insert(list.len().to_string(), right.clone());
         }
         return Ok(Value::List(list));
-    } else if let Value::FastList(mut list) = left {
+    } else if let Value::FastList(_) = left {
+        let Value::FastList(mut list) = left.clone() else {
+            panic!("impossible");
+        };
         if let Some(mut vals) = right.values() {
             // Concat
             list.append(&mut vals);
         } else {
             // Append
-            list.push(right);
+            list.push(right.clone());
         }
         return Ok(Value::FastList(list));
     };
@@ -428,7 +434,7 @@ impl_op_ex!(+ |left: Value, right: Value| -> Result<Value, String> {
     if let Value::Str(s) = right {
         return Ok(Value::Str(left.to_string()? + &s));
     } else if let Value::Str(s) = left {
-        return Ok(Value::Str(s + &right.to_string()?));
+        return Ok(Value::Str(s.to_owned() + &right.to_string()?));
     }
     // Anything else
     return do_op!(left, right, +, Err(
@@ -437,60 +443,60 @@ impl_op_ex!(+ |left: Value, right: Value| -> Result<Value, String> {
 });
 
 // Subtract
-impl_op_ex!(- |left: Value, right: Value| -> Result<Value, String> {
+impl_op_ex!(- |left: &Value, right: &Value| -> Result<Value, String> {
     do_op!(left, right, -,
         Err(format!("Cannot subtract {} and {}", left.get_type(), right.get_type()))
     )
 });
 
 // Multiply
-impl_op_ex!(* |left: Value, right: Value| -> Result<Value, String> {
-    return match left.clone() {
+impl_op_ex!(* |left: &Value, right: &Value| -> Result<Value, String> {
+    return match left {
         // str * number is valid
         Value::Str(s) => {
             if let Value::Int(i_right) = right {
-                Ok(if i_right > 0 {
-                    Value::Str(s.repeat(i_right.try_into().unwrap()))
+                Ok(if *i_right > 0 {
+                    Value::Str((*s).repeat((*i_right).try_into().unwrap()))
                 } else {
                     Value::Str("".to_string())
                 })
             } else {
-                Err(format!("Cannot multiply {} and {}", left.get_type(), right.get_type()))
+                Err(format!(
+                    "Cannot multiply {} and {}", left.get_type(), right.get_type()
+                ))
             }
         },
         _ => do_op!(left, right, *,
-            Err(format!("Cannot multiply {} and {}", left.get_type(), right.get_type()))
+            Err(format!(
+                "Cannot multiply {} and {}", left.get_type(), right.get_type()
+            ))
         ),
     }
 });
 
 // Div
-impl_op_ex!(/ |left: Value, right: Value| -> Result<Value, String> {
-    match left {
-        Value::Int(i) => Value::Float(i as f32) / right,
-        _ => do_op!(
-            left, right, /,
-            Err(
-                format!(
-                    "Cannot modulo {} and {}",
-                    left.get_type(),
-                    right.get_type()
-                )
-            )
-        )
+impl_op_ex!(/ |left: &Value, right: &Value| -> Result<Value, String> {
+    if let Value::Int(i) = left {
+        return &Value::Float(*i as f32) / right;
     }
+    do_op!(
+        left, right, /,
+        Err(format!(
+            "Cannot modulo {} and {}",
+            left.get_type(),
+            right.get_type()
+        ))
+    )
 });
 
 // Modulo
-impl_op_ex!(% |left: Value, right: Value| -> Result<Value, String> {
+impl_op_ex!(% |left: &Value, right: &Value| -> Result<Value, String> {
     do_op!(
         left, right, %,
-        Err(
-            format!(
-                "Cannot modulo {} and {}",
-                left.get_type(),
-                right.get_type()
-            )
-        )
+        Err(format!(
+            "Cannot modulo {} and {}",
+            left.get_type(),
+            right.get_type()
+        ))
     )
 });

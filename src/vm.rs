@@ -300,19 +300,17 @@ impl Vm {
     }
 
     // Set a variable
-    pub fn set_local(&mut self, name: &String, val: Value) -> bool {
+    pub fn get_local_index(&mut self, name: &String) -> Option<usize> {
         // Sets a local var
         let mut index = self.var_names.len();
         while index > self.var_min {
             index -= 1;
             if &self.var_names[index] == name {
-                // Now that I have it, set it
-                self.var_vals[index] = val;
-                return true;
+                return Some(index);
             }
         }
         // Failed to get var
-        return false;
+        return None;
     }
 
     pub fn set_global(&mut self, name: &String, val: Value) -> bool {
@@ -327,8 +325,11 @@ impl Vm {
     pub fn set_var(&mut self, name: &String, val: Value) -> Result<(), String>
     {
         // Changes a variable to a different value
-        if self.set_local(name, val.clone()) {
-            return Ok(());
+        if !self.is_global {
+            if let Some(index) = self.get_local_index(name) {
+                self.var_vals[index] = val;
+                return Ok(());
+            }
         }
         if self.set_global(name, val) {
             return Ok(());
@@ -1024,7 +1025,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         Opcode::INX => {
             let index = vm.pop();
             let list = vm.pop();
-            match list.index(index.clone()) {
+            match list.index(&index) {
                  Some(x) => vm.push(x),
                  _ => return Err(format!(
                     "failed to index {} with {}",
@@ -1123,7 +1124,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         Opcode::IN => {
             let rhs = vm.pop();
             let lhs = vm.pop();
-            if let Some(b) = rhs.contains(lhs.clone()) {
+            if let Some(b) = rhs.contains(&lhs) {
                 vm.push(Value::Bool(b));
             } else {
                 return Err(
@@ -1134,7 +1135,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         Opcode::EQ => {
             let rhs = vm.pop();
             let lhs = vm.pop();
-            vm.push(Value::Bool(lhs.eq(rhs)));
+            vm.push(Value::Bool(lhs.eq(&rhs)));
         },
         Opcode::LT => {
             let rhs = vm.pop();
