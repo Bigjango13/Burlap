@@ -17,9 +17,10 @@ rustyline = "11.0.0"
 # For lexing
 logos = "0.13.0"
 # For C ffi
-libc = "0.2.142"
-libffi = "3.2.0"
+libc = {version = "0.2.142", optional = true}
+libffi = {version = "3.2.0", optional = true}
 
 [features]
 default = ["fancyrepl"]
 fancyrepl = ["rustyline/custom-bindings", "rustyline/derive"]
+cffi = ["libc", "libffi"]

@@ -5,7 +5,9 @@ use std::io::{Write, Read, Seek, SeekFrom};
 use std::io;
 
 use crate::Arguments;
+#[cfg(feature = "cffi")]
 use crate::cffi::{load_functi, load_library};
+#[cfg(feature = "cffi")]
 use crate::cffi::call as ffi_call;
 use crate::compiler::Program;
 use crate::value::{FileInfo, Value};
@@ -185,15 +187,19 @@ impl Vm {
             functies.insert(
                 "__burlap_throw".to_string(), sk_throw as Functie
             );
+            #[cfg(feature = "cffi")]
             functies.insert(
                 "__burlap_load_lib".to_string(), sk_libload as Functie
             );
+            #[cfg(feature = "cffi")]
             functies.insert(
                 "__burlap_load_functi".to_string(), sk_functiload as Functie
             );
+            #[cfg(feature = "cffi")]
             functies.insert(
                 "__burlap_ffi_call".to_string(), sk_call_c as Functie
             );
+            #[cfg(feature = "cffi")]
             functies.insert(
                 "__burlap_ptr".to_string(), sk_ptr as Functie
             );
@@ -611,10 +617,11 @@ fn sk_open(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     };
     // File info
     let fi = Rc::new(RefCell::new(FileInfo{
+        name: file, mode,
         closed: false,
         file: Some(fileinfo)
     }));
-    return Ok(Value::File(file, mode, fi));
+    return Ok(Value::File(fi));
 }
 
 fn sk_close(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
@@ -622,8 +629,8 @@ fn sk_close(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
         // Invalid args
         vm.bad_args(&"close".to_string(), args.len(), 1)?;
     }
-    let Value::File(_, _, ref mut info) = args[0] else {
-        return Err(format!("cannot close from {}", args[0].get_type()));
+    let Value::File(ref mut info) = args[0] else {
+        return Err(format!("cannot close {}", args[0].get_type()));
     };
     info.borrow_mut().closed = true;
     info.borrow_mut().file = None;
@@ -644,12 +651,13 @@ fn sk_read(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
         // Invalid args
         vm.bad_args(&"read".to_string(), args.len(), 1)?;
     }
-    let Value::File(_, mode, ref mut info) = args[0] else {
+    let Value::File(ref mut info) = args[0] else {
         return Err(format!("cannot read from {}", args[0].get_type()));
     };
     if info.borrow().closed {
         return Err("cannot read from closed file".to_string());
     }
+    let mode = info.borrow().mode;
     if mode.abs() != 1 {
         return Err("can only read from 'r'/'rb'".to_string());
     }
@@ -675,13 +683,13 @@ fn sk_seek(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         vm.bad_args(&"seek".to_string(), args.len(), 2)?;
     }
     // Check and get file
-    let Value::File(_, mode, ref mut info) = args[0].clone() else {
+    let Value::File(ref mut info) = args[0].clone() else {
         return Err(format!("cannot seek on {}", args[0].get_type()));
     };
     if info.borrow().closed {
         return Err("cannot seek on closed file".to_string());
     }
-    if mode.abs() != 2 && mode != 0 {
+    if info.borrow().mode.abs() != 2 {
         return Err("can only seek on 'w'/'wb'".to_string());
     }
     // Get position
@@ -707,12 +715,13 @@ fn sk_write(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         vm.bad_args(&"write".to_string(), args.len(), 2)?;
     }
     // Now check args
-    let Value::File(_, mode, ref mut info) = args[0].clone() else {
+    let Value::File(ref mut info) = args[0].clone() else {
         return Err(format!("cannot write to {}", args[0].get_type()));
     };
     if info.borrow().closed {
         return Err("cannot write to closed file".to_string());
     }
+    let mode = info.borrow().mode;
     if mode.abs() != 2 && mode != 0 {
         return Err("can only write to 'w'/'wb'/'a'".to_string());
     }
@@ -793,6 +802,7 @@ fn sk_byte(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 }
 
 // Pointer
+#[cfg(feature = "cffi")]
 fn sk_ptr(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
@@ -833,6 +843,7 @@ fn sk_throw(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     Err(args[0].to_string()?)
 }
 
+#[cfg(feature = "cffi")]
 fn sk_libload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         vm.bad_args(&"__burlap_load_library".to_string(), args.len(), 1)?;
@@ -840,6 +851,7 @@ fn sk_libload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     return Ok(Value::Ptr(load_library(args[0].to_string()?)?))
 }
 
+#[cfg(feature = "cffi")]
 fn sk_functiload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
         vm.bad_args(&"__burlap_load_functi".to_string(), args.len(), 2)?;
@@ -851,6 +863,7 @@ fn sk_functiload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     return Ok(Value::Ptr(load_functi(handle, args[1].to_string()?)?));
 }
 
+#[cfg(feature = "cffi")]
 fn sk_call_c(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 3 {
         vm.bad_args(&"__burlap_ffi_call".to_string(), args.len(), 3)?;

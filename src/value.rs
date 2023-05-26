@@ -7,6 +7,8 @@ use indexmap::map::IndexMap;
 
 #[derive(Debug)]
 pub struct FileInfo {
+    pub name: String,
+    pub mode: i8,
     pub closed: bool,
     pub file: Option<File>
 }
@@ -29,12 +31,13 @@ pub enum Value {
     Byte(u8),
     List(IndexMap<String, Value>),
     None,
-    File(String, i8, Rc<RefCell<FileInfo>>),
+    File(Rc<RefCell<FileInfo>>),
 
     // FastList (used for lists with only number keys)
     FastList(Vec<Value>),
 
     // Ptr, used for ffi
+    #[cfg(feature = "cffi")]
     Ptr(usize),
 
     // Iterator (used for iter based loops)
@@ -90,6 +93,7 @@ impl Value {
             Value::Float(f) => *f as i32,
             Value::Bool(b) => if *b { 1 } else { 0 },
             Value::Byte(b) => *b as i32,
+            #[cfg(feature = "cffi")]
             Value::Ptr(ptr) => *ptr as i32,
             _ => 0,
         };
@@ -168,6 +172,7 @@ impl Value {
             Value::Bool(b) => *b,
             Value::List(l) => !l.is_empty(),
             Value::FastList(l) => !l.is_empty(),
+            #[cfg(feature = "cffi")]
             Value::Ptr(ptr) => *ptr != 0,
             _ => false,
         };
@@ -185,6 +190,7 @@ impl Value {
             Value::None => "None",
             Value::File(..) => "File",
             // Internal types
+            #[cfg(feature = "cffi")]
             Value::Ptr(_) => "__burlap_ptr",
             Value::Iter(..) => "__burlap_iter",
             Value::RangeType(..) => "__burlap_rangetype",
@@ -359,6 +365,7 @@ impl Value {
                 }
             },
             // Pointers
+            #[cfg(feature = "cffi")]
             Value::Ptr(p) => {
                 if let Value::Ptr(p_right) = right {
                     *p == p_right

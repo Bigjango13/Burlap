@@ -5,6 +5,7 @@ use std::env;
 use std::path::PathBuf;
 use std::process::exit;
 
+#[cfg(feature = "cffi")]
 mod cffi;
 mod common;
 mod compiler;
