@@ -141,11 +141,55 @@ fn compile_set(program: &mut Program, var: &ASTNode) -> bool {
     return true;
 }
 
+fn compile_short_binop(
+    program: &mut Program,
+    lhs: &Box<ASTNode>, op: &TokenType, rhs: &Box<ASTNode>,
+    clean: bool
+) -> bool {
+    // Compiles short circuiting operators (&& and ||)
+    // Uses jump instructions to:
+    // Turn `a() && b()` into `r = a(); if r { r &= b() }; r`
+    // Turn `a() || b()` into `r = a(); if !r { r |= b() }; r`
+    if !compile_expr(program, lhs) {
+        return false;
+    }
+    program.ops.push(Opcode::DUP as u8);
+    if op == &TokenType::Or {
+        program.ops.push(Opcode::NOT as u8);
+    }
+    // Start jump
+    program.ops.push(Opcode::JMPNT as u8);
+    let pos = program.ops.len();
+    program.ops.push(0);
+    program.ops.push(0);
+    program.ops.push(0);
+    // Run 'b' (the left)
+    if !compile_expr(program, rhs) {
+        return false;
+    }
+    // Uses &= or |= on 'b' (the left)
+    if op == &TokenType::Or {
+        program.ops.push(Opcode::OR as u8);
+    } else {
+        program.ops.push(Opcode::AND as u8);
+    }
+    // End the jump
+    program.fill_jmp(pos, 0);
+    if clean {
+        program.ops.push(Opcode::DEL as u8);
+    }
+    return true;
+}
+
 fn compile_binop(
     program: &mut Program,
     lhs: &Box<ASTNode>, op: &TokenType, rhs: &Box<ASTNode>,
     clean: bool
 ) -> bool {
+    // Short circuiting ops are special
+    if op == &TokenType::And || op == &TokenType::Or {
+        return compile_short_binop(program, lhs, op, rhs, clean);
+    }
     // Compile sides
     if op != &TokenType::Equals {
         // No need to compile the value if it will just be reassigned

@@ -84,6 +84,7 @@ Burlap started because I wanted to learn how to create a programming language. I
     - Add `in` as a binop
     - Remove boolean and none math
     - Add guaranteed tail recursion
+    - Make short circuiting operators short circuit
     - Make `str` return none on failure
     - Fix major bug with jumping instructions
     - Fix empty import bug
