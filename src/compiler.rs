@@ -573,11 +573,13 @@ fn compile_stmt(
             path.set_extension("sk");
             if let Ok(src) = read_to_string(path.to_str().unwrap()) {
                 args.source = src;
+                args.name = path.into_os_string().into_string().unwrap();
             } else {
                 // Try x.sack
                 path.set_extension("sack");
                 if let Ok(src) = read_to_string(path.to_str().unwrap()) {
                     args.source = src;
+                    args.name = path.into_os_string().into_string().unwrap();
                 } else {
                     // No such file
                     print_err(
