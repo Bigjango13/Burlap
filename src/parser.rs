@@ -62,6 +62,7 @@ struct Parser {
     at: usize,
     in_func: bool,
     has_err: bool,
+    name: String
 }
 
 impl Parser {
@@ -125,7 +126,7 @@ fn parse_call(parser: &mut Parser) -> Option<ASTNode> {
     let mut ret = parse_base_expr(parser)?;
     let name: String;
     if let ASTNode::VarExpr(n) = &ret {
-        name = n.clone();
+        name = n.clone().split("::").nth(1).unwrap().to_string();
     } else {
         return Some(ret);
     }
@@ -173,8 +174,9 @@ fn parse_unary(parser: &mut Parser) -> Option<ASTNode> {
     }
     if vec![PlusPlus, MinusMinus].contains(&parser.current()) {
         let op = parser.current();
-        if let Identifier(v) = parser.next() {
+        if let Identifier(mut v) = parser.next() {
             parser.next();
+            v = parser.name.clone() + "::" + &v;
             return Some(ASTNode::UnaryExpr(op, Box::new(ASTNode::VarExpr(v))));
         } else {
             error!(parser, "++/-- require identifiers", ErrType::Err);
@@ -275,7 +277,9 @@ fn parse_list_item(parser: &mut Parser, at: i32) -> (String, Option<ASTNode>) {
             parser.next();
         } else if let Comma | Rbracket = parser.current() {
             // Named indexes don't need values
-            return (name.clone(), Some(ASTNode::VarExpr(name)));
+            return (name.clone(), Some(ASTNode::VarExpr(
+                parser.name.clone() + "::" + &name
+            )));
         } else {
             // It's not a named index (`[myvar + 1]`)
             name = at.to_string();
@@ -336,7 +340,9 @@ fn parse_list(parser: &mut Parser) -> Option<ASTNode> {
 fn parse_base_expr(parser: &mut Parser) -> Option<ASTNode> {
     return match parser.current() {
         // Inbuilt type
-        Identifier(v) => { parser.next(); Some(ASTNode::VarExpr(v))     },
+        Identifier(v) => { parser.next(); Some(ASTNode::VarExpr(
+            parser.name.clone() + "::" + &v
+        ))     },
         Str(s)        => { parser.next(); Some(ASTNode::StringExpr(s))  },
         Int(i)        => { parser.next(); Some(ASTNode::NumberExpr(i))  },
         Float(f)      => { parser.next(); Some(ASTNode::DecimalExpr(f)) },
@@ -503,7 +509,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     // Name
     let name: String;
     if let Identifier(n) = parser.current() {
-        name = n;
+        name = parser.name.clone() + "::" + &n;
     } else {
         error!(parser, "expected variable name");
         return Option::None;
@@ -589,7 +595,7 @@ fn parse_let(parser: &mut Parser) -> Option<ASTNode> {
     // Get var name
     let name: String;
     if let Identifier(n) = parser.current() {
-        name = n;
+        name = parser.name.clone() + "::" + &n;
     } else {
         error!(parser, "expected variable name");
         return Option::None;
@@ -681,7 +687,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         }
         // Arg name
         if let Identifier(n) = parser.current() {
-            args.push(n);
+            args.push(parser.name.clone() + "::" + &n);
             parser.next();
         } else {
             error!(parser, "expected argument name");
@@ -725,7 +731,7 @@ pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Option<Vec<ASTNode>> {
     let mut parser = Parser{
         tokens, extensions: args.extensions.clone(),
         at: 0, has_err: false, in_func: false,
-        ast: vec![]
+        ast: vec![], name: args.name.clone()
     };
     // Parse
     while parser.current() != Eof {
