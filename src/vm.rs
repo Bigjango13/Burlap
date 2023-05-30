@@ -1241,10 +1241,14 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         },
 
         Opcode::RET => {
-            let Value::Int(pos) = vm.stack.swap_remove(vm.stack.len() - 2) else
-            {
+            let ret = vm.stack.pop().unwrap();
+            while let Value::Iter(..) = vm.stack.last().unwrap() {
+                vm.stack.pop();
+            }
+            let Value::Int(pos) = vm.stack.pop().unwrap() else {
                 return Err("Non-int return address".to_string());
             };
+            vm.stack.push(ret);
             // Fix scope
             loop {
                 let Some((_, _, c)) = vm.scope.last() else {

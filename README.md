@@ -82,11 +82,12 @@ Burlap started because I wanted to learn how to create a programming language. I
 - 1.1.5: "Self host speedrun"
     - Add `args()`
     - Add `in` as a binop
-    - Remove boolean and none math
     - Add guaranteed tail recursion
+    - Remove boolean and none math
     - Make short circuiting operators short circuit
     - Make `str` return none on failure
     - Fix major bug with jumping instructions
+    - Fix returning from a loop
     - Fix empty import bug
 - 1.1.4: Byte and file update
     - Add string indexing
