@@ -105,6 +105,8 @@ pub enum TokenType {
     TimesEquals,
     #[token("/=")]
     DivEquals,
+    #[token("%=")]
+    ModEquals,
     // Logical operators
     #[token("&&")]
     And,

@@ -215,7 +215,7 @@ fn compile_binop(
         TokenType::Div | TokenType::DivEquals => {
             program.ops.push(Opcode::DIV as u8);
         },
-        TokenType::Modulo => {
+        TokenType::Modulo | TokenType::ModEquals => {
             program.ops.push(Opcode::MOD as u8);
         },
         TokenType::And => {
@@ -259,7 +259,7 @@ fn compile_binop(
     // Set the variable
     if let TokenType::PlusEquals | TokenType::MinusEquals
         | TokenType::TimesEquals | TokenType::DivEquals
-        | TokenType::Equals = op.clone()
+        | TokenType::ModEquals | TokenType::Equals = op.clone()
     {
         if !compile_set(program, lhs) {
             return false;

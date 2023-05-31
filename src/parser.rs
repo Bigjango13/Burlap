@@ -242,14 +242,14 @@ fn parse_binop_set(parser: &mut Parser) -> Option<ASTNode> {
     // Left must start with identifier
     if let Identifier(..) = parser.current() {
         let ret = parse_binop_helper(parser, vec![
-            Equals, PlusEquals, MinusEquals, TimesEquals, DivEquals
+            Equals, PlusEquals, MinusEquals, TimesEquals, DivEquals, ModEquals
         ], &parse_binop_logic, false)?;
         let ASTNode::BinopExpr(rhs, op, _) = ret.clone() else {
             return Some(ret);
         };
         // Check that the binop is a setter
-        if let Equals | PlusEquals | MinusEquals | TimesEquals | DivEquals =
-            op {} else {
+        if let Equals | PlusEquals | MinusEquals | TimesEquals
+            | DivEquals | ModEquals = op {} else {
             return Some(ret);
         }
         // Check that arms are either Var or Index
@@ -362,7 +362,7 @@ fn parse_base_expr(parser: &mut Parser) -> Option<ASTNode> {
         EqualsEquals | NotEquals | Lt | Gt | LtEquals | GtEquals
         | PlusEquals | MinusEquals | TimesEquals | DivEquals
         | Plus | Minus | Times | Div | Modulo | And | Or | Xor
-        | PlusPlus | MinusMinus | Not => {
+        | PlusPlus | MinusMinus | Not | ModEquals => {
             error!(
                 parser,
                 "invalid use of operator, did you forgot something before/after?"

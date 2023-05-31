@@ -66,7 +66,7 @@ impl rustyline::highlight::Highlighter for FancyRepl {
                 | TokenType::Times | TokenType::Div | TokenType::Modulo
                 | TokenType::PlusPlus | TokenType::MinusMinus
                 | TokenType::Not | TokenType::Equals | TokenType::And
-                | TokenType::Or | TokenType::Xor
+                | TokenType::Or | TokenType::Xor | TokenType::ModEquals
                 | TokenType::Colon => Some("\x1b[31m"),
                 // Numbers
                 TokenType::Int(_) | TokenType::Float(_) => Some("\x1b[1;35m"),
