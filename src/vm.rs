@@ -213,12 +213,17 @@ impl Vm {
         }
     }
 
+    // Unmangle a var name
+    fn unmangle(name: &String) -> String {
+        name.clone().split("::").nth(1).unwrap().to_string()
+    }
+
     // Get a vec of all symbol names
     #[cfg(feature = "fancyrepl")]
     pub fn get_symbols(&self, add_keywords: bool) -> Vec<String> {
         // Globals
         let mut ret: Vec<String>
-            = self.globals.keys().cloned().collect();
+            = self.globals.keys().map(|x| Self::unmangle(x)).collect();
         // Functies
         ret.extend(
             self.functies.keys().cloned().collect::<Vec<String>>()
@@ -229,7 +234,8 @@ impl Vm {
             .collect::<Vec<String>>()
         );
         // Locals
-        ret.extend(self.var_names.clone());
+        ret.extend(self.var_names.iter().map(|x| Self::unmangle(x))
+            .collect::<Vec<String>>());
         // Keywords
         if add_keywords {
             ret.extend(vec![
