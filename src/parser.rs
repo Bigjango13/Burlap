@@ -179,7 +179,7 @@ fn parse_unary(parser: &mut Parser) -> Option<ASTNode> {
             v = parser.name.clone() + "::" + &v;
             return Some(ASTNode::UnaryExpr(op, Box::new(ASTNode::VarExpr(v))));
         } else {
-            error!(parser, "++/-- require identifiers", ErrType::Err);
+            error!(parser, "++/-- require identifiers");
             return Option::None;
         }
     }
