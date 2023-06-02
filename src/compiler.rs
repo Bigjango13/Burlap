@@ -569,6 +569,7 @@ fn compile_stmt(
             // Open file
             let mut path = program.path.clone();
             path.push(file);
+            let old_name = args.name.clone();
             // Try x.sk first
             path.set_extension("sk");
             if let Ok(src) = read_to_string(path.to_str().unwrap()) {
@@ -602,7 +603,11 @@ fn compile_stmt(
             if !compile(ast, args, program) {
                 return false;
             }
+            args.name = old_name;
             program.path = old_path;
+            // Reset path
+            program.push(Value::Str(args.name.clone()));
+            program.ops.push(Opcode::SF as u8);
         },
         Nop => {
             // Nop isn't turned into the NOP instruction because it's useless
@@ -630,6 +635,9 @@ pub fn compile(
     if ast.is_empty() {
         return true;
     }
+    // Set path
+    program.push(Value::Str(args.name.clone()));
+    program.ops.push(Opcode::SF as u8);
     // Compile
     for node in &ast[..ast.len()-1] {
         if !compile_stmt(program, args, node, false) {

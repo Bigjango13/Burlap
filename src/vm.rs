@@ -22,6 +22,10 @@ pub enum Opcode {
     // The almighty NOP
     NOP,
 
+    // Meta opcodes
+    // Set File (string)
+    SF,
+
     // Stack
     // PUSH value ([const u8 index] -> value)
     PUSH,
@@ -121,6 +125,8 @@ type Functie = fn(&mut Vm, Vec<Value>) -> Result<Value, String>;
 pub struct Vm {
     // Extensions
     pub args: Arguments,
+    // File name
+    pub filename: String,
 
     // State
     pub has_err: bool,
@@ -207,9 +213,10 @@ impl Vm {
         Vm {
             args, has_err: false, in_func: false, functies,
             is_global: true, globals: FxHashMap::default(),
-            var_names: vec![], var_vals: vec![], var_min: 0,
+            var_names: vec![], var_vals: vec![], jump: false,
             stack: vec![], scope: vec![], call_frames: vec![],
-            program: Program::new(), jump: false, at: 0
+            at: 0, var_min: 0, program: Program::new(),
+            filename: "".to_string()
         }
     }
 
@@ -799,7 +806,7 @@ fn sk_byte(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
             Value::FastList(ret)
         }
         Value::Str(_) =>
-            return Err("cannot convert empty strint to bytes".to_string()),
+            return Err("cannot convert empty string to bytes".to_string()),
         // Int and identity
         Value::Int(i) => Value::Byte((*i % 256).try_into().unwrap()),
         Value::Byte(b) => Value::Byte(*b),
@@ -967,6 +974,14 @@ fn set_key(
 fn exec_next(vm: &mut Vm) -> Result<(), String> {
     match vm.cur_opcode() {
         Opcode::NOP => {},
+
+        // Set File
+        Opcode::SF => {
+            let Some(Value::Str(filename)) = vm.stack.pop() else {
+                panic!("Cannot set non-string filename!");
+            };
+            vm.filename = filename;
+        },
 
         // Push
         Opcode::PUSH => {
@@ -1293,7 +1308,7 @@ pub fn run(vm: &mut Vm) -> bool {
         }
         // Run
         if let Err(s) = exec_next(vm) {
-            println!("Runtime Error: {}", s);
+            println!("Runtime Error in {}: {}", vm.filename, s);
             vm.at = vm.program.ops.len() - 1;
             return false;
         }
