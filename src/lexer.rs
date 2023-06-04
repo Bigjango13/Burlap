@@ -157,8 +157,7 @@ pub fn lex(
     }
     // Stream (for errors)
     let mut stream = Stream{
-        name, rat: 0, at: 0, line: 1,
-        str: lines.get(0).unwrap_or(&"").to_string(), size: 0,
+        name, rat: 0, at: 0, line: 1, size: 0,
     };
     let mut lastat = 0;
     let mut tok = lex.next();
@@ -183,10 +182,6 @@ pub fn lex(
             let token = tok.unwrap().unwrap();
             if token == TokenType::Newline {
                 // Bump line
-                stream.str = match lines.get(stream.line) {
-                    Some(s) => *s,
-                    None => ""
-                }.to_string();
                 stream.line += 1;
                 lastat = lex.span().start + 1;
             }

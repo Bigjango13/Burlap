@@ -1,10 +1,11 @@
+use std::fs;
+use std::io::{BufReader, BufRead};
+
 // Stream
 #[derive(Debug, Clone)]
 pub struct Stream {
     // File name
     pub name: String,
-    // Line contents
-    pub str: String,
     // Line #
     pub line: usize,
     // Char pos in line
@@ -42,6 +43,12 @@ pub fn print_err(msg: &str, errtype: ErrType, color: bool) -> String {
 }
 
 pub fn err(stream: &Stream, msg: &str, errtype: ErrType, color: bool) {
+    let line = if let Ok(file) = fs::File::open(stream.name.clone()) {
+        BufReader::new(file).lines().nth(stream.line - 1)
+            .expect("failed to read file for errors").unwrap()
+    } else {
+        panic!("Failed to read file for error printing!");
+    };
     // Print file name and line/char info ("test.sk:1:3: ")
     if color {
         print!("\x1b[1m{}:{}:{}:\x1b[0m ", stream.name, stream.line, stream.at);
@@ -51,14 +58,14 @@ pub fn err(stream: &Stream, msg: &str, errtype: ErrType, color: bool) {
     // Print the type ("error:")
     let color_code = print_err(msg, errtype, color);
     // Print the line ("    1 | print("Hello World!");")
-    let line = format!("    {} | ", stream.line);
-    println!("{}{}", line, stream.str.replace('\t', "    "));
+    let prefix = format!("    {} | ", stream.line);
+    println!("{}{}", prefix, line.replace('\t', "    "));
     // Print arrow ("      |   ^")
     // Adjust for tabs
-    let at = stream.str[0..stream.at].matches('\t').count()*3 + stream.at;
+    let at = line[0..stream.at].matches('\t').count()*3 + stream.at;
     print!(
         "{}| {}",
-        " ".repeat(line.len() - 2), " ".repeat(at)
+        " ".repeat(prefix.len() - 2), " ".repeat(at)
     );
     if color {
         println!("{}{}\x1b[0m", color_code, "^".repeat(stream.size));
