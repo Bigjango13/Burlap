@@ -22,10 +22,6 @@ pub enum Opcode {
     // The almighty NOP
     NOP,
 
-    // Meta opcodes
-    // Set File (string)
-    SF,
-
     // Stack
     // PUSH value ([const u8 index] -> value)
     PUSH,
@@ -975,14 +971,6 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
     match vm.cur_opcode() {
         Opcode::NOP => {},
 
-        // Set File
-        Opcode::SF => {
-            let Some(Value::Str(filename)) = vm.stack.pop() else {
-                panic!("Cannot set non-string filename!");
-            };
-            vm.filename = filename;
-        },
-
         // Push
         Opcode::PUSH => {
             let index = vm.read(1);
@@ -1308,7 +1296,8 @@ pub fn run(vm: &mut Vm) -> bool {
         }
         // Run
         if let Err(s) = exec_next(vm) {
-            println!("Runtime Error in {}: {}", vm.filename, s);
+            let (line, filename) = vm.program.get_info(vm.at as u32);
+            println!("Runtime Error in {}:{}: {}", filename, line, s);
             vm.at = vm.program.ops.len() - 1;
             return false;
         }

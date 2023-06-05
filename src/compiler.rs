@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fs::read_to_string;
 use std::path::PathBuf;
 
@@ -20,11 +21,18 @@ pub struct Program {
     pub functis: FxHashMap<String, (usize, i32)>,
     // Import dir
     pub path: PathBuf,
+
+    // Side tables
+    line_table: Vec<(u32, u32, u32)>,
+    file_table: Vec<(u32, u32, String)>,
+
     // Compiler info
     // The functi being compiled (name, args, address)
     functi: (String, u8, u32),
     // If RS and LEVI are needed
-    needs_scope: bool
+    needs_scope: bool,
+    // Where in the byte code the current file started
+    inc_start: u32,
 }
 
 impl Program {
@@ -34,9 +42,30 @@ impl Program {
             ops: vec![], consts: vec![],
             functis: FxHashMap::default(),
             path: PathBuf::from("."),
-            needs_scope: false,
+            line_table: vec![], file_table: vec![],
+            needs_scope: false, inc_start: 0,
             functi: ("".to_string(), 0, 0),
         }
+    }
+
+    fn bin_range<T: Clone>(index: u32, table: &Vec<(u32, u32, T)>) -> Option<T> {
+        table.binary_search_by(
+            |x| {
+                if x.0 > index {
+                    Ordering::Greater
+                } else if x.1 < index {
+                    Ordering::Less
+                } else { Ordering::Equal }
+            }
+        ).and_then(|x| Ok(table[x].2.clone())).ok()
+    }
+
+    pub fn get_info(&mut self, index: u32) -> (u32, String) {
+        let file = Self::bin_range(index, &self.file_table)
+            .unwrap_or("Unknown File".to_string());
+        let line = Self::bin_range(index, &self.line_table)
+            .unwrap_or(0);
+        (line, file)
     }
 
     pub fn push(&mut self, val: Value) {
@@ -570,6 +599,9 @@ fn compile_stmt(
             let mut path = program.path.clone();
             path.push(file);
             let old_name = args.name.clone();
+            program.file_table.push((
+                program.inc_start, program.ops.len() as u32, args.name.clone()
+            ));
             // Try x.sk first
             path.set_extension("sk");
             if let Ok(src) = read_to_string(path.to_str().unwrap()) {
@@ -603,11 +635,9 @@ fn compile_stmt(
             if !compile(ast, args, program) {
                 return false;
             }
+            program.inc_start = program.ops.len() as u32;
             args.name = old_name;
             program.path = old_path;
-            // Reset path
-            program.push(Value::Str(args.name.clone()));
-            program.ops.push(Opcode::SF as u8);
         },
         Nop => {
             // Nop isn't turned into the NOP instruction because it's useless
@@ -635,9 +665,7 @@ pub fn compile(
     if ast.is_empty() {
         return true;
     }
-    // Set path
-    program.push(Value::Str(args.name.clone()));
-    program.ops.push(Opcode::SF as u8);
+    program.inc_start = program.ops.len() as u32;
     // Compile
     for node in &ast[..ast.len()-1] {
         if !compile_stmt(program, args, node, false) {
@@ -651,5 +679,9 @@ pub fn compile(
     }
     // Jumps go onto the next instruction, so a nop is needed at the end
     program.ops.push(Opcode::NOP as u8);
+    // End file
+    program.file_table.push((
+        program.inc_start, program.ops.len() as u32, args.name.clone()
+    ));
     return true;
 }
