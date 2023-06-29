@@ -170,6 +170,17 @@ impl rustyline::completion::Completer for FancyRepl {
     }
 }
 
+pub fn get_repl_line() -> &'static mut String {
+    unsafe {
+        // Hack to make errors in repl mode work
+        static mut LINE: Option<String> = None;
+        if LINE == None {
+            LINE = Some("".to_string());
+        }
+        return LINE.as_mut().unwrap();
+    }
+}
+
 pub fn repl(args: &mut Arguments) {
     // Print welcome msg
     println!("Burlap v{}", env!("CARGO_PKG_VERSION"));
@@ -212,9 +223,12 @@ pub fn repl(args: &mut Arguments) {
         // Input
         if let Ok(line) = readline {
             // Add to history
-            rl.add_history_entry(line.clone())
-                .expect("failed to add line to history");
+            if !hist_file.is_empty() {
+               rl.add_history_entry(line.clone())
+                    .expect("failed to add line to history");
+            }
             args.source = line + ";";
+            *get_repl_line() = args.source.clone();
             // Gen ast
             let Some(ast) = to_ast(args) else {
                 continue;

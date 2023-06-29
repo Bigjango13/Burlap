@@ -2,6 +2,8 @@ use std::env;
 use std::fs;
 use std::io::{BufReader, BufRead};
 
+use crate::repl::get_repl_line;
+
 // Stream
 #[derive(Debug, Clone)]
 pub struct Stream {
@@ -44,21 +46,19 @@ pub fn print_err(msg: &str, errtype: ErrType, color: bool) -> String {
 }
 
 fn get_line(stream: &Stream) -> String {
-    // Special case
+    // Special cases
     if stream.name == "<cli>" {
         let mut args = env::args();
         args.position(|x| x == "-");
         return args.next()
             .unwrap().lines().nth(stream.line - 1)
             .expect("failed to read file for errors").to_string()
+    } else if stream.name == "<stdin>" {
+        return get_repl_line().clone().lines().nth(stream.line - 1)
+            .unwrap().to_string();
     }
 
-    let name = /*if stream.name == "<stdin>" {
-        stream.tmpname.clone()
-    } else {*/
-        stream.name.clone()
-    //}
-    ;
+    let name = stream.name.clone();
     // Open
     let Ok(file) = fs::File::open(name) else {
         panic!("Failed to open file for error printing!");
