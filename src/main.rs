@@ -26,6 +26,7 @@ use crate::vm::{run, Vm};
 pub struct Arguments {
     source: String,
     name: String,
+    path: PathBuf,
     is_debug: bool,
     is_repl: bool,
     format: bool,
@@ -39,7 +40,7 @@ impl Arguments {
             source: "".to_string(), is_debug: false,
             is_repl: true, extensions: vec!["color".to_string()],
             name: "<stdin>".to_string(), format: false,
-            program_args: vec![]
+            program_args: vec![], path: PathBuf::from(".")
         }
     }
 }
@@ -52,6 +53,7 @@ pub fn to_ast(args: &mut Arguments) -> Option<Vec<ASTNode>> {
     ) else {
         return None;
     };
+    args.source = "".to_string();
     // Parse
     let Some(ast) = parse(tokens, args) else {
         return None;
@@ -184,14 +186,14 @@ fn main() {
         // Repl
         repl(&mut args);
     } else {
+        args.path = PathBuf::from(args.name.clone());
         // Execute file
         let Some(ast) = to_ast(&mut args) else {
             exit(1);
         };
-        args.source = "".to_string();
         let mut vm = Vm::new(args.clone());
         // Fix import path
-        vm.program.path = PathBuf::from(args.name.clone());
+        vm.program.path = args.path.clone();
         vm.program.path.pop();
         if !compile(ast, &mut args, &mut vm.program) {
             exit(1);

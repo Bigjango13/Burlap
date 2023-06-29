@@ -1,4 +1,5 @@
-use crate::Arguments;
+use std::fs::read_to_string;
+use crate::{Arguments, to_ast};
 use crate::common::{err, ErrType, IMPOSSIBLE_STATE};
 use crate::lexer::{Token, TokenType};
 use TokenType::*;
@@ -46,8 +47,10 @@ pub enum ASTNode {
     LoopStmt(String, Box<ASTNode>, Box<ASTNode>),
     // While loop, (6 > i, Body(...))
     WhileStmt(Box<ASTNode>, Box<ASTNode>),
-    // Import, ("math")
+    // ImportStmt, (filename), used for the file table as the parser handles imports
     ImportStmt(String),
+    // EndImportStmt, (), used for marking the end of the import
+    EndImportStmt(),
 
     // Special
     // Nop, does nothing
@@ -58,7 +61,7 @@ pub enum ASTNode {
 struct Parser {
     tokens: Vec<Token>,
     ast: Vec<ASTNode>,
-    extensions: Vec<String>,
+    args: Arguments,
     at: usize,
     in_func: bool,
     has_err: bool,
@@ -84,14 +87,14 @@ macro_rules! error {
         $parser.has_err = true;
         err(
             &$parser.tokens[$parser.at].stream, $msg, ErrType::Err,
-            $parser.extensions.contains(&"color".to_string())
+            $parser.args.extensions.contains(&"color".to_string())
         );
     );
     // DO NOT USE WITH ErrType::Err
     ($parser:expr, $msg:expr, $err_type:expr) => (
         err(
             &$parser.tokens[$parser.at].stream, $msg, $err_type,
-            $parser.extensions.contains(&"color".to_string())
+            $parser.args.extensions.contains(&"color".to_string())
         );
     )
 }
@@ -569,23 +572,52 @@ fn parse_loop(parser: &mut Parser) -> Option<ASTNode> {
 }
 
 // Imports
-fn parse_import(parser: &mut Parser) -> Option<ASTNode> {
+fn parse_import(parser: &mut Parser) -> Option<Vec<ASTNode>> {
     // Eat import
     parser.next();
     // The parens part 1
     eat!(parser, Lparan, "missing '(' in import")?;
     // Import name
-    let Str(value) = parser.current() else {
+    let Str(file) = parser.current() else {
         error!(parser, "import filename must be a constant string");
         return Option::None;
     };
     parser.next();
-    // The parens part 2: electric boogaloo
+    // The closing parens
     eat!(parser, Rparan, "missing ')' in import")?;
+
+    // Everything parsed well, now for the tricky part; importing
+    let old_name = parser.args.name.clone();
+    let old_path = parser.args.path.clone();
+    let path = &mut parser.args.path;
+    path.pop();
+    path.push(file.clone());
+    // Try x.sk
+    path.set_extension("sk");
+    if let Ok(src) = read_to_string(path.to_str().unwrap()) {
+        parser.args.source = src;
+        parser.args.name = path.clone().into_os_string().into_string().unwrap();
+    } else {
+        // Try x.sack
+        path.set_extension("sack");
+        if let Ok(src) = read_to_string(path.to_str().unwrap()) {
+            parser.args.source = src;
+            parser.args.name = path.clone().into_os_string().into_string().unwrap();
+        } else {
+            // No such file
+            error!(parser, format!("cannot import {}", file).as_str());
+            return Option::None;
+        }
+    }
+
+    // Return
+    let ret = to_ast(&mut parser.args);
+    parser.args.name = old_name;
+    parser.args.path = old_path;
+
     // Semicolon
     eat_semicolon!(parser)?;
-    // Return
-    return Some(ASTNode::ImportStmt(value));
+    return ret;
 }
 
 // Variable definition
@@ -604,7 +636,7 @@ fn parse_let(parser: &mut Parser) -> Option<ASTNode> {
     // Let without value (non-standard)
     if let Semicolon = parser.current() {
         parser.next();
-        if parser.extensions.contains(&"auto-none".to_string()) {
+        if parser.args.extensions.contains(&"auto-none".to_string()) {
             return Some(ASTNode::LetStmt(name, Box::new(ASTNode::NoneExpr)));
         } else {
             error!(parser, "let must have value");
@@ -639,7 +671,7 @@ fn parse_return(parser: &mut Parser) -> Option<ASTNode> {
     // Return without value (non-standard)
     if let Semicolon = parser.current() {
         parser.next();
-        if parser.extensions.contains(&"auto-none".to_string()) {
+        if parser.args.extensions.contains(&"auto-none".to_string()) {
             return Some(ASTNode::ReturnStmt(Box::new(ASTNode::NoneExpr)));
         } else {
             error!(parser, "return must have value");
@@ -710,7 +742,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         err(
             &parser.tokens[parser.at].stream,
             "forward declaration isn't supported", ErrType::Hint,
-            parser.extensions.contains(&"color".to_string())
+            parser.args.extensions.contains(&"color".to_string())
         );
         return Option::None;
     }
@@ -729,22 +761,25 @@ pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Option<Vec<ASTNode>> {
     // Set up
     // TODO: Line numbers
     let mut parser = Parser{
-        tokens, extensions: args.extensions.clone(),
+        tokens, args: args.clone(),
         at: 0, has_err: false, in_func: false,
         ast: vec![], name: args.name.clone()
     };
     // Parse
     while parser.current() != Eof {
         // Import must be highest scope
-        let stmt = if parser.current() == Import {
-            parse_import(&mut parser)
-        } else {
-            parse_statement(&mut parser)
-        };
-        if let Some(stmt) = stmt {
-            parser.ast.push(stmt);
+        if parser.current() == Import {
+            if let Some(mut imported_ast) = parse_import(&mut parser) {
+                parser.ast.append(&mut imported_ast);
+            } else {
+                parser.has_err = true;
+            };
             continue;
         }
+        if let Some(stmt) = parse_statement(&mut parser) {
+            parser.ast.push(stmt);
+            continue;
+        };
         // Skip along until EOF/; so the errors don't go crazy
         loop {
             if let Eof | Semicolon = parser.current() {

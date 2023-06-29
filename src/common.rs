@@ -1,3 +1,4 @@
+use std::env;
 use std::fs;
 use std::io::{BufReader, BufRead};
 
@@ -42,13 +43,33 @@ pub fn print_err(msg: &str, errtype: ErrType, color: bool) -> String {
     }
 }
 
-pub fn err(stream: &Stream, msg: &str, errtype: ErrType, color: bool) {
-    let line = if let Ok(file) = fs::File::open(stream.name.clone()) {
-        BufReader::new(file).lines().nth(stream.line - 1)
-            .expect("failed to read file for errors").unwrap()
-    } else {
-        panic!("Failed to read file for error printing!");
+fn get_line(stream: &Stream) -> String {
+    // Special case
+    if stream.name == "<cli>" {
+        let mut args = env::args();
+        args.position(|x| x == "-");
+        return args.next()
+            .unwrap().lines().nth(stream.line - 1)
+            .expect("failed to read file for errors").to_string()
+    }
+
+    let name = /*if stream.name == "<stdin>" {
+        stream.tmpname.clone()
+    } else {*/
+        stream.name.clone()
+    //}
+    ;
+    // Open
+    let Ok(file) = fs::File::open(name) else {
+        panic!("Failed to open file for error printing!");
     };
+    // Read
+    return BufReader::new(file).lines().nth(stream.line - 1)
+        .expect("failed to read file for errors").unwrap()
+}
+
+pub fn err(stream: &Stream, msg: &str, errtype: ErrType, color: bool) {
+    let line = get_line(stream);
     // Print file name and line/char info ("test.sk:1:3: ")
     if color {
         print!("\x1b[1m{}:{}:{}:\x1b[0m ", stream.name, stream.line, stream.at);

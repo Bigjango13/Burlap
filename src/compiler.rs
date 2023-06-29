@@ -1,12 +1,10 @@
 use std::cmp::Ordering;
-use std::fs::read_to_string;
 use std::path::PathBuf;
 
 use crate::Arguments;
-use crate::common::{print_err, ErrType, IMPOSSIBLE_STATE};
+use crate::common::IMPOSSIBLE_STATE;
 use crate::lexer::TokenType;
 use crate::parser::{ASTNode, ASTNode::*};
-use crate::to_ast;
 use crate::value::Value;
 use crate::vm::Opcode;
 
@@ -594,7 +592,7 @@ fn compile_stmt(
             // Return return value
             program.ops.push(Opcode::RET as u8);
         },
-        ImportStmt(file) => {
+        /*ImportStmt(file) => {
             // Open file
             let mut path = program.path.clone();
             path.push(file);
@@ -638,7 +636,7 @@ fn compile_stmt(
             program.inc_start = program.ops.len() as u32;
             args.name = old_name;
             program.path = old_path;
-        },
+        },*/
         Nop => {
             // Nop isn't turned into the NOP instruction because it's useless
         },

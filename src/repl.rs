@@ -227,6 +227,9 @@ pub fn repl(args: &mut Arguments) {
             // Reset file name (imports mess it up during compiling)
             args.name = "<stdin>".to_string();
             // Run
+            if vm.program.ops.len() == vm.at + 1 {
+                continue;
+            }
             if vm.at != 0 {
                 vm.at += 1;
             }
