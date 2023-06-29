@@ -47,10 +47,10 @@ pub enum ASTNode {
     LoopStmt(String, Box<ASTNode>, Box<ASTNode>),
     // While loop, (6 > i, Body(...))
     WhileStmt(Box<ASTNode>, Box<ASTNode>),
-    // ImportStmt, (filename), used for the file table as the parser handles imports
-    ImportStmt(String),
-    // EndImportStmt, (), used for marking the end of the import
-    EndImportStmt(),
+    // ImportStmt, used for the file table as the parser handles imports
+    ImportStmt(),
+    // EndImportStmt, (filename), used for marking the end of the import
+    EndImportStmt(String),
 
     // Special
     // Nop, does nothing
@@ -572,7 +572,7 @@ fn parse_loop(parser: &mut Parser) -> Option<ASTNode> {
 }
 
 // Imports
-fn parse_import(parser: &mut Parser) -> Option<Vec<ASTNode>> {
+fn parse_import(parser: &mut Parser) -> Option<(String, Vec<ASTNode>)> {
     // Eat import
     parser.next();
     // The parens part 1
@@ -611,13 +611,14 @@ fn parse_import(parser: &mut Parser) -> Option<Vec<ASTNode>> {
     }
 
     // Return
-    let ret = to_ast(&mut parser.args);
+    let ret = to_ast(&mut parser.args)?;
+    let name = parser.args.name.clone();
     parser.args.name = old_name;
     parser.args.path = old_path;
 
     // Semicolon
     eat_semicolon!(parser)?;
-    return ret;
+    return Some((name, ret));
 }
 
 // Variable definition
@@ -769,8 +770,10 @@ pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Option<Vec<ASTNode>> {
     while parser.current() != Eof {
         // Import must be highest scope
         if parser.current() == Import {
-            if let Some(mut imported_ast) = parse_import(&mut parser) {
+            if let Some((path, mut imported_ast)) = parse_import(&mut parser) {
+                parser.ast.push(ASTNode::ImportStmt());
                 parser.ast.append(&mut imported_ast);
+                parser.ast.push(ASTNode::EndImportStmt(path));
             } else {
                 parser.has_err = true;
             };

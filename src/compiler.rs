@@ -592,51 +592,19 @@ fn compile_stmt(
             // Return return value
             program.ops.push(Opcode::RET as u8);
         },
-        /*ImportStmt(file) => {
-            // Open file
-            let mut path = program.path.clone();
-            path.push(file);
-            let old_name = args.name.clone();
+        ImportStmt() => {
             program.file_table.push((
                 program.inc_start, program.ops.len() as u32, args.name.clone()
             ));
-            // Try x.sk first
-            path.set_extension("sk");
-            if let Ok(src) = read_to_string(path.to_str().unwrap()) {
-                args.source = src;
-                args.name = path.into_os_string().into_string().unwrap();
-            } else {
-                // Try x.sack
-                path.set_extension("sack");
-                if let Ok(src) = read_to_string(path.to_str().unwrap()) {
-                    args.source = src;
-                    args.name = path.into_os_string().into_string().unwrap();
-                } else {
-                    // No such file
-                    print_err(
-                        format!("cannot import {}", file).as_str(),
-                        ErrType::Err,
-                        args.extensions.contains(&"color".to_string())
-                    );
-                    return false;
-                }
-            }
-            // Gen ast
-            let Some(ast) = to_ast(args) else {
-                return false;
-            };
-            // Fix import path
-            let old_path = program.path.clone();
-            program.path = program.path.join(file);
-            program.path.pop();
-            // Compile
-            if !compile(ast, args, program) {
-                return false;
-            }
             program.inc_start = program.ops.len() as u32;
-            args.name = old_name;
-            program.path = old_path;
-        },*/
+        },
+        EndImportStmt(file) => {
+            program.file_table.push((
+                program.inc_start, program.ops.len() as u32, file.clone()
+            ));
+            program.inc_start = program.ops.len() as u32;
+        },
+
         Nop => {
             // Nop isn't turned into the NOP instruction because it's useless
         },
