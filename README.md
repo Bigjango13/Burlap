@@ -75,11 +75,21 @@ To pass arguments to code in argv or the REPL use `--`, for example: `burlap -- 
 
 To show help, run `burlap -h` or `burlap --help`.
 
+## Tests
+
+### Feature test
+
+The feature test can be ran with `burlap tests/test.sk`, after every run a file called `tmp-filename-for-tests` will be made as a part of file io tests. Sack currently doesn't have the ability to deleate files, it will need to be removed manually
+
+### Speed test
+
+The speed test is currently only one test, it can be ran with `burlap tests/speedtest.sk` or you can have a benchmark made with [hyperfine](https://github.com/sharkdp/hyperfine) (or other related tool) like so: `hyperfine "burlap tests/speedtest.sk" "python3 tests/speedtest.py"`
+
 ## History
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
-- 1.1.5: "Self host speedrun"
+- 1.1.5: Trying to selfhost update
     - Add `args()`
     - Add `in` as a binop
     - Add `%=` operator
