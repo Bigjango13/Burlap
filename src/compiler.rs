@@ -175,8 +175,8 @@ fn compile_short_binop(
 ) -> bool {
     // Compiles short circuiting operators (&& and ||)
     // Uses jump instructions to:
-    // Turn `a() && b()` into `r = a(); if r { r &= b() }; r`
-    // Turn `a() || b()` into `r = a(); if !r { r |= b() }; r`
+    // Turn `a() && b()` into `r = a(); if r { r = b() }; r`
+    // Turn `a() || b()` into `r = a(); if !r { r = b() }; r`
     if !compile_expr(program, lhs) {
         return false;
     }
@@ -190,15 +190,10 @@ fn compile_short_binop(
     program.ops.push(0);
     program.ops.push(0);
     program.ops.push(0);
-    // Run 'b' (the left)
+    // It's 'b' (the left)
+    program.ops.push(Opcode::DEL as u8);
     if !compile_expr(program, rhs) {
         return false;
-    }
-    // Uses &= or |= on 'b' (the left)
-    if op == &TokenType::Or {
-        program.ops.push(Opcode::OR as u8);
-    } else {
-        program.ops.push(Opcode::AND as u8);
     }
     // End the jump
     program.fill_jmp(pos, 0);
