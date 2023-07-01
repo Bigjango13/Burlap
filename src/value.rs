@@ -3,8 +3,6 @@ use std::rc::Rc;
 use std::fs::File;
 use std::ops;
 
-use indexmap::map::IndexMap;
-
 #[derive(Debug)]
 pub struct FileInfo {
     pub name: String,
@@ -29,7 +27,7 @@ pub enum Value {
     Float(f32),
     Bool(bool),
     Byte(u8),
-    List(IndexMap<String, Value>),
+    List(Vec<(String, Value)>),
     None,
     File(Rc<RefCell<FileInfo>>),
 
@@ -128,7 +126,7 @@ impl Value {
                 for val in l.iter() {
                     // The the index isn't a number, print the index
                     if !val.0.as_bytes()[0].is_ascii_digit() {
-                        ret += val.0;
+                        ret += &val.0;
                         ret += ": ";
                     }
                     ret += &val.1.to_string()?;
@@ -200,7 +198,7 @@ impl Value {
             return Some(l.clone());
         }
         if let Value::List(l) = self {
-            return Some(l.values().cloned().collect());
+            return Some(l.iter().map(|i| i.1.clone()).collect());
         }
         None
     }
@@ -220,7 +218,9 @@ impl Value {
         let Value::List(list) = self else {
             return Err(format!("Cannot iterate over {}", self.get_type()));
         };
-        return Ok(Value::Iter(list.values().cloned().collect(), 0));
+        return Ok(Value::Iter(
+            list.iter().map(|i| i.1.clone()).collect(), 0
+        ));
     }
     pub fn iter_next(&mut self) -> Result<Option<Value>, String> {
         // Must be an iter or rangetype
@@ -297,11 +297,16 @@ impl Value {
         };
         // String indexing (keys)
         if let Value::Str(s) = index {
-            return l.get(s).cloned();
+            for i in l {
+                if &i.0 == s {
+                    return Some(i.1.clone());
+                }
+            }
+            return None;
         }
         // Number indexing
-        return match l.get_index(index.to_int() as usize) {
-            // Remove the key
+        return match l.get(index.to_int() as usize) {
+            // Extract the value and return
             Some((_, v)) => Some(v.clone()),
             None => None
         };
@@ -410,11 +415,11 @@ impl_op_ex!(+ |left: &Value, right: &Value| -> Result<Value, String> {
         if let Some(vals) = right.values() {
             // Concat
             for val in vals.clone() {
-                list.insert(list.len().to_string(), val);
+                list.push((list.len().to_string(), val));
             }
         } else {
             // Append
-            list.insert(list.len().to_string(), right.clone());
+            list.push((list.len().to_string(), right.clone()));
         }
         return Ok(Value::List(list));
     } else if let Value::FastList(_) = left {

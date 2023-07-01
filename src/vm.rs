@@ -12,7 +12,6 @@ use crate::cffi::call as ffi_call;
 use crate::compiler::Program;
 use crate::value::{FileInfo, Value};
 
-use indexmap::map::IndexMap;
 use rustc_hash::FxHashMap;
 
 #[repr(u8)]
@@ -933,12 +932,12 @@ fn set_key(
             }
         } else {
             // Convert to normal list
-            let mut slowlist = IndexMap::<String, Value>::with_capacity(
+            let mut slowlist = Vec::<(String, Value)>::with_capacity(
                 list.len()
             );
             let mut at = 0;
             for i in list {
-                slowlist.insert(at.to_string(), i);
+                slowlist.push((at.to_string(), i));
                 at += 1;
             }
             // Set
@@ -948,19 +947,31 @@ fn set_key(
     };
     // Insert
     if key.get_type() == "Number" {
-        let entry = list.entry(key.to_string()?)
-            .and_modify(|s| *s = val.clone());
-        // Try to insert a new key
-        if key.to_int() != entry.index().try_into().unwrap_or(-1) {
+        let key = key.to_int();
+        if key < 0 || key as usize > list.len() {
             return Err(
                 "cannot assign to out of bounds key".to_string()
             );
         }
-        entry.or_insert(val);
+        let key = key as usize;
+        if key == list.len() {
+            // Add new key
+            list.push((key.to_string(), val));
+        } else {
+            // Modify key
+            list[key].1 = val;
+        }
     } else {
-        // Add or create
-        let key = key.to_string();
-        list.entry(key?).and_modify(|s| *s = val.clone()).or_insert(val);
+        // Add or create string key
+        let key = key.to_string()?;
+        for mut i in &mut list {
+            if i.0 == key {
+                i.1 = val;
+                return Ok(Value::List(list));
+            }
+        }
+        // Modify
+        list.push((key, val));
     }
     Ok(Value::List(list))
 }
@@ -1003,7 +1014,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 return Err("Non-int list size".to_string());
             };
             // Get the keys and values and put them into the list
-            let mut list = IndexMap::<String, Value>::with_capacity(
+            let mut list = Vec::<(String, Value)>::with_capacity(
                 size as usize,
             );
             while size > 0 {
@@ -1012,7 +1023,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 };
                 let val = vm.pop();
                 // Store
-                list.insert(key, val);
+                list.push((key, val));
                 size -= 1;
             }
             list.reverse();
