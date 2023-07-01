@@ -59,7 +59,7 @@ Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) progr
 
 It's a normal rust project, so `cargo run` to run, `cargo build` to build, and `cargo build --release` to build in release mode (slower to build, a lot faster to run).
 
-If you want to install it, run `cargo install --git https://github.com/Bigjango13/Burlap`, now you can use `burlap` as a command!.
+If you want to install it, run `cargo install --git https://github.com/Bigjango13/Burlap`, now you can use `burlap` as a command!
 
 ## Running
 
