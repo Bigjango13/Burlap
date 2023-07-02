@@ -119,63 +119,44 @@ macro_rules! eat_semicolon {
 }
 
 // Expressions
-// Call
-fn parse_call_from(parser: &mut Parser, mut ret: ASTNode) -> Option<ASTNode> {
+// Calls or indexes
+fn parse_callindex_from(parser: &mut Parser, mut ret: ASTNode) -> Option<ASTNode> {
     // Parse call
-    if parser.current() != Lparan {
-        // Not a call
+    let is_call = parser.current() == Lparan;
+    let (Lparan | Lbracket) = parser.current() else {
+        // Not a call or index
         return Some(ret);
-    }
-    // Eat '('
+    };
+    // Eat '('/'['
     parser.next();
-    // Get args
-    let mut args: Vec<ASTNode> = vec![];
-    loop {
-        if let Rparan = parser.current() {
-            break;
+    // Get args/index
+    if is_call {
+        let mut args: Vec<ASTNode> = vec![];
+        loop {
+            if let Rparan = parser.current() {
+                break;
+            }
+            args.push(parse_expr(parser)?);
+            if let Rparan = parser.current() {
+                break;
+            }
+            eat!(parser, Comma, "expected ')' or ',' in argument list")?;
         }
-        args.push(parse_expr(parser)?);
-        if let Rparan = parser.current() {
-            break;
-        }
-        eat!(parser, Comma, "expected ')' or ',' in argument list")?;
-    }
-    parser.next();
-    ret = ASTNode::CallExpr(Box::new(ret), args);
-    // Functions can return functions, so foo()() is valid
-    return parse_call_from(parser, ret);
-}
-
-fn parse_call(parser: &mut Parser) -> Option<ASTNode> {
-    // Parse base function
-    let mut ret = parse_base_expr(parser)?;
-    if parser.current() != Lparan {
-        return Some(ret);
-    }
-    if let ASTNode::VarExpr(ref mut n) = &mut ret {
-        // Try stripping the namespace
-        let name = n.clone().split("::").nth(1).unwrap().to_string();
-        if parser.functis.iter().any(|i| i == &name) {
-            // Vars can't shadow functions
-            *n = name;
-        }
-    }
-    return parse_call_from(parser, ret);
-}
-
-// Index
-fn parse_index(parser: &mut Parser) -> Option<ASTNode> {
-    // Get expr
-    let mut ret = parse_call(parser)?;
-    // Parse index
-    while let Lbracket = parser.current() {
         parser.next();
-        let index = parse_expr(parser);
-        ret = ASTNode::IndexExpr(Box::new(ret), Box::new(index?));
-        // Eat ']'
+        ret = ASTNode::CallExpr(Box::new(ret), args);
+    } else {
+        let expr = parse_expr(parser)?;
         eat!(parser, Rbracket, "expected ']' at end of index")?;
+        ret = ASTNode::IndexExpr(Box::new(ret), Box::new(expr));
     }
-    return Some(ret);
+    // Functions and indexes can return functions and lists, so loop
+    return parse_callindex_from(parser, ret);
+}
+
+fn parse_call_or_index(parser: &mut Parser) -> Option<ASTNode> {
+    // Parse base function
+    let ret = parse_base_expr(parser)?;
+    return parse_callindex_from(parser, ret);
 }
 
 // Unary
@@ -196,7 +177,7 @@ fn parse_unary(parser: &mut Parser) -> Option<ASTNode> {
             return Option::None;
         }
     }
-    return parse_index(parser);
+    return parse_call_or_index(parser);
 }
 
 // Binops
