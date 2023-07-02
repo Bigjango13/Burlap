@@ -154,6 +154,7 @@ impl Value {
                 ret
             }
             Value::None => "none".to_string(),
+            Value::Functi(n) => format!("Functi({})", n),
             // Anything else
             _ => return Err(
                 format!("Failed to convert {} to string", self.get_type())
