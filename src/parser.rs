@@ -1,6 +1,6 @@
 use std::fs::read_to_string;
 use crate::{Arguments, to_ast};
-use crate::common::{err, ErrType, IMPOSSIBLE_STATE};
+use crate::common::{err, ErrType, IMPOSSIBLE_STATE, get_builtin_funcs};
 use crate::lexer::{Token, TokenType};
 use TokenType::*;
 
@@ -22,7 +22,7 @@ pub enum ASTNode {
     // Var, (x)
     VarExpr(String),
     // Call, (print, [Number(7)])
-    CallExpr(String, Vec<ASTNode>),
+    CallExpr(Box<ASTNode>, Vec<ASTNode>),
     // Index, (mylist, Number(7))
     IndexExpr(Box<ASTNode>, Box<ASTNode>),
     // Unary, (Minus, Number(1))
@@ -61,6 +61,7 @@ pub enum ASTNode {
 struct Parser {
     tokens: Vec<Token>,
     ast: Vec<ASTNode>,
+    functis: Vec<String>,
     args: Arguments,
     at: usize,
     in_func: bool,
@@ -119,38 +120,47 @@ macro_rules! eat_semicolon {
 
 // Expressions
 // Call
-fn parse_call(parser: &mut Parser) -> Option<ASTNode> {
-    // A function can't return a function so no need for a loop
-    if let Identifier(_) = parser.current() {} else {
-        // Can't call anything but identifiers
-        return parse_base_expr(parser);
-    }
-    // Eat
-    let mut ret = parse_base_expr(parser)?;
-    let name: String;
-    if let ASTNode::VarExpr(n) = &ret {
-        name = n.clone().split("::").nth(1).unwrap().to_string();
-    } else {
+fn parse_call_from(parser: &mut Parser, mut ret: ASTNode) -> Option<ASTNode> {
+    // Parse call
+    if parser.current() != Lparan {
+        // Not a call
         return Some(ret);
     }
-    // Parse call
+    // Eat '('
+    parser.next();
+    // Get args
     let mut args: Vec<ASTNode> = vec![];
-    if let Lparan = parser.current() {
-        parser.next();
-        loop {
-            if let Rparan = parser.current() {
-                break;
-            }
-            args.push(parse_expr(parser)?);
-            if let Rparan = parser.current() {
-                break;
-            }
-            eat!(parser, Comma, "expected ')' or ',' in argument list")?;
+    loop {
+        if let Rparan = parser.current() {
+            break;
         }
-        parser.next();
-        ret = ASTNode::CallExpr(name, args);
+        args.push(parse_expr(parser)?);
+        if let Rparan = parser.current() {
+            break;
+        }
+        eat!(parser, Comma, "expected ')' or ',' in argument list")?;
     }
-    return Some(ret);
+    parser.next();
+    ret = ASTNode::CallExpr(Box::new(ret), args);
+    // Functions can return functions, so foo()() is valid
+    return parse_call_from(parser, ret);
+}
+
+fn parse_call(parser: &mut Parser) -> Option<ASTNode> {
+    // Parse base function
+    let mut ret = parse_base_expr(parser)?;
+    if parser.current() != Lparan {
+        return Some(ret);
+    }
+    if let ASTNode::VarExpr(ref mut n) = &mut ret {
+        // Try stripping the namespace
+        let name = n.clone().split("::").nth(1).unwrap().to_string();
+        if parser.functis.iter().any(|i| i == &name) {
+            // Vars can't shadow functions
+            *n = name;
+        }
+    }
+    return parse_call_from(parser, ret);
 }
 
 // Index
@@ -523,7 +533,12 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     // Iterator
     let mut iter = parse_expr(parser)?;
     // Range optimization
-    if let ASTNode::CallExpr(name, args) = iter.clone() {
+    if let ASTNode::CallExpr(expr, args) = iter.clone() {
+        let name = if let ASTNode::VarExpr(n) = *expr {
+            n
+        } else {
+            "".to_string()
+        };
         if name == *"range" {
             if args.len() != 2 {
                 // Arg check
@@ -534,7 +549,10 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
                 return Option::None;
             }
             // Use the faster range
-            iter = ASTNode::CallExpr("__burlap_range".to_string(), args);
+            iter = ASTNode::CallExpr(
+                Box::new(ASTNode::VarExpr("__burlap_range".to_string())),
+                args
+            );
         }
     }
     // End parens
@@ -710,6 +728,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         error!(parser, "expected function name");
         return Option::None;
     }
+    parser.functis.push(name.clone());
     parser.next();
     // Args
     eat!(parser, Lparan, "expected '(' at start of argument list")?;
@@ -761,10 +780,12 @@ pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Option<Vec<ASTNode>> {
     }
     // Set up
     // TODO: Line numbers
+    let extended = args.extensions.contains(&"burlap-extensions".to_string());
     let mut parser = Parser{
         tokens, args: args.clone(),
         at: 0, has_err: false, in_func: false,
-        ast: vec![], name: args.name.clone()
+        ast: vec![], name: args.name.clone(),
+        functis: get_builtin_funcs(extended),
     };
     // Parse
     while parser.current() != Eof {

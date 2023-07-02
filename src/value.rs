@@ -30,6 +30,7 @@ pub enum Value {
     List(Vec<(String, Value)>),
     None,
     File(Rc<RefCell<FileInfo>>),
+    Functi(String),
 
     // FastList (used for lists with only number keys)
     FastList(Vec<Value>),
@@ -185,6 +186,7 @@ impl Value {
             Value::List(_) | Value::FastList(_) => "List",
             Value::None => "None",
             Value::File(..) => "File",
+            Value::Functi(..) => "Functi",
             // Internal types
             #[cfg(feature = "cffi")]
             Value::Ptr(_) => "__burlap_ptr",

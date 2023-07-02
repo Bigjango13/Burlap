@@ -327,7 +327,7 @@ fn compile_expr(program: &mut Program, node: &ASTNode) -> bool {
             return compile_unary(program, op, val);
         },
         // Calls
-        CallExpr(name, args) => {
+        CallExpr(expr, args) => {
             // Push the call. Name, arg count, args (in reverse order)
             for arg in args {
                 if !compile_expr(program, arg) {
@@ -335,7 +335,21 @@ fn compile_expr(program: &mut Program, node: &ASTNode) -> bool {
                 }
             }
             program.push(Value::Int(args.len() as i32));
-            program.push(Value::Str(name.clone()));
+            if let ASTNode::VarExpr(name) = *expr.clone() {
+                if name.contains("::") {
+                    // Variable name
+                    if !compile_expr(program, expr) {
+                        return false;
+                    }
+                } else {
+                    // Function name
+                    program.push(Value::Functi(name.clone()));
+                }
+            } else {
+                if !compile_expr(program, expr) {
+                    return false;
+                }
+            }
             program.ops.push(Opcode::CALL as u8);
         },
         // List
@@ -557,11 +571,13 @@ fn compile_stmt(
             program.fill_jmp(pos, 0);
         },
         ReturnStmt(ret) => {
-            match *ret.clone() {
-                CallExpr(name, args) if (
-                    name == program.functi.0
-                    && args.len() == program.functi.1 as usize
-                ) => {
+            let mut do_tco = false;
+            if let CallExpr(expr, args) = *ret.clone() {
+                if let ASTNode::VarExpr(name) = *expr {
+                    do_tco = name == program.functi.0
+                        && args.len() == program.functi.1 as usize;
+                }
+                if do_tco {
                     // Tail call
                     for ref arg in args.iter().rev() {
                         if !compile_expr(program, arg) {
@@ -577,13 +593,13 @@ fn compile_stmt(
                         program.ops.len() - program.functi.2 as usize - 1
                     );
                 }
+            }
+            if !do_tco {
                 // Compile return value
-                _ => {
-                    if !compile_expr(program, ret) {
-                        return false;
-                    }
+                if !compile_expr(program, ret) {
+                    return false;
                 }
-            };
+            }
             // Return return value
             program.ops.push(Opcode::RET as u8);
         },

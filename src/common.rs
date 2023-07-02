@@ -94,3 +94,44 @@ pub fn err(stream: &Stream, msg: &str, errtype: ErrType, color: bool) {
         println!("{}", "^".repeat(stream.size));
     }
 }
+
+pub fn get_builtin_funcs(extended: bool) -> Vec<String> {
+    let mut ret: Vec<String> = vec![
+        "print",
+        "input",
+        "type",
+        "len",
+        "range",
+        "args",
+        "open",
+        "close",
+        "read",
+        "write",
+        "seek",
+        "flush",
+        "int",
+        "float",
+        "string",
+        "byte",
+        "__burlap_range"
+    ].iter().map(|i| i.to_string()).collect();
+    if extended {
+        let mut tmp = vec![
+            "__burlap_typed_eq",
+            "__burlap_print",
+            "__burlap_throw",
+        ].iter().map(|i| i.to_string()).collect();
+        ret.append(&mut tmp);
+        #[cfg(feature = "cffi")]
+        {
+            tmp = vec![
+                "__burlap_load_lib",
+                "__burlap_load_functi",
+                "__burlap_ffi_call",
+                "__burlap_ptr",
+            ].iter().map(|i| i.to_string()).collect();
+            ret.append(&mut tmp);
+        }
+    }
+    return ret;
+}

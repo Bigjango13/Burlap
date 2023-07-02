@@ -271,6 +271,12 @@ impl Vm {
     }
 
     pub fn get_var(&self, name: &String) -> Result<Value, String> {
+        let real_name = name.clone().split("::").nth(1).unwrap().to_string();
+        if self.functies.contains_key(&real_name)
+            || self.program.functis.contains_key(&real_name)
+        {
+            return Ok(Value::Functi(real_name));
+        }
         if self.is_global {
             // Don't bother checking local scope
             return self.get_global(name);
@@ -279,6 +285,13 @@ impl Vm {
     }
 
     pub fn check_for_var(&self, name: &String) -> bool {
+        // Check functis
+        let real_name = name.clone().split("::").nth(1).unwrap().to_string();
+        if self.functies.contains_key(&real_name)
+            || self.program.functis.contains_key(&real_name)
+        {
+            return true;
+        }
         if !self.is_global {
             // Check locals
             if self.var_names[self.var_min..].contains(name) {
@@ -392,9 +405,12 @@ impl Vm {
     // Call a function
     #[inline]
     pub fn call(
-        &mut self, name: &String, args: &Vec<Value>
+        &mut self, functi: &Value, args: &Vec<Value>
     ) -> Result<(), String> {
-
+        // Get function name
+        let Value::Functi(name) = functi else {
+            return Err(format!("cannot call {}", functi.get_type()));
+        };
         // Non-builtin functions
         let Some((pos, arg_num)) = self.program.functis.get(name) else {
             // Builtin functions
@@ -1218,9 +1234,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         }
 
         Opcode::CALL => {
-            let Value::Str(name) = vm.pop() else {
-                return Err("Non-string function name".to_string());
-            };
+            let function = vm.pop();
             let Value::Int(mut arg_num) = vm.pop() else {
                 return Err("Non-int arg number".to_string());
             };
@@ -1231,7 +1245,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 arg_num -= 1;
             }
             // Call
-            vm.call(&name, &args)?;
+            vm.call(&function, &args)?;
         },
 
         Opcode::TCO => {
