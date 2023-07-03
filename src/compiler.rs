@@ -8,15 +8,13 @@ use crate::parser::{ASTNode, ASTNode::*};
 use crate::value::Value;
 use crate::vm::Opcode;
 
-use rustc_hash::FxHashMap;
-
 #[derive(Debug)]
 pub struct Program {
     // Opcodes and constants
     pub ops: Vec<u8>,
     pub consts: Vec<Value>,
-    // Function locations (name : (byte pos, arg num))
-    pub functis: FxHashMap<String, (usize, i32)>,
+    // Function locations (name, byte pos, arg num))
+    pub functis: Vec<(String, usize, i32)>,
     // Import dir
     pub path: PathBuf,
 
@@ -38,7 +36,7 @@ impl Program {
     pub fn new() -> Program {
         Program{
             ops: vec![], consts: vec![],
-            functis: FxHashMap::default(),
+            functis: Vec::new(),
             path: PathBuf::from("."),
             line_table: vec![], file_table: vec![],
             needs_scope: false, inc_start: 0,

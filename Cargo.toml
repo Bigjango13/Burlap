@@ -10,8 +10,6 @@ home = "0.5.4"
 impl_ops = "0.1.1"
 # For speed
 rustc-hash = "1.1.0"
-# For lists
-indexmap = "1.9.2"
 # For REPL
 rustyline = "11.0.0"
 # For lexing

@@ -232,7 +232,7 @@ impl Vm {
         );
         // Functions
         ret.extend(
-            self.program.functis.keys().cloned()
+            self.program.functis.iter().map(|i| i.0.clone())
             .collect::<Vec<String>>()
         );
         // Locals
@@ -273,7 +273,7 @@ impl Vm {
     pub fn get_var(&self, name: &String) -> Result<Value, String> {
         let real_name = name.clone().split("::").nth(1).unwrap().to_string();
         if self.functies.contains_key(&real_name)
-            || self.program.functis.contains_key(&real_name)
+            || self.program.functis.iter().any(|i| &i.0 == &real_name)
         {
             return Ok(Value::Functi(real_name));
         }
@@ -288,7 +288,7 @@ impl Vm {
         // Check functis
         let real_name = name.clone().split("::").nth(1).unwrap().to_string();
         if self.functies.contains_key(&real_name)
-            || self.program.functis.contains_key(&real_name)
+            || self.program.functis.iter().any(|i| &i.0 == &real_name)
         {
             return true;
         }
@@ -412,8 +412,22 @@ impl Vm {
             return Err(format!("cannot call {}", functi.get_type()));
         };
         // Non-builtin functions
-        let Some((pos, arg_num)) = self.program.functis.get(name) else {
-            // Builtin functions
+        let (mut pos, mut arg_num): (usize, i32) = (0, 0);
+        let mut func_exists = false;
+        for (ref iname, ipos, iarg_num) in &self.program.functis {
+            if iname == name {
+                func_exists = true;
+                arg_num = *iarg_num;
+                if *iarg_num != args.len().try_into().unwrap() {
+                    // It exists, but wrong arg number
+                    continue;
+                }
+                pos = *ipos;
+                break;
+            }
+        }
+        // Builtin functions
+        if pos == 0 {
             if let Some(functie) = self.functies.get(name) {
                 // Reverse (normally the vm pops the args in reverse)
                 let args = args.clone().into_iter().rev().collect();
@@ -421,15 +435,17 @@ impl Vm {
                 self.push(ret);
                 return Ok(());
             }
-            return Err(format!("no function called \"{}\"", name));
+            if func_exists {
+                self.bad_args(name, args.len(), arg_num as usize)?;
+            } else {
+                return Err(format!("no function called \"{}\"", name));
+            }
         };
-        self.call_frames.push(args.clone().into_iter().rev().collect());
-        // Dereference
-        let (pos, arg_num) = (*pos, *arg_num);
         // Check args
         if arg_num != args.len() as i32 {
             self.bad_args(name, args.len(), arg_num as usize)?;
         }
+        self.call_frames.push(args.clone().into_iter().rev().collect());
         // Store return address
         self.push(Value::Int(self.at as i32));
         // Jump there
@@ -1230,7 +1246,8 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 return Err("Non-int arg number".to_string());
             };
             // Add the function
-            vm.program.functis.insert(name, (vm.at + 5, args_num));
+            // TODO: Disallow duplicate functions
+            vm.program.functis.push((name, vm.at + 5, args_num));
         }
 
         Opcode::CALL => {
