@@ -95,43 +95,55 @@ pub fn err(stream: &Stream, msg: &str, errtype: ErrType, color: bool) {
     }
 }
 
-pub fn get_builtin_funcs(extended: bool) -> Vec<String> {
-    let mut ret: Vec<String> = vec![
-        "print",
-        "input",
-        "type",
-        "len",
-        "range",
-        "args",
-        "open",
-        "close",
-        "read",
-        "write",
-        "seek",
-        "flush",
-        "int",
-        "float",
-        "string",
-        "byte",
-        "__burlap_range"
-    ].iter().map(|i| i.to_string()).collect();
+fn _get_builtins(extended: bool) -> Vec<(String, i32)> {
+    let mut ret: Vec<(String, i32)> = vec![
+        ("print", 1),
+        ("input", 1),
+        ("type", 1),
+        ("len", 1),
+        ("range", 2),
+        ("args", 0),
+        ("open", 2),
+        ("close", 1),
+        ("read", 1),
+        ("write", 2),
+        ("seek", 2),
+        ("flush", 1),
+        ("int", 1),
+        ("float", 1),
+        ("string", 1),
+        ("byte", 1),
+        ("__burlap_range", 2),
+    ].iter().map(|(n, a)| (n.to_string(), *a)).collect();
     if extended {
         let mut tmp = vec![
-            "__burlap_typed_eq",
-            "__burlap_print",
-            "__burlap_throw",
-        ].iter().map(|i| i.to_string()).collect();
+            ("__burlap_typed_eq", 2),
+            ("__burlap_print", 1),
+            ("__burlap_throw", 1),
+        ].iter().map(|(n, a)| (n.to_string(), *a)).collect();
         ret.append(&mut tmp);
         #[cfg(feature = "cffi")]
         {
             tmp = vec![
-                "__burlap_load_lib",
-                "__burlap_load_functi",
-                "__burlap_ffi_call",
-                "__burlap_ptr",
-            ].iter().map(|i| i.to_string()).collect();
+                ("__burlap_load_lib", 1),
+                ("__burlap_load_functi", 2),
+                ("__burlap_ffi_call", 3),
+                ("__burlap_ptr", 1),
+            ].iter().map(|(n, a)| (n.to_string(), *a)).collect();
             ret.append(&mut tmp);
         }
     }
     return ret;
+}
+
+pub fn get_builtins(extended: bool) -> &'static Vec<(String, i32)> {
+    unsafe {
+        static mut BUILTINS: Option<Vec<(String, i32)>> = None;
+        static mut EXTENDED: bool = false;
+        if BUILTINS == None || EXTENDED != extended {
+            EXTENDED = extended;
+            BUILTINS = Some(_get_builtins(extended));
+        }
+        return BUILTINS.as_mut().unwrap();
+    }
 }

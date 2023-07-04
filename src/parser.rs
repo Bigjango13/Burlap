@@ -1,6 +1,6 @@
 use std::fs::read_to_string;
 use crate::{Arguments, to_ast};
-use crate::common::{err, ErrType, IMPOSSIBLE_STATE, get_builtin_funcs};
+use crate::common::{err, ErrType, IMPOSSIBLE_STATE, get_builtins};
 use crate::lexer::{Token, TokenType};
 use TokenType::*;
 
@@ -61,7 +61,8 @@ pub enum ASTNode {
 struct Parser {
     tokens: Vec<Token>,
     ast: Vec<ASTNode>,
-    functis: Vec<String>,
+    functis: Vec<(String, i32)>,
+    vars: Vec<String>,
     args: Arguments,
     at: usize,
     in_func: bool,
@@ -118,6 +119,118 @@ macro_rules! eat_semicolon {
     );
 }
 
+// Var/func checking
+enum SymLookupRes {
+    TakenByVar,
+    TakenByFuncti,
+    TakenByBuiltin,
+    Free,
+}
+
+fn get_sym(parser: &mut Parser, name: &String, arg_num: i32) -> SymLookupRes {
+    // -1 arg_num means name is a variable
+    // Check variables
+    if parser.vars.iter().any(|n| n == name) {
+        return SymLookupRes::TakenByVar;
+    }
+    // Check functions
+    if parser.functis.iter()
+        .any(|(n, a)| n == name && (arg_num == -1 || arg_num == *a)) {
+        return SymLookupRes::TakenByFuncti;
+    }
+    // Check builtins
+    let extended = parser.args.extensions.contains(&"burlap-extensions".to_string());
+    if get_builtins(extended).iter()
+        .any(|(n, a)| n == name && (arg_num == -1 || arg_num == *a))
+    {
+        return SymLookupRes::TakenByBuiltin;
+    }
+    return SymLookupRes::Free;
+}
+
+fn check_unique(parser: &mut Parser, name: &String, arg_num: i32) {
+    let name = &name.clone().split("::").nth(1).unwrap_or(name.as_str()).to_string();
+    match get_sym(parser, name, arg_num) {
+        SymLookupRes::TakenByVar => {error!(
+            parser,
+            format!("the name \"{}\" is already taken by a variable", *name).as_str()
+        );},
+        SymLookupRes::TakenByFuncti => {error!(
+            parser,
+            if arg_num == -1 {
+                format!("the name \"{}\" is already taken by a function", *name)
+            } else {
+                format!("cannot overload \"{}\" with the same number of args", *name)
+            }.as_str()
+        );},
+        SymLookupRes::TakenByBuiltin => {error!(
+            parser,
+            if arg_num == -1 {
+                format!("the name \"{}\" is already taken by a builtin function", *name)
+            } else {
+                format!("cannot overload \"{}\" as it is a builtin function", *name)
+            }.as_str()
+        );},
+        SymLookupRes::Free => if arg_num != -1 {
+            parser.functis.push((name.clone(), arg_num));
+        } else {
+            parser.vars.push(name.clone());
+        }
+    };
+}
+
+fn check_name(parser: &mut Parser, name: &String) {
+    let name = &name.clone().split("::").nth(1).unwrap_or(name.as_str()).to_string();
+    match get_sym(parser, name, -1) {
+        SymLookupRes::TakenByVar => (),
+        SymLookupRes::TakenByFuncti => (),
+        SymLookupRes::TakenByBuiltin => (),
+        SymLookupRes::Free => {error!(
+            parser,
+            format!("\"{}\" is not defined", *name).as_str()
+        );}
+    };
+}
+
+fn check_call(parser: &mut Parser, name: &String, arg_num: i32) {
+    let name = &name.clone().split("::").nth(1).unwrap_or(name.as_str()).to_string();
+    let mut wrong_args = false;
+    // Functions
+    for (n, a) in &parser.functis {
+        if n == name {
+            if *a == arg_num {
+                // A correct call was found
+                return;
+            }
+            wrong_args = true;
+        }
+    }
+    // Builtins
+    let extended = parser.args.extensions.contains(&"burlap-extensions".to_string());
+    for (n, a) in get_builtins(extended) {
+        if n == name {
+            if *a == arg_num {
+                // A correct call was found
+                return;
+            }
+            wrong_args = true;
+        }
+    }
+    // Variables
+    if parser.vars.iter().any(|n| n == name) {
+        // No way to check
+        return;
+    }
+    // No correct call
+    // "not defined" errors are reported earlier
+    if wrong_args {
+        error!(
+            parser,
+            format!("incorrect number of arguments for \"{}\"", *name).as_str()
+        );
+    }
+}
+
 // Expressions
 // Calls or indexes
 fn parse_callindex_from(parser: &mut Parser, mut ret: ASTNode) -> Option<ASTNode> {
@@ -141,6 +254,9 @@ fn parse_callindex_from(parser: &mut Parser, mut ret: ASTNode) -> Option<ASTNode
                 break;
             }
             eat!(parser, Comma, "expected ')' or ',' in argument list")?;
+        }
+        if let ASTNode::VarExpr(ref name) = ret {
+            check_call(parser, name, args.len().try_into().unwrap());
         }
         parser.next();
         ret = ASTNode::CallExpr(Box::new(ret), args);
@@ -169,6 +285,7 @@ fn parse_unary(parser: &mut Parser) -> Option<ASTNode> {
     if vec![PlusPlus, MinusMinus].contains(&parser.current()) {
         let op = parser.current();
         if let Identifier(mut v) = parser.next() {
+            check_name(parser, &v);
             parser.next();
             v = parser.name.clone() + "::" + &v;
             return Some(ASTNode::UnaryExpr(op, Box::new(ASTNode::VarExpr(v))));
@@ -334,9 +451,13 @@ fn parse_list(parser: &mut Parser) -> Option<ASTNode> {
 fn parse_base_expr(parser: &mut Parser) -> Option<ASTNode> {
     return match parser.current() {
         // Inbuilt type
-        Identifier(v) => { parser.next(); Some(ASTNode::VarExpr(
-            parser.name.clone() + "::" + &v
-        ))     },
+        Identifier(v) => {
+            check_name(parser, &v);
+            parser.next();
+            Some(ASTNode::VarExpr(
+                parser.name.clone() + "::" + &v
+            ))
+        },
         Str(s)        => { parser.next(); Some(ASTNode::StringExpr(s))  },
         Int(i)        => { parser.next(); Some(ASTNode::NumberExpr(i))  },
         Float(f)      => { parser.next(); Some(ASTNode::DecimalExpr(f)) },
@@ -508,6 +629,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
         error!(parser, "expected variable name");
         return Option::None;
     }
+    check_unique(parser, &name, -1);
     parser.next();
     // Obligatory 'in'
     eat!(parser, In, "missing 'in' keyword in loop")?;
@@ -632,6 +754,7 @@ fn parse_let(parser: &mut Parser) -> Option<ASTNode> {
         error!(parser, "expected variable name");
         return Option::None;
     }
+    check_unique(parser, &name, -1);
     parser.next();
     // Let without value (non-standard)
     if let Semicolon = parser.current() {
@@ -709,7 +832,6 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         error!(parser, "expected function name");
         return Option::None;
     }
-    parser.functis.push(name.clone());
     parser.next();
     // Args
     eat!(parser, Lparan, "expected '(' at start of argument list")?;
@@ -720,6 +842,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         }
         // Arg name
         if let Identifier(n) = parser.current() {
+            check_unique(parser, &n, -1);
             args.push(parser.name.clone() + "::" + &n);
             parser.next();
         } else {
@@ -737,6 +860,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         }
     }
     parser.next();
+    check_unique(parser, &name, args.len().try_into().unwrap());
     // Body
     if let Lbrace = parser.current() {} else {
         error!(parser, "expected '{' to start function body");
@@ -761,12 +885,11 @@ pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Option<Vec<ASTNode>> {
     }
     // Set up
     // TODO: Line numbers
-    let extended = args.extensions.contains(&"burlap-extensions".to_string());
     let mut parser = Parser{
         tokens, args: args.clone(),
         at: 0, has_err: false, in_func: false,
         ast: vec![], name: args.name.clone(),
-        functis: get_builtin_funcs(extended),
+        functis: vec![], vars: vec![]
     };
     // Parse
     while parser.current() != Eof {
