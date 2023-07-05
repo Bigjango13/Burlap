@@ -58,10 +58,11 @@ pub enum ASTNode {
 }
 
 // Parser state
+pub type VecFunctis = Vec<(String, i32)>;
 struct Parser {
     tokens: Vec<Token>,
     ast: Vec<ASTNode>,
-    functis: Vec<(String, i32)>,
+    functis: VecFunctis,
     vars: Vec<String>,
     args: Arguments,
     at: usize,
@@ -882,17 +883,29 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
 }
 
 // Main parsing
-pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Option<(Vec<ASTNode>, Vec<(String, i32)>)> {
+pub fn parse(
+    tokens: Vec<Token>,
+    args: &Arguments
+) -> Option<(Vec<ASTNode>, VecFunctis)> {
+    let res = _parse(tokens, args, vec![], vec![])?;
+    return Some((res.0, res.1));
+}
+
+pub fn _parse(
+    tokens: Vec<Token>,
+    args: &Arguments,
+    functis: VecFunctis,
+    vars: Vec<String>
+) -> Option<(Vec<ASTNode>, VecFunctis, Vec<String>)> {
     if tokens.is_empty() {
-        return Some((vec![], vec![]));
+        return Some((vec![], vec![], vec![]));
     }
     // Set up
     // TODO: Line numbers
     let mut parser = Parser{
-        tokens, args: args.clone(),
+        tokens, args: args.clone(), functis, vars,
         at: 0, has_err: false, in_func: false,
         ast: vec![], name: args.name.clone(),
-        functis: vec![], vars: vec![]
     };
     // Parse
     while parser.current() != Eof {
@@ -923,5 +936,5 @@ pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Option<(Vec<ASTNode>, Vec<
     if parser.has_err {
         return Option::None;
     }
-    return Some((parser.ast, parser.functis));
+    return Some((parser.ast, parser.functis, parser.vars));
 }

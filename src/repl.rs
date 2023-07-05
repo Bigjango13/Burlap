@@ -1,9 +1,10 @@
 use crate::vm::{run, Vm};
 #[cfg(feature = "fancyrepl")]
 use crate::lexer::{lex, TokenType};
+use crate::parser::{VecFunctis, _parse};
 use crate::compiler::compile;
 use crate::common::{print_err, ErrType};
-use crate::{Arguments, to_ast};
+use crate::Arguments;
 
 #[cfg(feature = "fancyrepl")]
 use rustyline::validate::MatchingBracketValidator;
@@ -213,6 +214,8 @@ pub fn repl(args: &mut Arguments) {
         );
     };
     // REPL loop
+    let mut functis: VecFunctis = vec![];
+    let mut vars: Vec<String> = vec![];
     loop {
         // Get input
         let readline = rl.readline(">> ");
@@ -229,11 +232,26 @@ pub fn repl(args: &mut Arguments) {
             }
             args.source = line + ";";
             *get_repl_line() = args.source.clone();
-            // Gen ast
-            let Some(ast) = to_ast(args, None) else {
+            // Lex
+            let Some(tokens) = lex(
+                &args.source, args.name.clone(), true,
+                args.extensions.contains(&"color".to_string()),
+            ) else {
                 continue;
             };
             args.source = "".to_string();
+            // Get AST
+            let Some((ast, mut new_functis, mut new_vars))
+                = _parse(tokens, args, functis.clone(), vars.clone())
+            else {
+                continue;
+            };
+            functis.append(&mut new_functis);
+            vars.append(&mut new_vars);
+            if args.is_debug {
+                // Debug print ast
+                println!("Ast: {:?}", ast);
+            }
             // Compile
             if !compile(ast, args, &mut vm.program) {
                 continue;
