@@ -563,6 +563,7 @@ fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
     // Middle
     let mut body: Vec<ASTNode> = vec![];
     let mut err = false;
+    let old_len = parser.vars.len();
     loop {
         // Exit loop on } or EOF
         if let Rbrace | Eof = parser.current() {
@@ -581,6 +582,7 @@ fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
         }
     }
     // End
+    parser.vars.truncate(old_len);
     eat!(parser, Rbrace, "expected } to end body, not EOF")?;
     if err {
         return Option::None;
@@ -732,7 +734,7 @@ fn parse_import(parser: &mut Parser) -> Option<(String, Vec<ASTNode>)> {
     }
 
     // Return
-    let ret = to_ast(&mut parser.args)?;
+    let ret = to_ast(&mut parser.args, Some(&mut parser.functis))?;
     let name = parser.args.name.clone();
     parser.args.name = old_name;
     parser.args.path = old_path;
@@ -874,14 +876,15 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
     parser.in_func = true;
     let body = parse_body(parser);
     parser.in_func = false;
+    parser.vars.truncate(parser.vars.len() - args.len());
     // Return
     return Some(ASTNode::FunctiStmt(name, args, Box::new(body?)));
 }
 
 // Main parsing
-pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Option<Vec<ASTNode>> {
+pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Option<(Vec<ASTNode>, Vec<(String, i32)>)> {
     if tokens.is_empty() {
-        return Some(vec![]);
+        return Some((vec![], vec![]));
     }
     // Set up
     // TODO: Line numbers
@@ -920,5 +923,5 @@ pub fn parse(tokens: Vec<Token>, args: &Arguments) -> Option<Vec<ASTNode>> {
     if parser.has_err {
         return Option::None;
     }
-    return Some(parser.ast);
+    return Some((parser.ast, parser.functis));
 }

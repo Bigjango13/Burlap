@@ -230,7 +230,7 @@ pub fn repl(args: &mut Arguments) {
             args.source = line + ";";
             *get_repl_line() = args.source.clone();
             // Gen ast
-            let Some(ast) = to_ast(args) else {
+            let Some(ast) = to_ast(args, None) else {
                 continue;
             };
             args.source = "".to_string();

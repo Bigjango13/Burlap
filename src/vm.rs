@@ -259,14 +259,14 @@ impl Vm {
             }
         }
         // Failed to get var, return an error
-        return Err(format!("no variable called \"{}\"", name));
+        return Err(format!("no variable called \"{}\"! This is a bug and should have been detected earlier on", name));
     }
 
     fn get_global(&self, name: &String) -> Result<Value, String> {
         // Gets a var in the global scope
         return match self.globals.get(name) {
             Some(val) => Ok(val.clone()),
-            _ => Err(format!("no variable called \"{}\"", name))
+            _ => Err(format!("no variable called \"{}\"! This is a bug and should have been detected earlier on", name))
         };
     }
 
@@ -355,7 +355,7 @@ impl Vm {
         if self.set_global(name, val) {
             return Ok(());
         }
-        return Err(format!("no variable called \"{}\"", name));
+        return Err(format!("no variable called \"{}\"! This is a bug and should have been detected earlier on", name));
     }
 
     // Scope

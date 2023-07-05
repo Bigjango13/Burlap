@@ -45,7 +45,7 @@ impl Arguments {
     }
 }
 
-pub fn to_ast(args: &mut Arguments) -> Option<Vec<ASTNode>> {
+pub fn to_ast(args: &mut Arguments, functis: Option<&mut Vec<(String, i32)>>) -> Option<Vec<ASTNode>> {
     // Lex
     let Some(tokens) = lex(
         &args.source, args.name.clone(), true,
@@ -55,9 +55,13 @@ pub fn to_ast(args: &mut Arguments) -> Option<Vec<ASTNode>> {
     };
     args.source = "".to_string();
     // Parse
-    let Some(ast) = parse(tokens, args) else {
+    let Some((ast, mut new_functis)) = parse(tokens, args) else {
         return None;
     };
+    if functis != None {
+        // Add to function list
+        functis.unwrap().append(&mut new_functis);
+    }
     if args.is_debug {
         // Debug print ast
         println!("Ast: {:?}", ast);
@@ -188,7 +192,7 @@ fn main() {
     } else {
         args.path = PathBuf::from(args.name.clone());
         // Execute file
-        let Some(ast) = to_ast(&mut args) else {
+        let Some(ast) = to_ast(&mut args, None) else {
             exit(1);
         };
         let mut vm = Vm::new(args.clone());
