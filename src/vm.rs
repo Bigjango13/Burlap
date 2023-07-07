@@ -614,9 +614,12 @@ fn sk_args(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         return Ok(Value::FastList(vm.call_frames.last().unwrap().clone()));
     }
     // Global
+    #[cfg(not(target_family = "wasm"))]
     return Ok(Value::FastList(
         vm.args.program_args.iter().map(|x| Value::Str(x.clone())).collect()
     ));
+    #[cfg(target_family = "wasm")]
+    return Ok(Value::FastList(vec![Value::Str("wasm".to_string())]));
 }
 
 // File IO

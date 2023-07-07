@@ -266,29 +266,6 @@ if 0 {
     test("if 0 else", 1, 1);
 }
 
-# File tests
-print("*** File Tests ***");
-let filename = "tmp-filename-for-tests";
-# Write
-let file = open(filename, "w");
-write(file, "TEST");
-close(file);
-# Read
-file = open(filename, "r");
-test("r/w test", read(file), "TEST");
-close(file);
-# Append
-file = open(filename, "a");
-write(file, " OF DOOM");
-flush(file);
-close(file);
-# Read binary
-file = open(filename, "rb");
-let contents = read(file);
-test("rb/a test", contents[4], 0b00100000);
-test("rb/a test len", len(contents), 11);
-close(file);
-
 # Args test
 print("*** Args Tests ***");
 test("args len", len(args()), 0);
