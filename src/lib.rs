@@ -1,4 +1,8 @@
-#![allow(clippy::needless_return, clippy::print_literal)]
+#![allow(clippy::needless_return, clippy::print_literal, dead_code)]
+
+#[cfg(target_family = "wasm")]
+use wasm_bindgen::prelude::*;
+
 #[macro_use] extern crate impl_ops;
 use std::fs;
 use std::env;
@@ -7,10 +11,15 @@ use std::process::exit;
 
 #[cfg(feature = "cffi")]
 mod cffi;
+#[cfg(target_family = "wasm")]
+#[macro_use] mod common;
+#[cfg(not(target_family = "wasm"))]
 mod common;
 mod compiler;
 mod lexer;
 mod parser;
+#[cfg(not(target_family = "wasm"))]
+#[cfg(feature = "repl")]
 mod repl;
 mod value;
 mod vm;
@@ -19,8 +28,13 @@ use crate::compiler::compile;
 use crate::common::{print_err, ErrType};
 use crate::lexer::lex;
 use crate::parser::{parse, ASTNode};
+#[cfg(not(target_family = "wasm"))]
+#[cfg(feature = "repl")]
 use crate::repl::repl;
 use crate::vm::{run, Vm};
+
+#[cfg(target_family = "wasm")]
+pub static THE_SOURCE: &str = include_str!("main.sk");
 
 #[derive(Clone)]
 pub struct Arguments {
@@ -69,6 +83,7 @@ pub fn to_ast(args: &mut Arguments, functis: Option<&mut Vec<(String, i32)>>) ->
     return Some(ast);
 }
 
+#[cfg(not(target_family = "wasm"))]
 fn get_args() -> Result<Arguments, bool> {
     let mut args = Arguments::new();
     let mut file: String = "".to_string();
@@ -172,6 +187,7 @@ fn get_args() -> Result<Arguments, bool> {
     return Ok(args);
 }
 
+#[cfg(not(target_family = "wasm"))]
 fn main() {
     // Parse args
     let mut args = match get_args() {
@@ -180,15 +196,23 @@ fn main() {
     };
     // Run
     if args.is_repl {
-        if args.format {
-            print_err(
-                "formatting requires a file", ErrType::Err,
-                args.extensions.contains(&"color".to_string())
-            );
+        #[cfg(feature = "repl")]
+        {
+            if args.format {
+                print_err(
+                    "formatting requires a file", ErrType::Err,
+                    args.extensions.contains(&"color".to_string())
+                );
+                exit(1);
+            }
+            // Repl
+            repl(&mut args);
+        }
+        #[cfg(not(feature = "repl"))]
+        {
+            println!("You don't have the REPL enabled!");
             exit(1);
         }
-        // Repl
-        repl(&mut args);
     } else {
         args.path = PathBuf::from(args.name.clone());
         // Execute file
@@ -206,5 +230,30 @@ fn main() {
         if !run(&mut vm) {
             exit(1);
         }
+    }
+}
+
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen]
+#[cfg(target_family = "wasm")]
+pub fn main() {
+    // Set up panics
+    extern crate console_error_panic_hook;
+    use std::panic;
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
+
+    let mut args = Arguments::new();
+    args.extensions.pop();
+    args.source = THE_SOURCE.to_string();
+    let Some(ast) = to_ast(&mut args, None) else {
+        panic!("Failed to convert to AST!");
+    };
+    let mut vm = Vm::new(args.clone());
+    if !compile(ast, &mut args, &mut vm.program) {
+        panic!("Failed to convert to compile!");
+    }
+    // Run
+    if !run(&mut vm) {
+        panic!("Runtime error!");
     }
 }

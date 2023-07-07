@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <title>wasm burlap</title>
+  </head>
+  <body>
+    <script type="module">
+      import init, { main } from "./pkg/burlap.js";
+      console.error = function(e) {
+        alert(e);
+      };
+      console.log = console.error;
+      init().then(() => {
+        main();
+      });
+    </script>
+  </body>
+</html>

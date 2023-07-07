@@ -523,7 +523,7 @@ fn sk_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         for i in args {
             print!("{} ", i.to_string()?);
         }
-        println!();
+        println!("");
     } else if args.len() != 1 {
         // Invalid args
         vm.bad_args(&"print".to_string(), args.len(), 1)?;

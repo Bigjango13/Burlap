@@ -1,0 +1,298 @@
+# Meta testing stuff
+let testTotal = 0;
+let testBad = 0;
+functi test(msg, val, goodVal) {
+    let status_msg = "";
+    testTotal += 1;
+    if val == goodVal && type(val) == type(goodVal) {
+        status_msg = "works: ";
+    } else {
+        status_msg = "FAIL: ";
+        testBad += 1;
+    }
+    status_msg += msg + ": ";
+    print(status_msg + goodVal + " == " + val);
+}
+
+functi testSummary() {
+    print("");
+    print("SUMMARY: " + (testTotal-testBad) + " out of " + testTotal + " tests passed");
+    if testBad == 0 {
+        print("ALL TESTS PASSED!");
+    }
+}
+
+# Math ops tests
+print("*** Mathematical Operators Tests ***");
+test("2 + 3", 2 + 3, 5);
+test("2 + 3 + 4", 2 + 3 + 4, 9);
+
+test("2 - 3", 2 - 3, -1);
+test("2 - 3 - 4", 2 - 3 - 4, -5);
+
+test("2 * 3", 2 * 3, 6);
+test("2 * 3 * 4", 2 * 3 * 4, 24);
+
+test("6 / 3", 6 / 3, 2.0);
+test("42 / 3 / 2", 42 / 3 / 2, 7.0);
+
+test("2 % 3", 2 % 3, 2);
+test("15 % 4", 15 % 4, 3);
+
+# Compare tests
+print("*** Comparison Tests ***");
+test("2 > 2", 2 > 2, false);
+test("3 > 1", 3 > 1, true);
+test("1 > 3", 1 > 3, false);
+
+test("2 < 2", 2 < 2, false);
+test("3 < 1", 3 < 1, false);
+test("1 < 3", 1 < 3, true);
+
+test("2 >= 2", 2 >= 2, true);
+test("3 >= 1", 3 >= 1, true);
+test("1 >= 3", 1 >= 3, false);
+
+test("2 <= 2", 2 <= 2, true);
+test("3 <= 1", 3 <= 1, false);
+test("1 <= 3", 1 <= 3, true);
+
+test("2 == 2", 2 == 2, true);
+test("3 == 1", 3 == 1, false);
+test("1 == 3", 1 == 3, false);
+test('"E" == "E"', "E" == "E", true);
+test('"E" == "h"', "E" == "h", false);
+
+test("2 != 2", 2 != 2, false);
+test("3 != 1", 3 != 1, true);
+test("1 != 3", 1 != 3, true);
+test('"E" != "E"', "E" != "E", false);
+test('"E" != "h"', "E" != "h", true);
+
+print("*** Boolean Operator Tests ***");
+test("0 & 0", false && false, false);
+test("1 & 0", true && false, false);
+test("1 & 1", true && true, true);
+test("3 & 4", 3 && 4, 4);
+test("0 & 4", 0 && 4, 0);
+
+test("0 | 0", false || false, false);
+test("1 | 0", true || false, true);
+test("1 | 1", true || true, true);
+test("3 | 4", 3 || 4, 3);
+test("0 | 4", 0 || 4, 4);
+
+test("0 ^ 0", false ^^ false, false);
+test("1 ^ 0", true ^^ false, true);
+test("1 ^ 1", true ^^ true, false);
+
+test("!0", !false, true);
+test("!1", !true, false);
+
+# Add test
+print("*** Adding Tests ***");
+functi add_things(a, b) {
+    let c = a + b;
+    return c;
+}
+test("2 + 3", add_things(2, 3), 5);
+test("-9 + 19", add_things(-9, 19), 10);
+test("1.3 + 0.19", add_things(1.3, 0.19), 1.49);
+test('"ab" + "c"', add_things("ab", "c"), "abc");
+test('"X=" + 42', add_things("X=", 42), "X=42");
+test('1 + ":1"', add_things(1, ":1"), "1:1");
+test('3.14 + "~=pi"', add_things(3.14, "~=pi"), "3.14~=pi");
+
+# Setting operators
+print("*** Operator Tests ***");
+let x = 1;
+test("let", x, 1);
+x -= 1;
+test("-=", x, 0);
+x = 4;
+test("=", x, 4);
+x /= 2;
+test("/=", x, 2.0);
+x += 1;
+test("+=", x, 3.0);
+x *= 2;
+test("*=", x, 6.0);
+x = 1 - 1 - 1;
+test("associativity", x, -1);
+
+# Type tests
+print("*** Type Tests ***");
+test("String", type("Hello"), "String");
+test("Number", type(0), "Number");
+test("Decimal", type(0.0), "Decimal");
+test("Bool", type(false), "Bool");
+test("None", type(none), "None");
+
+# Factorial
+print("*** Factorial Tests ***");
+functi factorial(n) {
+    if n < 0 {
+        # factorial(x) is undefined when x < 0
+        return none;
+    }
+    if n < 2 {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+test("factorial(4)", factorial(4), 24);
+test("factorial(0)", factorial(0), 1);
+test("factorial(-17)", factorial(-17), none);
+
+# String tests
+print("*** String Tests ***");
+let str = "Hello";
+test("let str", str, "Hello");
+str += " World";
+test("str+", str, "Hello World");
+str = "E?";
+test("str=", str, "E?");
+str *= 3;
+test("str*", str, "E?E?E?");
+test("str[0]", str[1], "?");
+test("str len", len(str), 5);
+
+
+# Iter loop tests
+print("*** Iter Loop Tests ***");
+let i = 0;
+loop (j in range(1, 10)) {
+    ++i;
+    test("i == j", i, j);
+}
+test("i == 10", i, 10);
+
+# While loop test
+print("*** While Loop Tests ***");
+i = 1;
+loop (while i < 6) {
+    test("i < 6", i < 6, true);
+    ++i;
+}
+test("i == 6", i, 6);
+
+# Casting tests
+print("*** Casting Tests ***");
+test("int -> int", int(42), 42);
+test("int -> float", float(42), 42.0);
+test("int -> str", string(0), "0");
+test("int -> byte", byte(153), 0b10011001);
+
+test("float -> int", int(4.2), 4);
+test("float -> float", float(4.2), 4.2);
+test("float -> str", string(4.2), "4.2");
+
+test("str -> int", int("42"), 42);
+test("str -> float", float("4.2"), 4.2);
+test("str -> str", string("E"), "E");
+test("str -> byte", byte("E"), 0b01000101);
+test("str -> [byte]", byte("Hi!"), [0b01001000, 0b01101001, 0b0100001]);
+
+test("bool -> int", int(true), 1);
+test("bool -> float", float(true), 1.0);
+test("bool -> str", string(true), "true");
+
+test("none -> int", int(none), 0);
+test("none -> float", float(none), 0.0);
+test("none -> str", string(none), "none");
+
+test("byte -> int", int(0b10101011), 171);
+test("byte -> float", float(0b10101011), 171.0);
+test("byte -> str", string(0b01000101), "E");
+
+# List tests
+print("*** List Tests ***");
+let elm = 4;
+let list = [1, "E>h", elm, x: 42, elm * 2];
+test("list -> str", string(list), '[1, E>h, elm: 4, x: 42, 8]');
+test("len()", len(list), 4);
+test("number indexing", list[2], 4);
+test("key indexing", list['elm'], 4);
+test("var indexing", list[elm], 8);
+# Adding
+test("FL + FL", string([1, 2, 3] + [4, 5]), "[1, 2, 3, 4, 5]");
+test("FL + SL", string([1, 2, 3] + [f: 4, v: 5]), "[1, 2, 3, 4, 5]");
+test("SL + FL", string([i: 1, 2, 3] + [4, 5]), "[i: 1, 2, 3, 4, 5]");
+test("SL + SL", string([i: 1, 2, 3] + [f: 4, v: 5]), "[i: 1, 2, 3, 4, 5]");
+test("List + Value", string([1] + 2), "[1, 2]");
+test("List + [Value]", string([1] + [2]), "[1, 2]");
+test("List + [List]", string([1] + [[2]]), "[1, [2]]");
+# Note: The following list features aren't explicitly in the spec
+test("comparing", range(0, 5), [0, 1, 2, 3, 4, 5]);
+test("comparing with keys", range(0, 5), [O: 0, I: 1, Z: 2, E: 3, A: 4, S: 5]);
+list[0] = 47;
+test("mutate existing int key", list[0], 47);
+list["x"] = "Foourty Seeeven!";
+test("mutate existing str key", list["x"], "Foourty Seeeven!");
+list[len(list)+1] = "append";
+test("mutate non-existing int key", list[len(list)], "append");
+list["old"] = "New And Groovy!";
+test("mutate non-existing str key", list["old"], "New And Groovy!");
+# In
+test("num in [num]", 47 in [1, 3, 47, 7, 2], true);
+test("!num in [num]", 47 in [1, 3, 17, 7, 2], false);
+test("num in [float]", 47 in [1.0, 47.0, 47.0], true);
+test("FL in [SL]", [4] in [[4,5], [e:4], [4,4]], true);
+test("String in String", "Bob" in "Bobby", true);
+test("Byte in String", 0b01101111 in "Bobby", true);
+
+# If tests
+print("*** If Tests ***");
+let if_test = false;
+if 1 {
+    if_test = true;
+}
+test("if 1", if_test, true);
+
+if 0 {
+    if_test = false;
+}
+test("if 0", if_test, true);
+
+if 1 {
+    test("if 1 else", 1, 1);
+} else {
+    test("if 1 else", 1, 0);
+}
+
+if 0 {
+    test("if 0 else", 1, 0);
+} else {
+    test("if 0 else", 1, 1);
+}
+
+# File tests
+print("*** File Tests ***");
+let filename = "tmp-filename-for-tests";
+# Write
+let file = open(filename, "w");
+write(file, "TEST");
+close(file);
+# Read
+file = open(filename, "r");
+test("r/w test", read(file), "TEST");
+close(file);
+# Append
+file = open(filename, "a");
+write(file, " OF DOOM");
+flush(file);
+close(file);
+# Read binary
+file = open(filename, "rb");
+let contents = read(file);
+test("rb/a test", contents[4], 0b00100000);
+test("rb/a test len", len(contents), 11);
+close(file);
+
+# Args test
+print("*** Args Tests ***");
+test("args len", len(args()), 0);
+test("args[0]", args()[0], "tests/test.sk");
+
+# End of tests
+testSummary();

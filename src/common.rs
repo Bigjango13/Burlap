@@ -1,7 +1,11 @@
 use std::env;
 use std::fs;
 use std::io::{BufReader, BufRead};
+#[cfg(target_family = "wasm")]
+use crate::THE_SOURCE;
 
+#[cfg(not(target_family = "wasm"))]
+#[cfg(feature = "repl")]
 use crate::repl::get_repl_line;
 
 // Stream
@@ -22,6 +26,22 @@ pub struct Stream {
 pub const IMPOSSIBLE_STATE: &str =
     "we've reached an impossible state, anything is possible, \
     the limits were in our heads all along, follow your dreams";
+
+// Fix println! not working in wasm
+#[cfg(target_family = "wasm")]
+use wasm_bindgen::prelude::*;
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen]
+#[cfg(target_family = "wasm")]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    pub fn log(s: &str);
+}
+
+#[cfg(target_family = "wasm")]
+macro_rules! println {
+    ($($t:tt)*) => (crate::common::log(&format_args!($($t)*).to_string()))
+}
 
 // Errors
 pub enum ErrType{Err, Warn, Hint}
@@ -45,6 +65,13 @@ pub fn print_err(msg: &str, errtype: ErrType, color: bool) -> String {
     }
 }
 
+#[cfg(target_family = "wasm")]
+fn get_line(stream: &Stream) -> String {
+    THE_SOURCE.lines().nth(stream.line - 1)
+        .expect("failed to read file for errors").to_string()
+}
+
+#[cfg(not(target_family = "wasm"))]
 fn get_line(stream: &Stream) -> String {
     // Special cases
     if stream.name == "<cli>" {
@@ -54,8 +81,16 @@ fn get_line(stream: &Stream) -> String {
             .unwrap().lines().nth(stream.line - 1)
             .expect("failed to read file for errors").to_string()
     } else if stream.name == "<stdin>" {
-        return get_repl_line().clone().lines().nth(stream.line - 1)
-            .unwrap().to_string();
+        #[cfg(not(target_family = "wasm"))]
+        #[cfg(feature = "repl")]
+        {
+            return get_repl_line().clone().lines().nth(stream.line - 1)
+                .unwrap().to_string();
+        }
+        #[cfg(not(feature = "repl"))]
+        {
+           panic!("This shouldn't be possible, what did you do!!");
+        }
     }
 
     let name = stream.name.clone();
