@@ -1,7 +1,9 @@
 [package]
 name = "burlap"
-version = "1.1.5"
+version = "1.2.0"
 edition = "2021"
+description = "A powerful and user-friendly Sack interpreter"
+repository = "https://github.com/Bigjango13/Burlap"
 
 [dependencies]
 # For history file
@@ -28,13 +30,6 @@ fancyrepl = ["repl", "rustyline/custom-bindings", "rustyline/derive"]
 cffi = ["libc", "libffi"]
 wasm = ["wasm-bindgen", "console_error_panic_hook"]
 
-[profile.release]
-size.opt-level = "s"
-
-[[bin]]
-name = "burlap"
-path = "src/lib.rs"
-
 [lib]
-crate-type = ["cdylib", "rlib"]
-
+path = "src/main.rs"
+crate-type = ["cdylib"]

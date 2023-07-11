@@ -1,12 +1,17 @@
-use std::env;
-use std::fs;
-use std::io::{BufReader, BufRead};
+#[cfg(not(target_family = "wasm"))]
+mod cfg_mod {
+    pub use std::env;
+    pub use std::fs;
+    pub use std::io::{BufReader, BufRead};
+
+    #[cfg(feature = "repl")]
+    pub use crate::repl::get_repl_line;
+}
+#[cfg(not(target_family = "wasm"))]
+use cfg_mod::*;
+
 #[cfg(target_family = "wasm")]
 use crate::THE_SOURCE;
-
-#[cfg(not(target_family = "wasm"))]
-#[cfg(feature = "repl")]
-use crate::repl::get_repl_line;
 
 // Stream
 #[derive(Debug, Clone)]
@@ -30,17 +35,16 @@ pub const IMPOSSIBLE_STATE: &str =
 // Fix println! not working in wasm
 #[cfg(target_family = "wasm")]
 use wasm_bindgen::prelude::*;
+
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen]
-#[cfg(target_family = "wasm")]
 extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    pub fn log(s: &str);
+    pub fn println(s: &str);
 }
 
 #[cfg(target_family = "wasm")]
 macro_rules! println {
-    ($($t:tt)*) => (crate::common::log(&format_args!($($t)*).to_string()))
+    ($($t:tt)*) => (crate::common::println(&format_args!($($t)*).to_string()))
 }
 
 // Errors
@@ -67,8 +71,11 @@ pub fn print_err(msg: &str, errtype: ErrType, color: bool) -> String {
 
 #[cfg(target_family = "wasm")]
 fn get_line(stream: &Stream) -> String {
-    THE_SOURCE.lines().nth(stream.line - 1)
-        .expect("failed to read file for errors").to_string()
+    unsafe {
+        println!("[{}]", THE_SOURCE.as_ref().unwrap());
+        (&THE_SOURCE).as_ref().unwrap().lines().nth(stream.line - 1)
+            .expect("failed to read file for errors").to_string()
+    }
 }
 
 #[cfg(not(target_family = "wasm"))]
@@ -138,18 +145,25 @@ fn _get_builtins(extended: bool) -> Vec<(String, i32)> {
         ("len", 1),
         ("range", 2),
         ("args", 0),
-        ("open", 2),
-        ("close", 1),
-        ("read", 1),
-        ("write", 2),
-        ("seek", 2),
-        ("flush", 1),
         ("int", 1),
         ("float", 1),
         ("string", 1),
         ("byte", 1),
         ("__burlap_range", 2),
     ].iter().map(|(n, a)| (n.to_string(), *a)).collect();
+    // File IO
+    #[cfg(not(target_family = "wasm"))] {
+        let mut tmp = vec![
+            ("open", 2),
+            ("close", 1),
+            ("read", 1),
+            ("write", 2),
+            ("seek", 2),
+            ("flush", 1),
+        ].iter().map(|(n, a)| (n.to_string(), *a)).collect();
+        ret.append(&mut tmp);
+    }
+    // Extentions
     if extended {
         let mut tmp = vec![
             ("__burlap_typed_eq", 2),
@@ -157,8 +171,7 @@ fn _get_builtins(extended: bool) -> Vec<(String, i32)> {
             ("__burlap_throw", 1),
         ].iter().map(|(n, a)| (n.to_string(), *a)).collect();
         ret.append(&mut tmp);
-        #[cfg(feature = "cffi")]
-        {
+        #[cfg(feature = "cffi")] {
             tmp = vec![
                 ("__burlap_load_lib", 1),
                 ("__burlap_load_functi", 2),

@@ -1,42 +1,51 @@
-#![allow(clippy::needless_return, clippy::print_literal, dead_code)]
+#![allow(clippy::needless_return, clippy::print_literal)]
 
-#[cfg(target_family = "wasm")]
-use wasm_bindgen::prelude::*;
-
-#[macro_use] extern crate impl_ops;
-use std::fs;
-use std::env;
-use std::path::PathBuf;
-use std::process::exit;
-
-#[cfg(feature = "cffi")]
-mod cffi;
-#[cfg(target_family = "wasm")]
-#[macro_use] mod common;
-#[cfg(not(target_family = "wasm"))]
-mod common;
 mod compiler;
 mod lexer;
 mod parser;
-#[cfg(not(target_family = "wasm"))]
-#[cfg(feature = "repl")]
-mod repl;
 mod value;
 mod vm;
 
-use crate::compiler::compile;
-use crate::common::{print_err, ErrType};
-use crate::lexer::lex;
-use crate::parser::{parse, ASTNode};
+#[macro_use]
+extern crate impl_ops;
+
+use std::path::PathBuf;
+
 #[cfg(not(target_family = "wasm"))]
-#[cfg(feature = "repl")]
-use crate::repl::repl;
-use crate::vm::{run, Vm};
+#[path = ""]
+mod cfg_mod {
+    pub mod common;
+    #[cfg(feature = "cffi")]
+    pub mod cffi;
+    #[cfg(feature = "repl")]
+    pub mod repl;
+
+    pub use std::fs;
+    pub use std::env;
+    pub use std::process::exit;
+
+    #[cfg(feature = "repl")]
+    pub use crate::repl::repl;
+    pub use crate::common::{print_err, ErrType};
+}
 
 #[cfg(target_family = "wasm")]
-pub static THE_SOURCE: &str = include_str!("main.sk");
+#[path = ""]
+mod cfg_mod {
+    pub use wasm_bindgen::prelude::*;
+    #[macro_use] pub mod common;
+    pub static mut THE_SOURCE: Option<String> = None;
+}
+
+use cfg_mod::*;
+
+use crate::compiler::compile;
+use crate::lexer::lex;
+use crate::parser::{parse, ASTNode};
+use crate::vm::{run, Vm};
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct Arguments {
     source: String,
     name: String,
@@ -188,6 +197,7 @@ fn get_args() -> Result<Arguments, bool> {
 }
 
 #[cfg(not(target_family = "wasm"))]
+#[allow(dead_code)]
 fn main() {
     // Parse args
     let mut args = match get_args() {
@@ -235,25 +245,30 @@ fn main() {
 
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen]
-#[cfg(target_family = "wasm")]
-pub fn main() {
-    // Set up panics
+pub fn setup_panics() {
     extern crate console_error_panic_hook;
-    use std::panic;
-    panic::set_hook(Box::new(console_error_panic_hook::hook));
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+}
 
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen]
+pub fn burlap_run(src: &str) -> bool {
     let mut args = Arguments::new();
     args.extensions.pop();
-    args.source = THE_SOURCE.to_string();
+    args.name = "<playground>".to_string();
+    args.is_repl = false;
+    unsafe {
+        THE_SOURCE = Some(src.to_string());
+        args.source = THE_SOURCE.as_ref().unwrap().clone();
+    }
     let Some(ast) = to_ast(&mut args, None) else {
-        panic!("Failed to convert to AST!");
+        return false;
     };
     let mut vm = Vm::new(args.clone());
     if !compile(ast, &mut args, &mut vm.program) {
-        panic!("Failed to convert to compile!");
+        return false;
     }
     // Run
-    if !run(&mut vm) {
-        panic!("Runtime error!");
-    }
+    run(&mut vm);
+    return true;
 }

@@ -164,12 +164,15 @@ impl Vm {
         functies.insert("range".to_string(), sk_range as Functie);
         functies.insert("args".to_string(), sk_args as Functie);
         // File IO
-        functies.insert("open".to_string(), sk_open as Functie);
-        functies.insert("close".to_string(), sk_close as Functie);
-        functies.insert("read".to_string(), sk_read as Functie);
-        functies.insert("write".to_string(), sk_write as Functie);
-        functies.insert("seek".to_string(), sk_seek as Functie);
-        functies.insert("flush".to_string(), sk_flush as Functie);
+        #[cfg(not(target_family = "wasm"))]
+        {
+            functies.insert("open".to_string(), sk_open as Functie);
+            functies.insert("close".to_string(), sk_close as Functie);
+            functies.insert("read".to_string(), sk_read as Functie);
+            functies.insert("write".to_string(), sk_write as Functie);
+            functies.insert("seek".to_string(), sk_seek as Functie);
+            functies.insert("flush".to_string(), sk_flush as Functie);
+        }
         // Casts
         functies.insert("int".to_string(), sk_int as Functie);
         functies.insert("float".to_string(), sk_float as Functie);
@@ -216,6 +219,7 @@ impl Vm {
     }
 
     // Unmangle a var name
+    #[cfg(not(target_family = "wasm"))]
     fn unmangle(name: &String) -> String {
         name.clone().split("::").nth(1).unwrap().to_string()
     }
@@ -1249,7 +1253,6 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 return Err("Non-int arg number".to_string());
             };
             // Add the function
-            // TODO: Disallow duplicate functions
             vm.program.functis.push((name, vm.at + 5, args_num));
         }
 

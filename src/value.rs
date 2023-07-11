@@ -376,7 +376,7 @@ impl Value {
             #[cfg(feature = "cffi")]
             Value::Ptr(p) => {
                 if let Value::Ptr(p_right) = right {
-                    *p == p_right
+                    *p == *p_right
                 } else {
                     false
                 }

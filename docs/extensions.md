@@ -1,6 +1,6 @@
 # Burlap Extensions
 
-This is a list of extensions that burlap has.
+This is a list of extensions that burlap has, "extensions" is any flag, function, or type not explicitly outlined by the specifications.
 
 ## Flags
 
@@ -70,15 +70,15 @@ if really_important_function() == false {
 print("It worked!");
 ```
 
-### `__burlap_load_library(libname)`
+### `__burlap_load_library(libname)` (C-FFI Only)
 
 Try to load the library `libname` (raises an error on failure) and returns a (`__burlap_ptr`) handle to it. Used for FFI with other programming languages. It internally uses `dlopen` to load libraries. 
 
-### `__burlap_load_functi(libhandle, name)`
+### `__burlap_load_functi(libhandle, name)` (C-FFI Only)
 
 Tries to find the symbol called `name` in the library with handle `libhandle` (raises an error on failure). Internally uses `dlsym` to find symbols.
 
-### `__burlap_ffi_call(func_ptr, args, ret_type)`
+### `__burlap_ffi_call(func_ptr, args, ret_type)` (C-FFI Only)
 
 Calls `func_ptr` with the C equivalent of `args`, returns the return value as `ret_type`.
 
@@ -115,7 +115,7 @@ let mynum = __burlap_ffi_call(print_n, [47], "Number")
 print("Doubled num: " + mynum)
 ```
 
-### `__burlap_ptr(x)`
+### `__burlap_ptr(x)` (C-FFI Only)
 
 The casting function for the `__burlap_ptr` type, see below.
 
@@ -123,9 +123,9 @@ The casting function for the `__burlap_ptr` type, see below.
 
 These types are internal to burlap, and shouldn't be seen by the average user.
 
-### `__burlap_ptr`
+### `__burlap_ptr` (C-FFI Only)
 
-A pointer type, unlike other internal types, `__burlap_ptr` is meant to be interacted with. As such, it can be used with equivalence operators, has a cast (`__burlap_ptr(x)`), and is returned from (extended) functions.
+A pointer type, unlike other internal types, `__burlap_ptr` is meant to be interacted with. As such, it can be used with equivalence operators, has a cast (`__burlap_ptr(x)`), and is returned from buildin (extended) functions.
 
 ### `__burlap_iter`
 
