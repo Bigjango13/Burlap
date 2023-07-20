@@ -21,15 +21,15 @@ pub enum Opcode {
     // The almighty NOP
     NOP,
 
-    // Stack
-    // PUSH value ([const u8 index] -> value)
-    PUSH,
-    // PUSH value ([const u24 index] -> value)
-    PUSH3,
-    // DUPlicate head (value -> value, value)
-    DUP,
-    // DELete head (value)
-    DEL,
+    // Regs
+    // LoaD ([u16 pool index "src", register "dst"])
+    LD,
+    // LoaD Longer ([u24 pool index])
+    LDL,
+    // CoPy ([register "src", register "dst"])
+    CP,
+    // POP
+    POP,
 
     // Scope (Call scope is handled by CALL and RET)
     // Raise Scope
@@ -38,83 +38,97 @@ pub enum Opcode {
     LEVI,
 
     // Functions
-    // declare FuNction (name, arg#)
-    FN,
-    // CALL function (name, arg#, args...)
+    // Save ARGs ([u8 "arg count"])
+    SARG,
+    // Copy ARGs ([register "dst"])
+    CARG,
+    // CALL ([u24 "address"])
     CALL,
-    // Tail Call ([u24], args...)
-    TCO,
+    // Variable CALL function ([register "functi", u8 "arg #"])
+    VCALL,
+    // Returning CALL function ([u24 "address"])
+    RCALL,
     // RETurn (ret)
     RET,
 
     // Variables
-    // Push Variable ("name" -> value)
-    PV,
-    // Declare Variable ("name", value)
+    // Load Variable ([register "name", register "dst"])
+    LV,
+    // Declare Variable ([register "name", register "value"])
     DV,
-    // Set Variable ("name", value)
+    // Set Variable ([register "name", register "value"])
     SV,
-    // Declare Or Set variable ("name", value)
-    DOS,
 
     // Lists
-    // Load List (size, keys-and-values -> list)
-    LL,
-    // Load Fast List (size, values -> list)
-    LFL,
-    // INdeX (list, key -> value)
+    // INdeX ([register "list", register "index", register "dst"])
     INX,
-    // To ITeR (value -> iter)
-    TITR,
-    // NeXT (iter -> (iter, value, true) | (iter, false))
+    // into ITER ([register "value", register "dst"])
+    ITER,
+    // NeXT ([register "iter", register "dst", register "is_empty dst"])
     NXT,
-    // Set KeY (value, list, key -> list)
+    // Set KeY ([register "list", register "index", register "value"])
     SKY,
 
     // Math
-    // ADD (value, value -> value)
+    // ADD ([register "a", register "b", register "dst"])
     ADD,
-    // SUBtract (value, value -> value)
+    // SUBtract ([register "a", register "b", register "dst"])
     SUB,
-    // MULtiply (value, value -> value)
+    // MULtiply ([register "a", register "b", register "dst"])
     MUL,
-    // DIVide (value, value -> value)
+    // DIVide ([register "a", register "b", register "dst"])
     DIV,
-    // MODulo (value, value -> value)
+    // MODulo ([register "a", register "b", register "dst"])
     MOD,
 
     // Boolean
-    // AND (value, value -> value)
+    // AND ([register "a", register "b", register "dst"])
     AND,
-    // OR (value, value -> value)
+    // OR ([register "a", register "b", register "dst"])
     OR,
-    // XOR (value, value -> value)
+    // XOR ([register "a", register "b", register "dst"])
     XOR,
-    // NOT (value, value -> value)
+    // NOT ([register "a", register "dst"])
     NOT,
 
     // Comparison
-    // EQuals (value, value -> value)
+    // EQuals ([register "a", register "b", register "dst"])
     EQ,
-    // Greator Than (value, value -> value)
+    // Greator Than ([register "a", register "b", register "dst"])
     GT,
-    // Less Than (value, value -> value)
+    // Less Than ([register "a", register "b", register "dst"])
     LT,
-    // IN (value, value -> value)
+    // IN ([register "a", register "b", register "dst"])
     IN,
 
     // Jumps
-    // JuMP Unconditionally ([u24])
-    JMPU,
-    // JuMP Backward, unconditionally ([u24])
+    // JuMP ([u24 "addrress"])
+    JMP,
+    // JuMP Backward ([u24 "address"])
     JMPB,
-    // JuMP if NoT ([u24], offset)
+    // JuMP if NoT ([register "cond", u16 "offset"])
     JMPNT,
 }
 
 
 // A functie is a sack functions implemented in rust
 type Functie = fn(&mut Vm, Vec<Value>) -> Result<Value, String>;
+
+// Call frames
+struct CallFrame {
+    args: Option<Vec<Value>>,
+    return_addr: usize
+}
+
+#[inline]
+fn shift2(a: u8, b: u8) -> usize {
+    return ((a as usize) << 8) + (b as usize);
+}
+
+#[inline]
+fn shift3(a: u8, b: u8, c: u8) -> usize {
+    return ((a as usize) << 16) + ((b as usize) << 8) + (c as usize);
+}
 
 // VM state
 pub struct Vm {
@@ -139,12 +153,14 @@ pub struct Vm {
     var_min: usize,
     // Scope
     scope: Vec<(usize, usize, u8)>,
-    call_frames: Vec<Vec<Value>>,
+    call_frames: Vec<CallFrame>,
 
     // The program
     pub program: Program,
-    // Sacks stack
+    // Sacks stack and regs
     stack: Vec<Value>,
+    regs: [Value; 16],
+    // Misc
     pub jump: bool,
     pub at: usize,
 }
@@ -162,7 +178,6 @@ impl Vm {
         functies.insert("type".to_string(), sk_type as Functie);
         functies.insert("len".to_string(), sk_len as Functie);
         functies.insert("range".to_string(), sk_range as Functie);
-        functies.insert("args".to_string(), sk_args as Functie);
         // File IO
         #[cfg(not(target_family = "wasm"))]
         {
@@ -208,13 +223,14 @@ impl Vm {
                 "__burlap_ptr".to_string(), sk_ptr as Functie
             );
         }
+        const NONE: Value = Value::None;
         Vm {
             args, has_err: false, in_func: false, functies,
             is_global: true, globals: FxHashMap::default(),
             var_names: vec![], var_vals: vec![], jump: false,
             stack: vec![], scope: vec![], call_frames: vec![],
             at: 0, var_min: 0, program: Program::new(),
-            filename: "".to_string()
+            filename: "".to_string(), regs: [NONE; 16]
         }
     }
 
@@ -406,100 +422,88 @@ impl Vm {
         })
     }
 
-    // Call a function
-    #[inline]
-    pub fn call(
-        &mut self, functi: &Value, args: &Vec<Value>
+    pub fn call_name(
+        &mut self, name: String, mut arg_num: u8
     ) -> Result<(), String> {
-        // Get function name
-        let Value::Functi(name) = functi else {
-            return Err(format!("cannot call {}", functi.get_type()));
+        // Check builtins
+        let Some(functie) = self.functies.get(&name) else {
+            // Check non-builtins
+            return Err(format!("no function called \"{}\"", name));
         };
-        // Non-builtin functions
-        let (mut pos, mut arg_num): (usize, i32) = (0, 0);
-        let mut func_exists = false;
-        for (ref iname, ipos, iarg_num) in &self.program.functis {
-            if iname == name {
-                func_exists = true;
-                arg_num = *iarg_num;
-                if *iarg_num != args.len().try_into().unwrap() {
-                    // It exists, but wrong arg number
-                    continue;
-                }
-                pos = *ipos;
-                break;
-            }
+        // Get args
+        let mut args: Vec<Value> = vec![];
+        while arg_num > 0 {
+            args.push(self.stack.pop().unwrap());
+            arg_num -= 1;
         }
-        // Builtin functions
-        if pos == 0 {
-            if let Some(functie) = self.functies.get(name) {
-                // Reverse (normally the vm pops the args in reverse)
-                let args = args.clone().into_iter().rev().collect();
-                let ret = functie(self, args)?;
-                self.push(ret);
-                return Ok(());
-            }
-            if func_exists {
-                self.bad_args(name, args.len(), arg_num as usize)?;
-            } else {
-                return Err(format!("no function called \"{}\"", name));
-            }
-        };
-        // Check args
-        if arg_num != args.len() as i32 {
-            self.bad_args(name, args.len(), arg_num as usize)?;
-        }
-        self.call_frames.push(args.clone().into_iter().rev().collect());
+        let args = args.clone().into_iter().rev().collect();
+        // Call
+        let ret = functie(self, args)?;
+        self.stack.push(ret);
+        Ok(())
+    }
+
+    // Call a function
+    pub fn call(&mut self, addr: usize) {
         // Store return address
-        self.push(Value::Int(self.at as i32));
+        self.call_frames.push(CallFrame{args: None, return_addr: self.at});
         // Jump there
-        self.at = pos;
+        self.at = addr;
         self.jump = true;
-        // Push args
-        for arg in args {
-            self.push(arg.clone());
-        }
         // Lower scope
         self.lower_scope(true);
-        return Ok(());
     }
 
     pub fn cur_op(&mut self) -> u8 {
-        self.program.ops[self.at]
-    }
-
-    pub fn cur_opcode(&mut self) -> Opcode {
-        // Unsafe because casting an int to enum might not be valid
-        return unsafe {std::mem::transmute(self.program.ops[self.at])};
-    }
-
-    pub fn next_op(&mut self) -> u8 {
-        self.at += 1;
-        if self.at > self.program.ops.len() {
-            panic!("Read too many ops!");
-        }
-        self.program.ops[self.at]
-    }
-
-    // Push/pop
-    #[inline]
-    pub fn push(&mut self, value: Value) {
-        self.stack.push(value)
+        ((self.program.ops[self.at] & 0xFF000000) >> 24).try_into().unwrap()
     }
 
     #[inline]
-    pub fn pop(&mut self) -> Value {
-        self.stack.pop().unwrap()
+    pub fn cur_opcode(&mut self) -> (Opcode, u8, u8, u8) {
+        let op = self.program.ops[self.at];
+        return (
+            // Unsafe because casting an int to enum might not be valid
+            // 99% of the time it will be, the 1% is when someone is monkeying around with burlap
+            unsafe {
+                std::mem::transmute::<u8, Opcode>(
+                    ((op & 0xFF000000) >> 24).try_into().unwrap()
+                )
+            },
+            ((op & 0x00FF0000) >> 16).try_into().unwrap(),
+            ((op & 0x0000FF00) >> 8).try_into().unwrap(),
+            ((op & 0x000000FF) >> 0).try_into().unwrap(),
+        );
     }
 
-    pub fn read(&mut self, size: u8) -> i32 {
-        // Reads multiple bytes into a single number
-        let mut ret: i32 = 0;
-        for _ in 0..size {
-            ret <<= 8;
-            ret += self.next_op() as i32;
+    // Registers
+    #[inline]
+    pub fn set_reg(&mut self, reg: u8, value: Value) {
+        if reg >= 17 {
+            // Regs over 16 just act as stack
+            self.stack.push(value);
+        } else {
+            self.regs[reg as usize] = value;
         }
-        return ret;
+    }
+
+    #[inline]
+    pub fn get_reg_mut(&mut self, reg: u8) -> &mut Value {
+        if reg >= 17 {
+            // Regs over 16 just act as stack
+            self.stack.last_mut().expect("Overpopped stack!")
+        } else {
+            &mut self.regs[reg as usize]
+        }
+    }
+
+    #[inline]
+    pub fn get_reg(&mut self, reg: u8) -> Value {
+        if reg >= 17 {
+            // Regs over 16 just act as stack
+            self.stack.pop().expect("Overpopped stack!").clone()
+        } else {
+            self.regs[reg as usize].clone()
+        }
     }
 
     pub fn jump(&mut self, offset: i32) {
@@ -605,25 +609,6 @@ fn sk_range(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     }
     ret.push(Value::Int(min));
     return Ok(Value::FastList(ret));
-}
-
-// Args
-fn sk_args(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if args.len() != 0 {
-        // Invalid args
-        vm.bad_args(&"args".to_string(), args.len(), 0)?;
-    }
-    // In a function
-    if vm.call_frames.len() != 0 {
-        return Ok(Value::FastList(vm.call_frames.last().unwrap().clone()));
-    }
-    // Global
-    #[cfg(not(target_family = "wasm"))]
-    return Ok(Value::FastList(
-        vm.args.program_args.iter().map(|x| Value::Str(x.clone())).collect()
-    ));
-    #[cfg(target_family = "wasm")]
-    return Ok(Value::FastList(vec![Value::Str("wasm".to_string())]));
 }
 
 // File IO
@@ -945,10 +930,10 @@ fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 
 // Sets a key in a list and returns it
 fn set_key(
-    vlist: Value, key: Value, val: Value
-) -> Result<Value, String> {
-    let Value::List(mut list) = vlist else {
-        let Value::FastList(mut list) = vlist else {
+    vlist: &mut Value, key: Value, val: Value
+) -> Result<(), String> {
+    let Value::List(ref mut list) = vlist else {
+        let Value::FastList(ref mut list) = vlist else {
             return Err(format!(
                 "failed to index {} with {}",
                 vlist.to_string()?, key.to_string()?
@@ -976,13 +961,14 @@ fn set_key(
             );
             let mut at = 0;
             for i in list {
-                slowlist.push((at.to_string(), i));
+                slowlist.push((at.to_string(), i.clone()));
                 at += 1;
             }
             // Set
-            return set_key(Value::List(slowlist), key, val);
+            *vlist = Value::List(slowlist);
+            return set_key(vlist, key, val);
         }
-        return Ok(Value::FastList(list));
+        return Ok(());
     };
     // Insert
     if key.get_type() == "Number" {
@@ -1003,39 +989,48 @@ fn set_key(
     } else {
         // Add or create string key
         let key = key.to_string()?;
-        for mut i in &mut list {
+        for ref mut i in list.iter_mut() {
             if i.0 == key {
                 i.1 = val;
-                return Ok(Value::List(list));
+                // *vlist = Value::List(list);
+                return Ok(());
             }
         }
         // Modify
         list.push((key, val));
     }
-    Ok(Value::List(list))
+    // *vlist = Value::List(list);
+    return Ok(());
 }
 
 // The big switch, runs every instruction
 #[inline]
 fn exec_next(vm: &mut Vm) -> Result<(), String> {
-    match vm.cur_opcode() {
+    let (op, a, b, c) = vm.cur_opcode();
+    match op {
         Opcode::NOP => {},
 
-        // Push
-        Opcode::PUSH => {
-            let index = vm.read(1);
-            vm.push(vm.program.consts[index as usize].clone());
+        // Regs
+        Opcode::LD => {
+            let val = vm.program.consts[shift2(a, b)].clone();
+            vm.set_reg(
+                c,
+                val
+            );
         },
-        Opcode::PUSH3 => {
-            let index = vm.read(3);
-            vm.push(vm.program.consts[index as usize].clone());
+        Opcode::LDL => {
+            let val = vm.program.consts[shift3(a, b, c)].clone();
+            vm.set_reg(
+                17,
+                val
+            );
         },
-        Opcode::DUP => {
-            let val = vm.stack.last();
-            vm.push(val.expect("Overpopped stack!").clone());
+        Opcode::CP => {
+            let val = vm.get_reg(a).clone();
+            vm.set_reg(b, val);
         },
-        Opcode::DEL => {
-            vm.stack.pop();
+        Opcode::POP => {
+            vm.stack.pop().unwrap();
         },
 
         // Scope
@@ -1047,232 +1042,33 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             vm.lower_scope(false);
         },
 
-        // Lists
-        Opcode::LL => {
-            let Value::Int(mut size) = vm.pop() else {
-                return Err("Non-int list size".to_string());
-            };
-            // Get the keys and values and put them into the list
-            let mut list = Vec::<(String, Value)>::with_capacity(
-                size as usize,
-            );
-            while size > 0 {
-                let Value::Str(key) = vm.pop() else {
-                    return Err("Non-string list index".to_string());
-                };
-                let val = vm.pop();
-                // Store
-                list.push((key, val));
-                size -= 1;
-            }
-            list.reverse();
-            vm.push(Value::List(list));
-        },
-        Opcode::LFL => {
-            let Value::Int(mut size) = vm.pop() else {
-                return Err("Non-int list size".to_string());
-            };
-            // Get values
-            let mut list = Vec::<Value>::with_capacity(size as usize);
-            while size > 0 {
-                list.push(vm.pop());
-                size -= 1;
-            }
-            list.reverse();
-            vm.push(Value::FastList(list));
-        },
-        Opcode::INX => {
-            let index = vm.pop();
-            let list = vm.pop();
-            match list.index(&index) {
-                 Some(x) => vm.push(x),
-                 _ => return Err(format!(
-                    "failed to index {} with {}",
-                    list.to_string()?, index.to_string()?
-                )),
-            }
-        },
-        Opcode::TITR => {
-            // Convert to an iterator
-            let iter = vm.pop().to_iter()?;
-            vm.push(iter);
-        },
-        Opcode::NXT => {
-            // Get the value
-            let val = vm.stack.last_mut()
-                .ok_or("Overpopped stack!")?.iter_next()?;
-            if let Some(val) = val {
-                // Push value
-                vm.push(val);
-                vm.push(Value::Bool(true));
-            } else {
-                // End of list
-                vm.push(Value::Bool(false));
-            }
-        },
-        Opcode::SKY => {
-            let key = vm.pop();
-            let list = vm.pop();
-            let val = vm.pop();
-            vm.push(set_key(list, key, val)?)
-        },
-
-        // Variables
-        Opcode::PV => {
-            // Get varname
-            let Value::Str(varname) = vm.pop() else {
-                return Err("variable name must be string".to_string());
-            };
-            // Get var
-            let var = vm.get_var(&varname)?;
-            // Push
-            vm.push(var);
-        },
-        Opcode::SV => {
-            // Get varname
-            let Value::Str(varname) = vm.pop() else {
-                return Err("variable name must be string".to_string());
-            };
-            // Set
-            let val = vm.pop();
-            vm.set_var(&varname, val)?;
-        },
-        Opcode::DV => {
-            let Value::Str(varname) = vm.pop() else {
-                return Err("variable name must be string".to_string());
-            };
-            let val = vm.pop();
-            vm.make_var(&varname, val)?;
-        },
-        Opcode::DOS => {
-            let Value::Str(varname) = vm.pop() else {
-                return Err("variable name must be string".to_string());
-            };
-            let val = vm.pop();
-            if vm.make_var(&varname, val.clone()).is_err() {
-                vm.set_var(&varname, val)?;
-            }
-        },
-
-        // Binops
-        Opcode::ADD => {
-            let rhs = vm.pop();
-            let lhs = vm.pop();
-            vm.push((lhs + rhs)?);
-        },
-        Opcode::SUB => {
-            let rhs = vm.pop();
-            let lhs = vm.pop();
-            vm.push((lhs - rhs)?);
-        },
-        Opcode::MUL => {
-            let rhs = vm.pop();
-            let lhs = vm.pop();
-            vm.push((lhs * rhs)?);
-        },
-        Opcode::DIV => {
-            let rhs = vm.pop();
-            let lhs = vm.pop();
-            vm.push((lhs / rhs)?);
-        },
-        Opcode::MOD => {
-            let rhs = vm.pop();
-            let lhs = vm.pop();
-            vm.push((lhs % rhs)?);
-        },
-        Opcode::IN => {
-            let rhs = vm.pop();
-            let lhs = vm.pop();
-            if let Some(b) = rhs.contains(&lhs) {
-                vm.push(Value::Bool(b));
-            } else {
-                return Err(
-                    format!("Cannot use in on {:?} and {:?}", lhs.get_type(), rhs.get_type())
-                );
-            }
-        },
-        Opcode::EQ => {
-            let rhs = vm.pop();
-            let lhs = vm.pop();
-            vm.push(Value::Bool(lhs.eq(&rhs)));
-        },
-        Opcode::LT => {
-            let rhs = vm.pop();
-            let lhs = vm.pop();
-            vm.push(Value::Bool(lhs.to_float() < rhs.to_float()));
-        },
-        Opcode::GT => {
-            let rhs = vm.pop();
-            let lhs = vm.pop();
-            vm.push(Value::Bool(lhs.to_float() > rhs.to_float()));
-        },
-        Opcode::AND => {
-            let rhs = vm.pop();
-            let lhs = vm.pop();
-            vm.push(Value::Bool(lhs.is_truthy() && rhs.is_truthy()));
-        },
-        Opcode::OR => {
-            let rhs = vm.pop();
-            let lhs = vm.pop();
-            vm.push(Value::Bool(lhs.is_truthy() || rhs.is_truthy()));
-        },
-        Opcode::XOR => {
-            let rhs = vm.pop();
-            let lhs = vm.pop();
-            vm.push(Value::Bool(lhs.is_truthy() != rhs.is_truthy()));
-        },
-        Opcode::NOT => {
-            let v = vm.pop();
-            vm.push(Value::Bool(!v.is_truthy()));
-        },
-
-        // Jumps
-        Opcode::JMPU => {
-            let offset = vm.read(3);
-            vm.jump(offset);
-        },
-        Opcode::JMPB => {
-            let offset = vm.read(3);
-            vm.jump(-offset);
-        },
-        Opcode::JMPNT => {
-            let offset = vm.read(3);
-            let cond = vm.pop();
-            // Check if it should jump
-            if !cond.is_truthy() {
-                vm.jump(offset);
-            }
-        },
-
         // Functions
-        Opcode::FN => {
-            let Value::Str(name) = vm.pop() else {
-                return Err("Non-string function name".to_string());
-            };
-            let Value::Int(args_num) = vm.pop() else {
-                return Err("Non-int arg number".to_string());
-            };
-            // Add the function
-            vm.program.functis.push((name, vm.at + 5, args_num));
-        }
-
-        Opcode::CALL => {
-            let function = vm.pop();
-            let Value::Int(mut arg_num) = vm.pop() else {
-                return Err("Non-int arg number".to_string());
-            };
-            // Get the args
-            let mut args = Vec::<Value>::with_capacity(arg_num as usize);
-            while arg_num > 0 {
-                args.push(vm.pop());
-                arg_num -= 1;
-            }
-            // Call
-            vm.call(&function, &args)?;
+        Opcode::SARG => {
+            let len = vm.stack.len();
+            let args: Vec<Value> = vm.stack[len - a as usize .. len]
+                .iter().cloned().collect();
+            vm.call_frames.last_mut().unwrap().args = Some(args);
         },
-
-        Opcode::TCO => {
+        Opcode::CARG => {
+            let args = Value::FastList(
+                vm.call_frames.last_mut().unwrap().args.clone()
+                    .expect("No saved args at `args()` call!")
+            );
+            vm.set_reg(a, args);
+        },
+        Opcode::CALL => {
+            vm.call(shift3(a, b, c));
+        },
+        Opcode::VCALL => {
+            let functi = vm.get_reg(a);
+            let Value::Functi(fn_name) = functi else {
+                return Err(format!("cannot call {}", functi.get_type()));
+            };
+            vm.call_name(fn_name, b)?;
+        }
+        Opcode::RCALL => {
             // Clear scope
+            // TODO: Don't use tuples
             loop {
                 let Some((_, _, c)) = vm.scope.last() else {
                     break;
@@ -1285,42 +1081,183 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 }
                 vm.raise_scope()?;
             }
-            // Set args
-            let arg_num = vm.call_frames.pop().unwrap().len();
-            let stack_len = vm.stack.len();
-            vm.call_frames.push(
-                vm.stack[stack_len-arg_num .. stack_len].iter()
-                    .map(|x| x.clone()).rev().collect()
-            );
             // Jump
-            let offset = vm.read(3);
-            vm.jump(-offset);
+            vm.at = shift3(a, b, c);
         },
-
         Opcode::RET => {
-            let ret = vm.stack.pop().unwrap();
-            while let Value::Iter(..) = vm.stack.last().unwrap() {
-                vm.stack.pop();
-            }
-            let Value::Int(pos) = vm.stack.pop().unwrap() else {
-                return Err("Non-int return address".to_string());
-            };
-            vm.stack.push(ret);
-            // Fix scope
-            loop {
-                let Some((_, _, c)) = vm.scope.last() else {
-                    break;
-                };
-                if *c == 0 {
-                    vm.raise_scope()?;
-                    break;
-                }
-                vm.raise_scope()?;
-            }
-            vm.call_frames.pop();
-            // Move
+            let pos = vm.call_frames.pop().unwrap().return_addr;
             vm.at = pos as usize + 1;
             vm.jump = true;
+        }
+
+        // Lists
+        Opcode::INX => {
+            let list = vm.get_reg(a);
+            let index = vm.get_reg(b);
+            match list.index(&index) {
+                 Some(x) => vm.set_reg(c, x),
+                 _ => return Err(format!(
+                    "failed to index {} with {}",
+                    list.to_string()?, index.to_string()?
+                )),
+            }
+        },
+        Opcode::ITER => {
+            // Convert to an iterator
+            let iter = vm.get_reg(a).to_iter()?;
+            vm.set_reg(b, iter);
+        },
+        Opcode::NXT => {
+            // Get the value
+            let iter = vm.get_reg_mut(a);
+            if let Some(val) = iter.iter_next()? {
+                // Add value
+                vm.set_reg(b, val);
+                vm.set_reg(c, Value::Bool(true));
+            } else {
+                // End of list
+                vm.set_reg(c, Value::Bool(false));
+            }
+        },
+        Opcode::SKY => {
+            // If the list is in a reg it can be done without copying the list
+            let mut tmp_list: Option<Value> = None;
+            let key: Value;
+            let val: Value;
+            let list = if a > 16 {
+                tmp_list = Some(vm.get_reg(a));
+                key = vm.get_reg(b);
+                val = vm.get_reg(c);
+                tmp_list.as_mut().unwrap()
+            } else {
+                key = vm.get_reg(b);
+                val = vm.get_reg(c);
+                &mut vm.regs[a as usize]
+            };
+            set_key(list, key, val)?;
+            if a > 16 {
+                vm.set_reg(a, tmp_list.unwrap());
+            }
+        },
+
+        // Variables
+        Opcode::LV => {
+            // Get varname
+            let Value::Str(varname) = vm.get_reg(a) else {
+                return Err("variable name must be string".to_string());
+            };
+            // Get var
+            let var = vm.get_var(&varname)?;
+            // Load
+            vm.set_reg(b, var);
+        },
+        Opcode::DV => {
+            // Get varname
+            let Value::Str(varname) = vm.get_reg(a) else {
+                return Err("variable name must be string".to_string());
+            };
+            // Get var
+            let val = vm.get_reg(b);
+            // Declare
+            vm.make_var(&varname, val)?;
+        },
+        Opcode::SV => {
+            // Get varname
+            let Value::Str(varname) = vm.get_reg(a) else {
+                return Err("variable name must be string".to_string());
+            };
+            // Get value
+            let val = vm.get_reg(b);
+            // Set
+            vm.set_var(&varname, val)?;
+        },
+
+        // Binops
+        Opcode::ADD => {
+            let rhs = vm.get_reg(a);
+            let lhs = vm.get_reg(b);
+            vm.set_reg(c, (lhs + rhs)?);
+        },
+        Opcode::SUB => {
+            let rhs = vm.get_reg(a);
+            let lhs = vm.get_reg(b);
+            vm.set_reg(c, (lhs - rhs)?);
+        },
+        Opcode::MUL => {
+            let rhs = vm.get_reg(a);
+            let lhs = vm.get_reg(b);
+            vm.set_reg(c, (lhs * rhs)?);
+        },
+        Opcode::DIV => {
+            let rhs = vm.get_reg(a);
+            let lhs = vm.get_reg(b);
+            vm.set_reg(c, (lhs / rhs)?);
+        },
+        Opcode::MOD => {
+            let rhs = vm.get_reg(a);
+            let lhs = vm.get_reg(b);
+            vm.set_reg(c, (lhs % rhs)?);
+        },
+        Opcode::IN => {
+            let rhs = vm.get_reg(a);
+            let lhs = vm.get_reg(b);
+            if let Some(b) = rhs.contains(&lhs) {
+                vm.set_reg(c, Value::Bool(b));
+            } else {
+                return Err(
+                    format!("Cannot use in on {:?} and {:?}", lhs.get_type(), rhs.get_type())
+                );
+            }
+        },
+        Opcode::EQ => {
+            let rhs = vm.get_reg(a);
+            let lhs = vm.get_reg(b);
+            vm.set_reg(c, Value::Bool(lhs.eq(&rhs)));
+        },
+        Opcode::LT => {
+            let rhs = vm.get_reg(a);
+            let lhs = vm.get_reg(b);
+            vm.set_reg(c, Value::Bool(lhs.to_float() < rhs.to_float()));
+        },
+        Opcode::GT => {
+            let rhs = vm.get_reg(a);
+            let lhs = vm.get_reg(b);
+            vm.set_reg(c, Value::Bool(lhs.to_float() > rhs.to_float()));
+        },
+        Opcode::AND => {
+            let rhs = vm.get_reg(a);
+            let lhs = vm.get_reg(b);
+            vm.set_reg(c, Value::Bool(lhs.is_truthy() && rhs.is_truthy()));
+        },
+        Opcode::OR => {
+            let rhs = vm.get_reg(a);
+            let lhs = vm.get_reg(b);
+            vm.set_reg(c, Value::Bool(lhs.is_truthy() || rhs.is_truthy()));
+        },
+        Opcode::XOR => {
+            let rhs = vm.get_reg(a);
+            let lhs = vm.get_reg(b);
+            vm.set_reg(c, Value::Bool(lhs.is_truthy() != rhs.is_truthy()));
+        },
+        Opcode::NOT => {
+            let v = vm.get_reg(a);
+            vm.set_reg(b, Value::Bool(!v.is_truthy()));
+        },
+
+        // Jumps
+        Opcode::JMP => {
+            vm.jump(shift3(a, b, c).try_into().unwrap());
+        },
+        Opcode::JMPB => {
+            let offset: i32 = shift3(a, b, c).try_into().unwrap();
+            vm.jump(-offset);
+        },
+        Opcode::JMPNT => {
+            let cond = vm.stack.pop().unwrap();
+            // Check if it should jump
+            if !cond.is_truthy() {
+                vm.jump(shift3(a, b, c).try_into().unwrap());
+            }
         }
     };
     // If nothing has returned an error, everything is fine
@@ -1356,7 +1293,7 @@ pub fn run(vm: &mut Vm) -> bool {
             continue;
         }
         if vm.at + 1 != vm.program.ops.len() {
-            vm.next_op();
+            vm.at += 1;
         } else {
             // At the end
             if vm.args.is_debug {

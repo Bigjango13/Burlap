@@ -11,7 +11,7 @@ use crate::vm::Opcode;
 #[derive(Debug)]
 pub struct Program {
     // Opcodes and constants
-    pub ops: Vec<u8>,
+    pub ops: Vec<u32>,
     pub consts: Vec<Value>,
     // Function locations (name, byte pos, arg num))
     pub functis: Vec<(String, usize, i32)>,
@@ -64,7 +64,7 @@ impl Program {
         (line, file)
     }
 
-    pub fn push(&mut self, val: Value) {
+    /*pub fn push(&mut self, val: Value) {
         // Get the index, or append
         let index = self.consts.iter().position(|i| i.clone() == val)
             .unwrap_or_else(|| {
@@ -93,10 +93,10 @@ impl Program {
         self.ops[start] = ((i >> 16) & 255) as u8;
         self.ops[start + 1] = ((i >> 8) & 255) as u8;
         self.ops[start + 2] = (i & 255) as u8;
-    }
+    }*/
 }
 
-fn compile_unary(
+/*fn compile_unary(
     program: &mut Program,
     op: &TokenType, val: &Box<ASTNode>
 ) -> bool {
@@ -500,7 +500,7 @@ fn compile_stmt(
 
             // Set the loop var
             program.push(Value::Str(var.to_string()));
-            program.ops.push(Opcode::DOS as u8);
+            program.ops.push(Opcode::DV as u8);
 
             // Body
             compile_body(program, args, body, true);
@@ -658,5 +658,12 @@ pub fn compile(
     program.file_table.push((
         program.inc_start, program.ops.len() as u32, args.name.clone()
     ));
+    return true;
+}
+*/
+
+pub fn compile(
+    ast: Vec<ASTNode>, args: &mut Arguments, program: &mut Program
+) -> bool {
     return true;
 }
