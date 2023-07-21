@@ -149,13 +149,10 @@ fn get_sym(parser: &mut Parser, name: &String, arg_num: i32) -> SymLookupRes {
     return SymLookupRes::Free;
 }
 
-fn check_unique(parser: &mut Parser, name: &String, arg_num: i32) {
+fn _check_unique(parser: &mut Parser, name: &String, arg_num: i32) -> bool {
     let name = &name.clone().split("::").nth(1).unwrap_or(name.as_str()).to_string();
     match get_sym(parser, name, arg_num) {
-        SymLookupRes::TakenByVar => {error!(
-            parser,
-            format!("the name \"{}\" is already taken by a variable", *name).as_str()
-        );},
+        SymLookupRes::TakenByVar => return false,
         SymLookupRes::TakenByFuncti => {error!(
             parser,
             if arg_num == -1 {
@@ -178,6 +175,16 @@ fn check_unique(parser: &mut Parser, name: &String, arg_num: i32) {
             parser.vars.push(name.clone());
         }
     };
+    return true;
+}
+
+fn check_unique(parser: &mut Parser, name: &String, arg_num: i32) {
+    if !_check_unique(parser, name, arg_num) {
+        error!(
+            parser,
+            format!("the name \"{}\" is already taken by a variable", *name).as_str()
+        );
+    }
 }
 
 fn check_name(parser: &mut Parser, name: &String) {
@@ -632,7 +639,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
         error!(parser, "expected variable name");
         return Option::None;
     }
-    check_unique(parser, &name, -1);
+    let _ = _check_unique(parser, &name, -1);
     parser.next();
     // Obligatory 'in'
     eat!(parser, In, "missing 'in' keyword in loop")?;

@@ -58,6 +58,8 @@ pub enum Opcode {
     DV,
     // Set Variable ([register "name", register "value"])
     SV,
+    // Declare Or Set variable ([register "name", register "value"])
+    DOS,
 
     // Lists
     // INdeX ([register "list", register "index", register "dst"])
@@ -1170,6 +1172,19 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             let val = vm.get_reg(b);
             // Set
             vm.set_var(&varname, val)?;
+        },
+        Opcode::DOS => {
+            // Get varname
+            let Value::Str(varname) = vm.get_reg(a) else {
+                return Err("variable name must be string".to_string());
+            };
+            // Get value
+            let val = vm.get_reg(b);
+            // Declare
+            if vm.make_var(&varname, val.clone()).is_err() {
+                // Set
+                vm.set_var(&varname, val)?;
+            }
         },
 
         // Binops

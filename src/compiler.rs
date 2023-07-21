@@ -500,7 +500,7 @@ fn compile_stmt(
 
             // Set the loop var
             program.push(Value::Str(var.to_string()));
-            program.ops.push(Opcode::DV as u8);
+            program.ops.push(Opcode::DOS as u8);
 
             // Body
             compile_body(program, args, body, true);
