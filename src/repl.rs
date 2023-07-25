@@ -2,7 +2,7 @@ use crate::vm::{run, Vm};
 #[cfg(feature = "fancyrepl")]
 use crate::lexer::{lex, TokenType};
 use crate::parser::{VecFunctis, _parse};
-use crate::compiler::compile;
+use crate::compiler::{compile, Compiler, Program};
 use crate::common::{print_err, ErrType};
 use crate::Arguments;
 
@@ -185,7 +185,8 @@ pub fn get_repl_line() -> &'static mut String {
 pub fn repl(args: &mut Arguments) {
     // Print welcome msg
     println!("Burlap v{}", env!("CARGO_PKG_VERSION"));
-    let mut vm = Vm::new(args.clone());
+    let mut compiler = Compiler::new();
+    let mut vm = Vm::new(args.clone(), Program::new());
     #[cfg(feature = "fancyrepl")]
     let mut rl = Editor::new().unwrap();
     #[cfg(not(feature = "fancyrepl"))]
@@ -253,15 +254,16 @@ pub fn repl(args: &mut Arguments) {
                 println!("Ast: {:?}", ast);
             }
             // Compile
-            if !compile(ast, args, &mut vm.program) {
+            if !compile(ast, args, &mut compiler) {
                 continue;
             }
             // Reset file name (imports mess it up during compiling)
             args.name = "<stdin>".to_string();
             // Run
-            if vm.program.ops.len() == vm.at + 1 {
+            if compiler.program.ops.len() == vm.at + 1 {
                 continue;
             }
+            vm.program = compiler.program;
             if vm.at != 0 {
                 vm.at += 1;
             }
@@ -271,6 +273,7 @@ pub fn repl(args: &mut Arguments) {
             {
                 rl.helper_mut().unwrap().symbols = vm.get_symbols(true);
             }
+            compiler.program = vm.program;
         }
     }
     // Save history

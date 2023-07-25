@@ -39,7 +39,7 @@ mod cfg_mod {
 
 use cfg_mod::*;
 
-use crate::compiler::compile;
+use crate::compiler::{compile, Compiler};
 use crate::lexer::lex;
 use crate::parser::{parse, ASTNode};
 use crate::vm::{run, Vm};
@@ -229,14 +229,15 @@ fn main() {
         let Some(ast) = to_ast(&mut args, None) else {
             exit(1);
         };
-        let mut vm = Vm::new(args.clone());
+        let mut compiler = Compiler::new();
         // Fix import path
-        vm.program.path = args.path.clone();
-        vm.program.path.pop();
-        if !compile(ast, &mut args, &mut vm.program) {
+        compiler.program.path = args.path.clone();
+        compiler.program.path.pop();
+        if !compile(ast, &mut args, &mut compiler) {
             exit(1);
         }
         // Run
+        let mut vm = Vm::new(args.clone(), compiler.program);
         if !run(&mut vm) {
             exit(1);
         }
@@ -265,7 +266,8 @@ pub fn burlap_run(src: &str) -> bool {
         return false;
     };
     let mut vm = Vm::new(args.clone());
-    if !compile(ast, &mut args, &mut vm.program) {
+    let mut compiler = Compiler::new(vm.program);
+    if !compile(ast, &mut args, &mut compiler) {
         return false;
     }
     // Run

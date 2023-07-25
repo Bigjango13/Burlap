@@ -169,7 +169,7 @@ pub struct Vm {
 
 impl Vm {
     // Init
-    pub fn new(args: Arguments) -> Vm {
+    pub fn new(args: Arguments, program: Program) -> Vm {
         // Builtin functions
         let mut functies = FxHashMap::with_capacity_and_hasher(
             16, Default::default()
@@ -231,8 +231,8 @@ impl Vm {
             is_global: true, globals: FxHashMap::default(),
             var_names: vec![], var_vals: vec![], jump: false,
             stack: vec![], scope: vec![], call_frames: vec![],
-            at: 0, var_min: 0, program: Program::new(),
-            filename: "".to_string(), regs: [NONE; 16]
+            at: 0, var_min: 0, program, filename: "".to_string(),
+            regs: [NONE; 16]
         }
     }
 
@@ -1292,7 +1292,11 @@ pub fn run(vm: &mut Vm) -> bool {
             // Print debugging info
             let opcode = vm.cur_opcode();
             let op = vm.cur_op();
-            println!("{}: {:?}({}) {:?}", vm.at, opcode, op, vm.stack);
+            println!(
+                "{}: {:?}({}, {}, {})",
+                vm.at,
+                opcode.0, opcode.1, opcode.2, opcode.3
+            );
         }
         // Run
         if let Err(s) = exec_next(vm) {

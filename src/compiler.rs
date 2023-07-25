@@ -21,14 +21,6 @@ pub struct Program {
     // Side tables
     line_table: Vec<(u32, u32, u32)>,
     file_table: Vec<(u32, u32, String)>,
-
-    // Compiler info
-    // The functi being compiled (name, args, address)
-    functi: (String, u8, u32),
-    // If RS and LEVI are needed
-    needs_scope: bool,
-    // Where in the byte code the current file started
-    inc_start: u32,
 }
 
 impl Program {
@@ -39,8 +31,6 @@ impl Program {
             functis: Vec::new(),
             path: PathBuf::from("."),
             line_table: vec![], file_table: vec![],
-            needs_scope: false, inc_start: 0,
-            functi: ("".to_string(), 0, 0),
         }
     }
 
@@ -63,30 +53,112 @@ impl Program {
             .unwrap_or(0);
         (line, file)
     }
+}
 
-    /*pub fn push(&mut self, val: Value) {
-        // Get the index, or append
-        let index = self.consts.iter().position(|i| i.clone() == val)
-            .unwrap_or_else(|| {
-            self.consts.push(val);
-            self.consts.len() - 1
-        });
-        // Push the instruction
-        if index > 2usize.pow(24)-1 {
-            panic!("Too many different constants!");
-        } else if index > u8::MAX.into() {
-            // The len is too big for one byte, so push 3
-            self.ops.push(Opcode::PUSH3 as u8);
-            self.ops.push(((index >> 16) & 255) as u8);
-            self.ops.push(((index >> 8) & 255) as u8);
-            self.ops.push((index & 255) as u8);
-        } else {
-            self.ops.push(Opcode::PUSH as u8);
-            self.ops.push(index as u8);
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+enum Reg {
+    R0 = 0, R1 = 1, R2 = 2, R3 = 3, R4 = 4,
+    R5 = 5, R6 = 6, R7 = 7, R8 = 8, R9 = 9,
+    R10 = 10, R11 = 11, R12 = 12, R13 = 13,
+    R14 = 14, R15 = 15, R16 = 16, Stack=17
+}
+
+pub struct Compiler {
+    pub program: Program,
+
+    // Compiler info
+    // The functi being compiled (name, args, address)
+    functi: (String, u8, u32),
+    // If RS and LEVI are needed
+    needs_scope: bool,
+    // Where in the byte code the current file started
+    inc_start: u32,
+    // Registers
+    regs: [bool; 17]
+}
+
+impl Compiler {
+    pub fn new() -> Compiler {
+        Compiler {
+            program: Program::new(),
+            needs_scope: false, inc_start: 0,
+            functi: ("".to_string(), 0, 0),
+            regs: [true; 17]
         }
     }
 
-    pub fn fill_jmp(&mut self, start: usize, mut i: usize) {
+    // Instruction wrappers
+    #[inline]
+    pub fn add_op_args(&mut self, op: Opcode, a: u8, b: u8, c: u8) {
+        self.program.ops.push(
+            ((op as u32) << 24)
+            + ((a as u32) << 16)
+            + ((b as u32) << 8)
+            + (c as u32)
+        );
+    }
+
+    #[inline]
+    pub fn add_op(&mut self, op: Opcode) {
+        self.add_op_args(op, 0, 0, 0);
+    }
+
+    #[inline]
+    pub fn copy(&mut self, src: Reg, dst: Reg) {
+        self.add_op_args(Opcode::CP, src as u8, dst as u8, 0);
+    }
+
+    // Register allocation
+    fn alloc_reg(&mut self) -> Reg {
+        let Some(reg) = self.regs.iter().position(|i| *i) else {
+            // No available registers, fallback to stack
+            return Reg::Stack;
+        };
+        self.regs[reg] = false;
+        return unsafe { std::mem::transmute(reg as u8) };
+    }
+
+    #[inline]
+    pub fn free_reg(&mut self, reg: Reg) {
+        if 17 >= reg as u8 {
+            return;
+        }
+        self.regs[reg as usize] = true;
+    }
+
+    pub fn push(&mut self, val: Value) -> Reg {
+        // Get the index, or append
+        let index = self.program.consts.iter().position(|i| i.clone() == val)
+            .unwrap_or_else(|| {
+            self.program.consts.push(val);
+            self.program.consts.len() - 1
+        });
+        // Push the instruction
+        if index > 2usize.pow(24)-1 {
+            panic!("Too many different constants! You have over 16777215 constants!!");
+        } else if index > 2usize.pow(16)-1 {
+            // The len is too big for two bytes, so use three
+            self.add_op_args(
+                Opcode::LDL,
+                ((index >> 16) & 255) as u8,
+                ((index >> 8) & 255) as u8,
+                (index & 255) as u8
+            );
+            return Reg::Stack;
+        } else {
+            // Get a register and push
+            let reg = self.alloc_reg();
+            self.add_op_args(
+                Opcode::LD,
+                ((index >> 8) & 255) as u8,
+                (index & 255) as u8,
+                reg as u8
+            );
+            return reg;
+        }
+    }
+
+    /*pub fn fill_jmp(&mut self, start: usize, mut i: usize) {
         if i == 0 {
             i = self.ops.len() - start - 2;
         }
@@ -96,8 +168,9 @@ impl Program {
     }*/
 }
 
+
 /*fn compile_unary(
-    program: &mut Program,
+    compiler: &mut Compiler,
     op: &TokenType, val: &Box<ASTNode>
 ) -> bool {
     match op {
@@ -143,9 +216,10 @@ impl Program {
         _ => panic!("{}", IMPOSSIBLE_STATE),
     }
     return true;
-}
+}*/
 
-fn compile_set(program: &mut Program, var: &ASTNode) -> bool {
+/*
+fn compile_set(compiler: &mut Compiler, var: &ASTNode) -> bool {
     // Recursively set
     if let VarExpr(s) = var.clone() {
         program.push(Value::Str(s));
@@ -167,7 +241,7 @@ fn compile_set(program: &mut Program, var: &ASTNode) -> bool {
 }
 
 fn compile_short_binop(
-    program: &mut Program,
+    compiler: &mut Compiler,
     lhs: &Box<ASTNode>, op: &TokenType, rhs: &Box<ASTNode>,
     clean: bool
 ) -> bool {
@@ -202,7 +276,7 @@ fn compile_short_binop(
 }
 
 fn compile_binop(
-    program: &mut Program,
+    compiler: &mut Compiler,
     lhs: &Box<ASTNode>, op: &TokenType, rhs: &Box<ASTNode>,
     clean: bool
 ) -> bool {
@@ -290,35 +364,37 @@ fn compile_binop(
         program.ops.push(Opcode::DEL as u8);
     }
     return true;
-}
+}*/
 
-fn compile_expr(program: &mut Program, node: &ASTNode) -> bool {
-    match node {
+fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
+    Some(match node {
         // Values
         VarExpr(val) => {
-            program.push(Value::Str(val.clone()));
-            program.ops.push(Opcode::PV as u8);
+            let reg = compiler.push(Value::Str(val.clone()));
+            // Load var inplace
+            compiler.add_op_args(Opcode::LV, reg as u8, reg as u8, 0);
+            reg
         },
         StringExpr(val) => {
-            program.push(Value::Str(val.clone()));
+            compiler.push(Value::Str(val.clone()))
         },
         NumberExpr(val) => {
-            program.push(Value::Int(*val));
+            compiler.push(Value::Int(*val))
         },
         DecimalExpr(val) => {
-            program.push(Value::Float(*val));
+            compiler.push(Value::Float(*val))
         },
         BoolExpr(val) => {
-            program.push(Value::Bool(*val));
+            compiler.push(Value::Bool(*val))
         },
         NoneExpr => {
-            program.push(Value::None);
+            compiler.push(Value::None)
         },
         ByteExpr(val) => {
-            program.push(Value::Byte(*val));
+            compiler.push(Value::Byte(*val))
         },
         // Binop/unary
-        BinopExpr(lhs, op, rhs) => {
+        /*BinopExpr(lhs, op, rhs) => {
             return compile_binop(program, lhs, op, rhs, false);
         }
         UnaryExpr(op, val) => {
@@ -379,16 +455,16 @@ fn compile_expr(program: &mut Program, node: &ASTNode) -> bool {
                 return false;
             }
             program.ops.push(Opcode::INX as u8);
-        },
+        },*/
         _ => {
             panic!("Unknown token! {:?}", node);
+            return None;
         }
-    };
-    return true;
+    })
 }
-
+/*
 fn _compile_body(
-    program: &mut Program, args: &mut Arguments,
+    compiler: &mut Compiler, args: &mut Arguments,
     nodes: &Vec<ASTNode>, manual_scope: bool
 ) -> bool {
     // Lower scope
@@ -414,7 +490,7 @@ fn _compile_body(
     return true;
 }
 fn compile_body(
-    program: &mut Program, args: &mut Arguments, node: &ASTNode, manual_scope: bool
+    compiler: &mut Compiler, args: &mut Arguments, node: &ASTNode, manual_scope: bool
 ) -> bool {
     let BodyStmt(nodes) = node else {
         if *node == Nop {
@@ -423,14 +499,14 @@ fn compile_body(
         panic!("compile_body got non-body node!");
     };
     return _compile_body(program, args, nodes, manual_scope);
-}
+}*/
 
 fn compile_stmt(
-    program: &mut Program, args: &mut Arguments, node: &ASTNode, dirty: bool
+    compiler: &mut Compiler, args: &mut Arguments, node: &ASTNode, dirty: bool
 ) -> bool {
     match node {
         // Statements
-        LetStmt(name, val) => {
+        /*LetStmt(name, val) => {
             compile_expr(program, val);
             program.push(Value::Str(name.to_string()));
             program.ops.push(Opcode::DV as u8);
@@ -621,49 +697,56 @@ fn compile_stmt(
         // Binops don't always return, so let them manage cleaning the stack
         BinopExpr(lhs, op, rhs) => {
             return compile_binop(program, lhs, op, rhs, !dirty);
-        },
+        },*/
         _ => {
-            let ret = compile_expr(program, node);
+            let Some(reg) = compile_expr(compiler, node) else {
+                return false;
+            };
             if !dirty {
                 // Remove unused values from the stack
-                program.ops.push(Opcode::DEL as u8);
+                if reg == Reg::Stack {
+                    compiler.add_op(Opcode::POP);
+                }
+            } else if reg != Reg::Stack {
+                // Move the result to the stack
+                compiler.copy(reg, Reg::Stack);
             }
-            return ret;
+            compiler.free_reg(reg);
         }
     };
     return true;
 }
 
 pub fn compile(
-    ast: Vec<ASTNode>, args: &mut Arguments, program: &mut Program
+    ast: Vec<ASTNode>, args: &mut Arguments, compiler: &mut Compiler
 ) -> bool {
     if ast.is_empty() {
         return true;
     }
-    program.inc_start = program.ops.len() as u32;
+    compiler.inc_start = compiler.program.ops.len() as u32;
     // Compile
     for node in &ast[..ast.len()-1] {
-        if !compile_stmt(program, args, node, false) {
+        if !compile_stmt(compiler, args, node, false) {
             return false;
         }
     }
     // If repl, compile the last value without cleaning up
     // Else just compile normally
-    if !compile_stmt(program, args, ast.last().unwrap(), args.is_repl) {
+    if !compile_stmt(compiler, args, ast.last().unwrap(), args.is_repl) {
         return false;
     }
     // Jumps go onto the next instruction, so a nop is needed at the end
-    program.ops.push(Opcode::NOP as u8);
+    compiler.add_op(Opcode::NOP);
     // End file
-    program.file_table.push((
-        program.inc_start, program.ops.len() as u32, args.name.clone()
+    compiler.program.file_table.push((
+        compiler.inc_start, compiler.program.ops.len() as u32, args.name.clone()
     ));
     return true;
 }
-*/
 
-pub fn compile(
-    ast: Vec<ASTNode>, args: &mut Arguments, program: &mut Program
+
+/*pub fn compile(
+    ast: Vec<ASTNode>, args: &mut Arguments, compiler: &mut Compiler
 ) -> bool {
     return true;
-}
+}*/
