@@ -331,17 +331,23 @@ fn parse_binop_helper(
     return Some(expr);
 }
 
-fn parse_binop_math(parser: &mut Parser) -> Option<ASTNode> {
-    // Math binops, +, -, *, /, %, in
+fn parse_binop_math2(parser: &mut Parser) -> Option<ASTNode> {
+    // Math 2 binops, *, /, %
     parse_binop_helper(parser, vec![
-        Plus, Minus, Times, Div, Modulo, In
+        Times, Div, Modulo
     ], &parse_unary, true)
 }
-fn parse_binop_cmp(parser: &mut Parser) -> Option<ASTNode> {
-    // Compare binops, ==, !=, <, >, <=, >=
+fn parse_binop_math1(parser: &mut Parser) -> Option<ASTNode> {
+    // Math 1 binops, + and -
     parse_binop_helper(parser, vec![
-        EqualsEquals, NotEquals, Lt, Gt, LtEquals, GtEquals
-    ], &parse_binop_math, true)
+        Plus, Minus,
+    ], &parse_binop_math2, true)
+}
+fn parse_binop_cmp(parser: &mut Parser) -> Option<ASTNode> {
+    // Compare binops, ==, !=, <, >, <=, >=, in
+    parse_binop_helper(parser, vec![
+        EqualsEquals, NotEquals, Lt, Gt, LtEquals, GtEquals, In
+    ], &parse_binop_math1, true)
 }
 fn parse_binop_logic(parser: &mut Parser) -> Option<ASTNode> {
     // Logic binops, &&, ||, ^^

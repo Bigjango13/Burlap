@@ -55,12 +55,18 @@ impl Program {
     }
 }
 
+#[allow(unsed)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum Reg {
     R0 = 0, R1 = 1, R2 = 2, R3 = 3, R4 = 4,
     R5 = 5, R6 = 6, R7 = 7, R8 = 8, R9 = 9,
     R10 = 10, R11 = 11, R12 = 12, R13 = 13,
-    R14 = 14, R15 = 15, R16 = 16, Stack=17
+    R14 = 14, R15 = 15, Stack = 16
+}
+
+#[inline]
+fn to_reg(i: u8) -> Reg {
+    unsafe { std::mem::transmute(i) }
 }
 
 pub struct Compiler {
@@ -115,12 +121,12 @@ impl Compiler {
             return Reg::Stack;
         };
         self.regs[reg] = false;
-        return unsafe { std::mem::transmute(reg as u8) };
+        return to_reg(reg as u8);
     }
 
     #[inline]
     pub fn free_reg(&mut self, reg: Reg) {
-        if 17 >= reg as u8 {
+        if 16 <= reg as u8 {
             return;
         }
         self.regs[reg as usize] = true;
@@ -218,29 +224,28 @@ impl Compiler {
     return true;
 }*/
 
-/*
-fn compile_set(compiler: &mut Compiler, var: &ASTNode) -> bool {
+
+fn compile_set(compiler: &mut Compiler, lvalue: &ASTNode, value: Reg) -> Option<()> {
     // Recursively set
-    if let VarExpr(s) = var.clone() {
-        program.push(Value::Str(s));
-        program.ops.push(Opcode::SV as u8);
-    } else if let IndexExpr(list, index) = var.clone() {
-        if !compile_expr(program, &list) {
-            return false;
-        }
-        if !compile_expr(program, &index) {
-            return false;
-        }
-        program.ops.push(Opcode::SKY as u8);
+    if let VarExpr(s) = lvalue.clone() {
+        let nreg = compiler.push(Value::Str(s));
+        compiler.add_op_args(Opcode::SV, nreg as u8, value as u8, 0);
+        compiler.free_reg(nreg);
+        compiler.free_reg(value);
+        return Some(());
+    } else if let IndexExpr(list, index) = lvalue.clone() {
+        let lreg = compile_expr(compiler, &list)?;
+        let ireg = compile_expr(compiler, &index)?;
+        compiler.add_op_args(Opcode::SKY, lreg as u8, ireg as u8, value as u8);
+        compiler.free_reg(lreg);
+        compiler.free_reg(ireg);
         // Indexes are attached to something, make sure it reattaches
-        if !compile_set(program, &list) {
-            return false;
-        }
+        return compile_set(compiler, &list, value);
     }
-    return true;
+    panic!("Cannot compile_set for something other then a variable or index");
 }
 
-fn compile_short_binop(
+/*fn compile_short_binop(
     compiler: &mut Compiler,
     lhs: &Box<ASTNode>, op: &TokenType, rhs: &Box<ASTNode>,
     clean: bool
@@ -273,78 +278,77 @@ fn compile_short_binop(
         program.ops.push(Opcode::DEL as u8);
     }
     return true;
-}
+}*/
 
 fn compile_binop(
     compiler: &mut Compiler,
     lhs: &Box<ASTNode>, op: &TokenType, rhs: &Box<ASTNode>,
     clean: bool
-) -> bool {
+) -> Option<Reg> {
     // Short circuiting ops are special
     if op == &TokenType::And || op == &TokenType::Or {
-        return compile_short_binop(program, lhs, op, rhs, clean);
+        //return compile_short_binop(program, lhs, op, rhs, clean);
     }
     // Compile sides
-    if op != &TokenType::Equals {
+    let lreg = if op != &TokenType::Equals {
         // No need to compile the value if it will just be reassigned
-        if !compile_expr(program, lhs) {
-            return false;
-        }
-    }
-    if !compile_expr(program, rhs) {
-        return false;
-    }
+        compile_expr(compiler, lhs)? as u8
+    } else {
+        // Unused reg so things will break if someone uses it
+        47
+    };
+    let rreg = compile_expr(compiler, rhs)? as u8;
     // Compile op
     match op {
         // Simple single instructions
         TokenType::Plus | TokenType::PlusEquals => {
-            program.ops.push(Opcode::ADD as u8);
+            compiler.add_op_args(Opcode::ADD, lreg, rreg, rreg);
         },
         TokenType::Minus | TokenType::MinusEquals => {
-            program.ops.push(Opcode::SUB as u8);
+            compiler.add_op_args(Opcode::SUB, lreg, rreg, rreg);
         },
         TokenType::Times | TokenType::TimesEquals => {
-            program.ops.push(Opcode::MUL as u8);
+            compiler.add_op_args(Opcode::MUL, lreg, rreg, rreg);
         },
         TokenType::Div | TokenType::DivEquals => {
-            program.ops.push(Opcode::DIV as u8);
+            compiler.add_op_args(Opcode::DIV, lreg, rreg, rreg);
         },
         TokenType::Modulo | TokenType::ModEquals => {
-            program.ops.push(Opcode::MOD as u8);
+            compiler.add_op_args(Opcode::MOD, lreg, rreg, rreg);
         },
         TokenType::And => {
-            program.ops.push(Opcode::AND as u8);
+            compiler.add_op_args(Opcode::AND, lreg, rreg, rreg);
         },
         TokenType::Or => {
-            program.ops.push(Opcode::OR as u8);
+            compiler.add_op_args(Opcode::OR, lreg, rreg, rreg);
         },
         TokenType::Xor => {
-            program.ops.push(Opcode::XOR as u8);
+            compiler.add_op_args(Opcode::XOR, lreg, rreg, rreg);
         },
         TokenType::Gt => {
-            program.ops.push(Opcode::GT as u8);
+            compiler.add_op_args(Opcode::GT, lreg, rreg, rreg);
         },
         TokenType::Lt => {
-            program.ops.push(Opcode::LT as u8);
+            compiler.add_op_args(Opcode::LT, lreg, rreg, rreg);
         },
         TokenType::EqualsEquals => {
-            program.ops.push(Opcode::EQ as u8);
+            compiler.add_op_args(Opcode::EQ, lreg, rreg, rreg);
         },
         TokenType::In => {
-            program.ops.push(Opcode::IN as u8);
+            compiler.add_op_args(Opcode::IN, lreg, rreg, rreg);
         },
         // Harder ones that don't have a single instruction
         TokenType::NotEquals => {
-            program.ops.push(Opcode::EQ as u8);
-            program.ops.push(Opcode::NOT as u8);
+            compiler.add_op_args(Opcode::EQ, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::NOT, lreg, rreg, rreg);
         },
         TokenType::LtEquals => {
-            program.ops.push(Opcode::LT as u8);
-            program.ops.push(Opcode::NOT as u8);
+            compiler.add_op_args(Opcode::LT, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::NOT, lreg, rreg, rreg);
         },
         TokenType::GtEquals => {
-            program.ops.push(Opcode::GT as u8);
-            program.ops.push(Opcode::NOT as u8);
+            compiler.add_op_args(Opcode::GT, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::NOT, lreg, rreg, rreg);
         },
         // Handled later
         TokenType::Equals => {},
@@ -355,16 +359,20 @@ fn compile_binop(
         | TokenType::TimesEquals | TokenType::DivEquals
         | TokenType::ModEquals | TokenType::Equals = op.clone()
     {
-        if !compile_set(program, lhs) {
-            return false;
-        }
-
+        compile_set(compiler, lhs, to_reg(rreg))?;
+        return Some(Reg::Stack);
     } else if clean {
         // Clean up the stack
-        program.ops.push(Opcode::DEL as u8);
+        if lreg == Reg::Stack as u8 {
+            compiler.add_op(Opcode::POP);
+        }
+        compiler.free_reg(to_reg(rreg));
+        compiler.free_reg(to_reg(lreg));
+        return Some(Reg::Stack);
     }
-    return true;
-}*/
+    compiler.free_reg(to_reg(lreg));
+    return Some(to_reg(rreg));
+}
 
 fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
     Some(match node {
@@ -394,17 +402,17 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
             compiler.push(Value::Byte(*val))
         },
         // Binop/unary
-        /*BinopExpr(lhs, op, rhs) => {
-            return compile_binop(program, lhs, op, rhs, false);
+        BinopExpr(lhs, op, rhs) => {
+            return compile_binop(compiler, lhs, op, rhs, false);
         }
-        UnaryExpr(op, val) => {
-            return compile_unary(program, op, val);
+        /*UnaryExpr(op, val) => {
+            return compile_unary(compiler, op, val);
         },
         // Calls
         CallExpr(expr, args) => {
             // Push the call. Name, arg count, args (in reverse order)
             for arg in args {
-                if !compile_expr(program, arg) {
+                if !compile_expr(compiler, arg) {
                     return false;
                 }
             }
@@ -412,7 +420,7 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
             if let ASTNode::VarExpr(name) = *expr.clone() {
                 if name.contains("::") {
                     // Variable name
-                    if !compile_expr(program, expr) {
+                    if !compile_expr(compiler, expr) {
                         return false;
                     }
                 } else {
@@ -458,7 +466,6 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
         },*/
         _ => {
             panic!("Unknown token! {:?}", node);
-            return None;
         }
     })
 }
@@ -503,16 +510,18 @@ fn compile_body(
 
 fn compile_stmt(
     compiler: &mut Compiler, args: &mut Arguments, node: &ASTNode, dirty: bool
-) -> bool {
+) -> Option<()> {
     match node {
         // Statements
-        /*LetStmt(name, val) => {
-            compile_expr(program, val);
-            program.push(Value::Str(name.to_string()));
-            program.ops.push(Opcode::DV as u8);
-            program.needs_scope = true;
+        LetStmt(name, val) => {
+            let vreg = compile_expr(compiler, val)?;
+            let nreg = compiler.push(Value::Str(name.to_string()));
+            compiler.add_op_args(Opcode::DV, nreg as u8, vreg as u8, 0);
+            compiler.free_reg(vreg);
+            compiler.free_reg(nreg);
+            compiler.needs_scope = true;
         },
-        IfStmt(cond, body, else_part) => {
+        /*IfStmt(cond, body, else_part) => {
             // The condition must be a expr, so no need to match against stmts
             compile_expr(program, cond);
 
@@ -688,7 +697,7 @@ fn compile_stmt(
                 program.inc_start, program.ops.len() as u32, file.clone()
             ));
             program.inc_start = program.ops.len() as u32;
-        },
+        },*/
 
         Nop => {
             // Nop isn't turned into the NOP instruction because it's useless
@@ -696,12 +705,15 @@ fn compile_stmt(
         // Expressions
         // Binops don't always return, so let them manage cleaning the stack
         BinopExpr(lhs, op, rhs) => {
-            return compile_binop(program, lhs, op, rhs, !dirty);
-        },*/
+            let reg = compile_binop(compiler, lhs, op, rhs, !dirty)?;
+            if dirty && reg != Reg::Stack {
+                // Copy to stack
+                compiler.copy(reg, Reg::Stack);
+                compiler.free_reg(reg);
+            }
+        },
         _ => {
-            let Some(reg) = compile_expr(compiler, node) else {
-                return false;
-            };
+            let reg = compile_expr(compiler, node)?;
             if !dirty {
                 // Remove unused values from the stack
                 if reg == Reg::Stack {
@@ -711,10 +723,11 @@ fn compile_stmt(
                 // Move the result to the stack
                 compiler.copy(reg, Reg::Stack);
             }
+            println!("freeing {:?}", reg);
             compiler.free_reg(reg);
         }
     };
-    return true;
+    return Some(());
 }
 
 pub fn compile(
@@ -726,13 +739,13 @@ pub fn compile(
     compiler.inc_start = compiler.program.ops.len() as u32;
     // Compile
     for node in &ast[..ast.len()-1] {
-        if !compile_stmt(compiler, args, node, false) {
+        if !compile_stmt(compiler, args, node, false).is_some() {
             return false;
         }
     }
     // If repl, compile the last value without cleaning up
     // Else just compile normally
-    if !compile_stmt(compiler, args, ast.last().unwrap(), args.is_repl) {
+    if !compile_stmt(compiler, args, ast.last().unwrap(), args.is_repl).is_some() {
         return false;
     }
     // Jumps go onto the next instruction, so a nop is needed at the end

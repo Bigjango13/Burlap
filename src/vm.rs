@@ -480,7 +480,7 @@ impl Vm {
     // Registers
     #[inline]
     pub fn set_reg(&mut self, reg: u8, value: Value) {
-        if reg >= 17 {
+        if reg >= 16 {
             // Regs over 16 just act as stack
             self.stack.push(value);
         } else {
@@ -490,7 +490,7 @@ impl Vm {
 
     #[inline]
     pub fn get_reg_mut(&mut self, reg: u8) -> &mut Value {
-        if reg >= 17 {
+        if reg >= 16 {
             // Regs over 16 just act as stack
             self.stack.last_mut().expect("Overpopped stack!")
         } else {
@@ -500,7 +500,7 @@ impl Vm {
 
     #[inline]
     pub fn get_reg(&mut self, reg: u8) -> Value {
-        if reg >= 17 {
+        if reg >= 16 {
             // Regs over 16 just act as stack
             self.stack.pop().expect("Overpopped stack!").clone()
         } else {
@@ -1023,7 +1023,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         Opcode::LDL => {
             let val = vm.program.consts[shift3(a, b, c)].clone();
             vm.set_reg(
-                17,
+                16,
                 val
             );
         },
@@ -1189,33 +1189,33 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
 
         // Binops
         Opcode::ADD => {
-            let rhs = vm.get_reg(a);
-            let lhs = vm.get_reg(b);
+            let lhs = vm.get_reg(a);
+            let rhs = vm.get_reg(b);
             vm.set_reg(c, (lhs + rhs)?);
         },
         Opcode::SUB => {
-            let rhs = vm.get_reg(a);
-            let lhs = vm.get_reg(b);
+            let lhs = vm.get_reg(a);
+            let rhs = vm.get_reg(b);
             vm.set_reg(c, (lhs - rhs)?);
         },
         Opcode::MUL => {
-            let rhs = vm.get_reg(a);
-            let lhs = vm.get_reg(b);
+            let lhs = vm.get_reg(a);
+            let rhs = vm.get_reg(b);
             vm.set_reg(c, (lhs * rhs)?);
         },
         Opcode::DIV => {
-            let rhs = vm.get_reg(a);
-            let lhs = vm.get_reg(b);
+            let lhs = vm.get_reg(a);
+            let rhs = vm.get_reg(b);
             vm.set_reg(c, (lhs / rhs)?);
         },
         Opcode::MOD => {
-            let rhs = vm.get_reg(a);
-            let lhs = vm.get_reg(b);
+            let lhs = vm.get_reg(a);
+            let rhs = vm.get_reg(b);
             vm.set_reg(c, (lhs % rhs)?);
         },
         Opcode::IN => {
-            let rhs = vm.get_reg(a);
-            let lhs = vm.get_reg(b);
+            let lhs = vm.get_reg(a);
+            let rhs = vm.get_reg(b);
             if let Some(b) = rhs.contains(&lhs) {
                 vm.set_reg(c, Value::Bool(b));
             } else {
@@ -1225,33 +1225,33 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             }
         },
         Opcode::EQ => {
-            let rhs = vm.get_reg(a);
-            let lhs = vm.get_reg(b);
+            let lhs = vm.get_reg(a);
+            let rhs = vm.get_reg(b);
             vm.set_reg(c, Value::Bool(lhs.eq(&rhs)));
         },
         Opcode::LT => {
-            let rhs = vm.get_reg(a);
-            let lhs = vm.get_reg(b);
+            let lhs = vm.get_reg(a);
+            let rhs = vm.get_reg(b);
             vm.set_reg(c, Value::Bool(lhs.to_float() < rhs.to_float()));
         },
         Opcode::GT => {
-            let rhs = vm.get_reg(a);
-            let lhs = vm.get_reg(b);
+            let lhs = vm.get_reg(a);
+            let rhs = vm.get_reg(b);
             vm.set_reg(c, Value::Bool(lhs.to_float() > rhs.to_float()));
         },
         Opcode::AND => {
-            let rhs = vm.get_reg(a);
-            let lhs = vm.get_reg(b);
+            let lhs = vm.get_reg(a);
+            let rhs = vm.get_reg(b);
             vm.set_reg(c, Value::Bool(lhs.is_truthy() && rhs.is_truthy()));
         },
         Opcode::OR => {
-            let rhs = vm.get_reg(a);
-            let lhs = vm.get_reg(b);
+            let lhs = vm.get_reg(a);
+            let rhs = vm.get_reg(b);
             vm.set_reg(c, Value::Bool(lhs.is_truthy() || rhs.is_truthy()));
         },
         Opcode::XOR => {
-            let rhs = vm.get_reg(a);
-            let lhs = vm.get_reg(b);
+            let lhs = vm.get_reg(a);
+            let rhs = vm.get_reg(b);
             vm.set_reg(c, Value::Bool(lhs.is_truthy() != rhs.is_truthy()));
         },
         Opcode::NOT => {
