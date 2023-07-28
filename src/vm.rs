@@ -1268,10 +1268,10 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             vm.jump(-offset);
         },
         Opcode::JMPNT => {
-            let cond = vm.stack.pop().unwrap();
+            let cond = vm.get_reg(a);
             // Check if it should jump
             if !cond.is_truthy() {
-                vm.jump(shift3(a, b, c).try_into().unwrap());
+                vm.jump(shift2(b, c).try_into().unwrap());
             }
         }
     };
@@ -1285,6 +1285,7 @@ pub fn run(vm: &mut Vm) -> bool {
     }
     vm.stack = vec![];
     if vm.args.is_debug {
+        println!("Consts: {:?}", vm.program.consts);
         println!("Ops: {:?}", vm.program.ops);
     }
     loop {

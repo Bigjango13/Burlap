@@ -55,7 +55,7 @@ impl Program {
     }
 }
 
-#[allow(unsed)]
+#[allow(unused)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum Reg {
     R0 = 0, R1 = 1, R2 = 2, R3 = 3, R4 = 4,
@@ -164,65 +164,76 @@ impl Compiler {
         }
     }
 
-    /*pub fn fill_jmp(&mut self, start: usize, mut i: usize) {
+    fn fill_jmp(&mut self, pos: usize, mut i: usize, reg: Option<Reg>) {
         if i == 0 {
-            i = self.ops.len() - start - 2;
+            i = self.program.ops.len() - pos + 1;
         }
-        self.ops[start] = ((i >> 16) & 255) as u8;
-        self.ops[start + 1] = ((i >> 8) & 255) as u8;
-        self.ops[start + 2] = (i & 255) as u8;
-    }*/
+         let op = &mut self.program.ops[pos - 1];
+        if let Some(x) = reg {
+            if i > 2usize.pow(16)-1 {
+                panic!("jump offset is over 2 bytes!");
+            }
+            *op += (x as u8 as u32) << 16;
+        } else {
+            if i > 2usize.pow(24)-1 {
+                panic!("jump offset is over 3 bytes!");
+            }
+            *op += (i & 255 << 16) as u32;
+        }
+        *op += (i & 255 << 8) as u32;
+        *op += (i & 255 << 0) as u32;
+    }
 }
 
 
-/*fn compile_unary(
+fn compile_unary(
     compiler: &mut Compiler,
     op: &TokenType, val: &Box<ASTNode>
-) -> bool {
-    match op {
+) -> Option<Reg> {
+    Some(match op {
         // -/!
         TokenType::Minus => {
-            program.push(Value::Int(0));
-            if !compile_expr(program, val) {
-                return false;
-            }
-            program.ops.push(Opcode::SUB as u8);
+            let ret = compile_expr(compiler, val)?;
+            let tmp = compiler.push(Value::Int(0));
+            compiler.add_op_args(Opcode::SUB, tmp as u8, ret as u8, ret as u8);
+            compiler.free_reg(tmp);
+            ret
         },
         TokenType::Not => {
-            if !compile_expr(program, val) {
-                return false;
-            }
-            program.ops.push(Opcode::NOT as u8);
+            let ret = compile_expr(compiler, val)?;
+            compiler.add_op_args(Opcode::NOT, ret as u8, ret as u8, 0);
+            ret
         },
         // ++/--
         TokenType::PlusPlus => {
-            if !compile_expr(program, val) {
-                return false;
-            }
-            program.push(Value::Int(1));
-            program.ops.push(Opcode::ADD as u8);
-            program.ops.push(Opcode::DUP as u8);
-            if let VarExpr(s) = *val.clone() {
-                program.push(Value::Str(s));
-                program.ops.push(Opcode::SV as u8);
-            }
+            let ret = compile_expr(compiler, val)?;
+            let tmp = compiler.push(Value::Int(1));
+            compiler.add_op_args(Opcode::ADD, ret as u8, tmp as u8, ret as u8);
+            compiler.free_reg(tmp);
+            let VarExpr(ref s) = **val else {
+                panic!("++ needs a var, how did you do this?");
+            };
+            let tmp = compiler.push(Value::Str(s.clone()));
+            compiler.add_op_args(Opcode::SV, tmp as u8, ret as u8, 0);
+            compiler.free_reg(tmp);
+            ret
         },
         TokenType::MinusMinus => {
-            if !compile_expr(program, val) {
-                return false;
-            }
-            program.push(Value::Int(1));
-            program.ops.push(Opcode::SUB as u8);
-            program.ops.push(Opcode::DUP as u8);
-            if let VarExpr(s) = *val.clone() {
-                program.push(Value::Str(s));
-                program.ops.push(Opcode::SV as u8);
-            }
+            let ret = compile_expr(compiler, val)?;
+            let tmp = compiler.push(Value::Int(1));
+            compiler.add_op_args(Opcode::SUB, ret as u8, tmp as u8, ret as u8);
+            compiler.free_reg(tmp);
+            let VarExpr(ref s) = **val else {
+                panic!("-- needs a var, how did you do this?");
+            };
+            let tmp = compiler.push(Value::Str(s.clone()));
+            compiler.add_op_args(Opcode::SV, tmp as u8, ret as u8, 0);
+            compiler.free_reg(tmp);
+            ret
         },
         _ => panic!("{}", IMPOSSIBLE_STATE),
-    }
-    return true;
-}*/
+    })
+}
 
 
 fn compile_set(compiler: &mut Compiler, lvalue: &ASTNode, value: Reg) -> Option<()> {
@@ -245,40 +256,40 @@ fn compile_set(compiler: &mut Compiler, lvalue: &ASTNode, value: Reg) -> Option<
     panic!("Cannot compile_set for something other then a variable or index");
 }
 
-/*fn compile_short_binop(
+fn compile_short_binop(
     compiler: &mut Compiler,
     lhs: &Box<ASTNode>, op: &TokenType, rhs: &Box<ASTNode>,
     clean: bool
-) -> bool {
+) -> Option<Reg> {
     // Compiles short circuiting operators (&& and ||)
     // Uses jump instructions to:
-    // Turn `a() && b()` into `r = a(); if r { r = b() }; r`
+    // Turn `a() && b()` into `r = a(); if r  { r = b() }; r`
     // Turn `a() || b()` into `r = a(); if !r { r = b() }; r`
-    if !compile_expr(program, lhs) {
-        return false;
-    }
-    program.ops.push(Opcode::DUP as u8);
-    if op == &TokenType::Or {
-        program.ops.push(Opcode::NOT as u8);
+    let lhs = compile_expr(compiler, lhs)?;
+    let dup_tmp = compiler.alloc_reg();
+    compiler.add_op_args(Opcode::NOT, lhs as u8, dup_tmp as u8, 0);
+    if op != &TokenType::Or {
+        // Double not is faster then a copy
+        compiler.add_op_args(Opcode::NOT, dup_tmp as u8, dup_tmp as u8, 0);
     }
     // Start jump
-    program.ops.push(Opcode::JMPNT as u8);
-    let pos = program.ops.len();
-    program.ops.push(0);
-    program.ops.push(0);
-    program.ops.push(0);
+    compiler.add_op(Opcode::JMPNT);
+    let pos = compiler.program.ops.len();
+    compiler.free_reg(dup_tmp);
     // It's 'b' (the left)
-    program.ops.push(Opcode::DEL as u8);
-    if !compile_expr(program, rhs) {
-        return false;
-    }
+    let rhs = compile_expr(compiler, rhs)?;
+    compiler.copy(rhs, lhs);
+    compiler.free_reg(rhs);
     // End the jump
-    program.fill_jmp(pos, 0);
+    compiler.fill_jmp(pos, 0, Some(dup_tmp));
     if clean {
-        program.ops.push(Opcode::DEL as u8);
+        if lhs == Reg::Stack {
+            compiler.add_op(Opcode::POP);
+        }
+        compiler.free_reg(lhs);
     }
-    return true;
-}*/
+    return Some(lhs);
+}
 
 fn compile_binop(
     compiler: &mut Compiler,
@@ -287,7 +298,7 @@ fn compile_binop(
 ) -> Option<Reg> {
     // Short circuiting ops are special
     if op == &TokenType::And || op == &TokenType::Or {
-        //return compile_short_binop(program, lhs, op, rhs, clean);
+        return compile_short_binop(compiler, lhs, op, rhs, clean);
     }
     // Compile sides
     let lreg = if op != &TokenType::Equals {
@@ -405,9 +416,9 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
         BinopExpr(lhs, op, rhs) => {
             return compile_binop(compiler, lhs, op, rhs, false);
         }
-        /*UnaryExpr(op, val) => {
+        UnaryExpr(op, val) => {
             return compile_unary(compiler, op, val);
-        },
+        },/*
         // Calls
         CallExpr(expr, args) => {
             // Push the call. Name, arg count, args (in reverse order)
@@ -723,7 +734,6 @@ fn compile_stmt(
                 // Move the result to the stack
                 compiler.copy(reg, Reg::Stack);
             }
-            println!("freeing {:?}", reg);
             compiler.free_reg(reg);
         }
     };
