@@ -1,46 +1,46 @@
 # Burlap
-> A powerful and user-friendly Sack interpreter, v1.2.0
+> A powerful and user-friendly Sack interpreter, v1.2.1
 
 ## What is Burlap?
 Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) programming language. It aims for a high level of spec compliance, any valid sack program should be able to be run using burlap (it does have a few minor variations from the spec, known differences are listed [here](docs/spec-diff.md))
 
 ## Features
 - [x] Complete sack v0.0.5 support
-- [x] Complete sack v1.0.0 support
-  - [x] Types
+- [ ] Complete sack v1.0.0 support
+  - [ ] Types
     - [x] Strings
     - [x] Number
     - [x] Decimal
     - [x] Bool
     - [x] None
-    - [x] Lists **(New)**
+    - [ ] Lists **(New)**
     - [x] Byte **(New)**
-    - [x] `type` function **(New)**
+    - [ ] `type` function **(New)**
   - [x] Operators
     - [x] Logical operators (`&&`, `||`, `^^`, `!`)
     - [x] Comparison operators (`>`, `<`, `>=`, `<=`, `==`, `!=`)
     - [x] Mathematical operators (`+`, `-`, `*`, `/`, `%`)
     - [x] Variable operators (`=`, `+=`, `-=`, `*=`, `/=`)
-  - [x] Print
-  - [x] Input **(New)**
-  - [x] Len **(New)**
-  - [x] Args **(New)**
-  - [x] If/if else/else
-  - [x] Return
-  - [x] Functions
-  - [x] Loops
-    - [x] Range loops
-    - [x] While loops **(New)**
-  - [x] Casting
+  - [ ] Print
+  - [ ] Input **(New)**
+  - [ ] Len **(New)**
+  - [ ] Args **(New)**
+  - [ ] If/if else/else
+  - [ ] Return
+  - [ ] Functions
+  - [ ] Loops
+    - [ ] Range loops
+    - [ ] While loops **(New)**
+  - [ ] Casting
   - [x] Import
   - [x] Scope
-  - [x] File IO **(New)**
-    - [x] Open **(New)**
-    - [x] Read **(New)**
-    - [x] Write **(New)**
-    - [x] Close **(New)**
-    - [x] Flush **(New)**
-    - [x] Seek **(New)**
+  - [ ] File IO **(New)**
+    - [ ] Open **(New)**
+    - [ ] Read **(New)**
+    - [ ] Write **(New)**
+    - [ ] Close **(New)**
+    - [ ] Flush **(New)**
+    - [ ] Seek **(New)**
 - [x] Lexing errors
 - [x] Parsing errors
 - [x] Runtime errors
@@ -110,6 +110,8 @@ The speed test is currently only one test, it can be ran with `burlap tests/spee
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
+- 1.2.1: Register update
+    - Change backend from a stack-based one to a register and stack-based one
 - 1.2.0: WASM update
     - Add WASM support
     - Add first class functions

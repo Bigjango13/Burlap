@@ -74,9 +74,11 @@ pub struct Compiler {
 
     // Compiler info
     // The functi being compiled (name, args, address)
-    functi: (String, u8, u32),
+    //functi: (String, u8, u32),
     // If RS and LEVI are needed
     needs_scope: bool,
+    // If VARG and CARG are needed
+    needs_args: bool,
     // Where in the byte code the current file started
     inc_start: u32,
     // Registers
@@ -88,8 +90,8 @@ impl Compiler {
         Compiler {
             program: Program::new(),
             needs_scope: false, inc_start: 0,
-            functi: ("".to_string(), 0, 0),
-            regs: [true; 17]
+            //functi: ("".to_string(), 0, 0),
+            regs: [true; 17], needs_args: false
         }
     }
 
@@ -110,7 +112,7 @@ impl Compiler {
     }
 
     #[inline]
-    pub fn copy(&mut self, src: Reg, dst: Reg) {
+    fn copy(&mut self, src: Reg, dst: Reg) {
         self.add_op_args(Opcode::CP, src as u8, dst as u8, 0);
     }
 
@@ -125,14 +127,14 @@ impl Compiler {
     }
 
     #[inline]
-    pub fn free_reg(&mut self, reg: Reg) {
+    fn free_reg(&mut self, reg: Reg) {
         if 16 <= reg as u8 {
             return;
         }
         self.regs[reg as usize] = true;
     }
 
-    pub fn push(&mut self, val: Value) -> Reg {
+    fn push(&mut self, val: Value) -> Reg {
         // Get the index, or append
         let index = self.program.consts.iter().position(|i| i.clone() == val)
             .unwrap_or_else(|| {
@@ -418,35 +420,57 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
         }
         UnaryExpr(op, val) => {
             return compile_unary(compiler, op, val);
-        },/*
+        },
         // Calls
         CallExpr(expr, args) => {
-            // Push the call. Name, arg count, args (in reverse order)
+            // Push the args (in reverse order)
             for arg in args {
-                if !compile_expr(compiler, arg) {
-                    return false;
-                }
+                // TODO: Find a way to force it to compile on the stack so it doesn't copy
+                let a = compile_expr(compiler, arg)?;
+                compiler.copy(a, Reg::Stack);
+                compiler.free_reg(a);
             }
-            program.push(Value::Int(args.len() as i32));
-            if let ASTNode::VarExpr(name) = *expr.clone() {
-                if name.contains("::") {
-                    // Variable name
-                    if !compile_expr(compiler, expr) {
-                        return false;
-                    }
+            // Get address
+            let (address, name) = if let ASTNode::VarExpr(ref n) = **expr {
+                // Lookup function address
+                if let Some(addr) = compiler.program.functis.iter().find_map(
+                    |i| if &i.0 == n && i.2 == args.len() as i32 { Some(i.1) } else { None }
+                ) {
+                    (addr, "".to_string())
+                } else if args.len() == 0 && n == "args" {
+                    // Saving args is needed
+                    compiler.needs_args = true;
+                    let ret = compiler.alloc_reg();
+                    compiler.add_op_args(Opcode::CARG, ret as u8, 0, 0);
+                    return Some(ret);
                 } else {
-                    // Function name
-                    program.push(Value::Functi(name.clone()));
+                    (0, n.clone())
                 }
             } else {
-                if !compile_expr(program, expr) {
-                    return false;
-                }
+                (0, "".to_string())
+            };
+            // Compile the call
+            if address == 0 {
+                // Variable call (VCALL)
+                let expr = if name == "" || name.contains("::"){
+                    compile_expr(compiler, expr)?
+                } else {
+                    compiler.push(Value::Functi(name.clone()))
+                };
+                compiler.add_op_args(Opcode::VCALL, expr as u8, args.len() as u8, 0);
+                compiler.free_reg(expr);
+            } else {
+                compiler.add_op_args(
+                    Opcode::CALL,
+                    ((address >> 16) & 255) as u8,
+                    ((address >> 8) & 255) as u8,
+                    (address & 255) as u8
+               );
             }
-            program.ops.push(Opcode::CALL as u8);
+            return Some(Reg::Stack);
         },
         // List
-        ListExpr(keys, values, fast) => {
+        /*ListExpr(keys, values, fast) => {
             // Build the list
             for at in 0..values.len() {
                 if !compile_expr(program, &values[at]) {
@@ -766,10 +790,3 @@ pub fn compile(
     ));
     return true;
 }
-
-
-/*pub fn compile(
-    ast: Vec<ASTNode>, args: &mut Arguments, compiler: &mut Compiler
-) -> bool {
-    return true;
-}*/

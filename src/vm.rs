@@ -16,7 +16,7 @@ use rustc_hash::FxHashMap;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug)]
-#[allow(clippy::upper_case_acronyms)]
+#[allow(clippy::upper_case_acronyms, dead_code)]
 pub enum Opcode {
     // The almighty NOP
     NOP,
@@ -456,9 +456,9 @@ impl Vm {
         self.lower_scope(true);
     }
 
-    pub fn cur_op(&mut self) -> u8 {
+    /*pub fn cur_op(&mut self) -> u8 {
         ((self.program.ops[self.at] & 0xFF000000) >> 24).try_into().unwrap()
-    }
+    }*/
 
     #[inline]
     pub fn cur_opcode(&mut self) -> (Opcode, u8, u8, u8) {
@@ -1292,7 +1292,6 @@ pub fn run(vm: &mut Vm) -> bool {
         if vm.args.is_debug {
             // Print debugging info
             let opcode = vm.cur_opcode();
-            let op = vm.cur_op();
             println!(
                 "{}: {:?}({}, {}, {})",
                 vm.at,
