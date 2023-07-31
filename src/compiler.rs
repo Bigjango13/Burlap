@@ -113,6 +113,9 @@ impl Compiler {
 
     #[inline]
     fn copy(&mut self, src: Reg, dst: Reg) {
+        if (src == dst) {
+            return;
+        }
         self.add_op_args(Opcode::CP, src as u8, dst as u8, 0);
     }
 
@@ -132,6 +135,25 @@ impl Compiler {
             return;
         }
         self.regs[reg as usize] = true;
+    }
+
+    fn push_to_stack(&mut self, val: Value) {
+        // Get the index, or append
+        let index = self.program.consts.iter().position(|i| i.clone() == val)
+            .unwrap_or_else(|| {
+            self.program.consts.push(val);
+            self.program.consts.len() - 1
+        });
+        // Push the instruction
+        if index > 2usize.pow(24)-1 {
+            panic!("Too many different constants! You have over 16777215 constants!!");
+        }
+        self.add_op_args(
+            Opcode::LDL,
+            ((index >> 16) & 255) as u8,
+            ((index >> 8) & 255) as u8,
+            (index & 255) as u8
+        );
     }
 
     fn push(&mut self, val: Value) -> Reg {
@@ -470,26 +492,38 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
             return Some(Reg::Stack);
         },
         // List
-        /*ListExpr(keys, values, fast) => {
+        ListExpr(keys, values, fast) => {
             // Build the list
-            for at in 0..values.len() {
-                if !compile_expr(program, &values[at]) {
-                    return false;
-                }
+            for at in (0..values.len()).rev() {
+                let a = compile_expr(compiler, &values[at])?;
+                compiler.copy(a, Reg::Stack);
+                compiler.free_reg(a);
                 if !*fast {
-                    program.push(Value::Str(keys[at].clone()));
+                    compiler.push_to_stack(Value::Str(keys[at].clone()));
                 }
             }
             // Push
-            program.push(Value::Int(values.len() as i32));
+            let len = values.len();
+            let reg = compiler.alloc_reg();
             if *fast {
-                program.ops.push(Opcode::LFL as u8);
+                compiler.add_op_args(
+                    Opcode::LFL,
+                    reg as u8,
+                    ((len >> 8) & 255) as u8,
+                    (len & 255) as u8
+                );
             } else {
-                program.ops.push(Opcode::LL as u8);
+                compiler.add_op_args(
+                    Opcode::LL,
+                    reg as u8,
+                    ((len >> 8) & 255) as u8,
+                    (len & 255) as u8
+                );
             }
+            return Some(reg);
         },
         // Indexes
-        IndexExpr(val, index) => {
+        /*IndexExpr(val, index) => {
             // Push
             if !compile_expr(program, val) {
                 return false;

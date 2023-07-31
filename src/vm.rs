@@ -62,6 +62,10 @@ pub enum Opcode {
     DOS,
 
     // Lists
+    // Load Fast List ([dst, u16 size, values on stack])
+    LFL,
+    // Load List ([dst, u16 size, values and keys on stack])
+    LL,
     // INdeX ([register "list", register "index", register "dst"])
     INX,
     // into ITER ([register "value", register "dst"])
@@ -1093,6 +1097,18 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         }
 
         // Lists
+        Opcode::LFL => {
+            let mut size = shift2(b, c);
+            let mut list = Vec::<Value>::with_capacity(size as usize);
+            while size > 0 {
+                list.push(vm.stack.pop().unwrap());
+                size -= 1;
+            }
+            vm.set_reg(a, Value::FastList(list));
+        },
+        Opcode::LL => {
+            todo!()
+        },
         Opcode::INX => {
             let list = vm.get_reg(a);
             let index = vm.get_reg(b);
