@@ -536,44 +536,41 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
         }
     })
 }
-/*
+
 fn _compile_body(
     compiler: &mut Compiler, args: &mut Arguments,
     nodes: &Vec<ASTNode>, manual_scope: bool
-) -> bool {
+) -> Option<()> {
     // Lower scope
-    let scope_pos = program.ops.len();
-    let old_needs_scope = program.needs_scope;
-    program.needs_scope = false;
+    let scope_pos = compiler.program.ops.len();
+    let old_needs_scope = compiler.needs_scope;
+    compiler.needs_scope = false;
     if !manual_scope {
-        program.ops.push(Opcode::NOP as u8);
+        compiler.add_op(Opcode::NOP);
     }
     // Compile all nodes
     for node in nodes {
-        if !compile_stmt(program, args, node, false) {
-            // Pass it down
-            return false;
-        }
+        compile_stmt(compiler, args, node, false)?;
     }
     // Raise scope
-    if !manual_scope && program.needs_scope {
-        program.ops.push(Opcode::RS as u8);
-        program.ops[scope_pos] = Opcode::LEVI as u8;
+    if !manual_scope && compiler.needs_scope {
+        compiler.add_op(Opcode::RS);
+        compiler.program.ops[scope_pos] = Opcode::LEVI as u8 as u32;
     }
-    program.needs_scope = old_needs_scope;
-    return true;
+    compiler.needs_scope = old_needs_scope;
+    return Some(());
 }
 fn compile_body(
     compiler: &mut Compiler, args: &mut Arguments, node: &ASTNode, manual_scope: bool
-) -> bool {
+) -> Option<()> {
     let BodyStmt(nodes) = node else {
         if *node == Nop {
-            return true;
+            return Some(());
         }
         panic!("compile_body got non-body node!");
     };
-    return _compile_body(program, args, nodes, manual_scope);
-}*/
+    _compile_body(compiler, args, nodes, manual_scope)
+}
 
 fn compile_stmt(
     compiler: &mut Compiler, args: &mut Arguments, node: &ASTNode, dirty: bool
@@ -690,9 +687,9 @@ fn compile_stmt(
             program.ops.push(0);
             program.fill_jmp(program.ops.len() - 3, program.ops.len() - pos - 1);
             program.fill_jmp(offpos, 0);
-        },
-        BodyStmt(nodes) => return _compile_body(program, args, nodes, false),
-        FunctiStmt(name, fargs, body) => {
+        },*/
+        BodyStmt(nodes) => return _compile_body(compiler, args, nodes, false),
+        /*FunctiStmt(name, fargs, body) => {
             // Declare function
             program.push(Value::Int(fargs.len() as i32));
             program.push(Value::Str(name.to_string()));
