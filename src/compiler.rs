@@ -489,7 +489,7 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
                     (address & 255) as u8
                );
             }
-            return Some(Reg::Stack);
+            Reg::Stack
         },
         // List
         ListExpr(keys, values, fast) => {
@@ -520,19 +520,17 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
                     (len & 255) as u8
                 );
             }
-            return Some(reg);
+            reg
         },
         // Indexes
-        /*IndexExpr(val, index) => {
+        IndexExpr(val, index) => {
             // Push
-            if !compile_expr(program, val) {
-                return false;
-            }
-            if !compile_expr(program, index) {
-                return false;
-            }
-            program.ops.push(Opcode::INX as u8);
-        },*/
+            let expr = compile_expr(compiler, val)?;
+            let index = compile_expr(compiler, index)?;
+            compiler.add_op_args(Opcode::INX, expr as u8, index as u8, expr as u8);
+            compiler.free_reg(index);
+            expr
+        },
         _ => {
             panic!("Unknown token! {:?}", node);
         }
