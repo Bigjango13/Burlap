@@ -1107,7 +1107,19 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             vm.set_reg(a, Value::FastList(list));
         },
         Opcode::LL => {
-            todo!()
+            let mut size = shift2(b, c);
+            let mut list = Vec::<(String, Value)>::with_capacity(size as usize);
+            // Get the keys and values and put them into the list
+            while size > 0 {
+                let Value::Str(key) = vm.stack.pop().unwrap() else {
+                    return Err("Non-string list index".to_string());
+                };
+                let val = vm.stack.pop().unwrap();
+                // Store
+                list.push((key, val));
+                size -= 1;
+            }
+            vm.set_reg(a, Value::List(list));
         },
         Opcode::INX => {
             let list = vm.get_reg(a);

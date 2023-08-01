@@ -113,7 +113,7 @@ impl Compiler {
 
     #[inline]
     fn copy(&mut self, src: Reg, dst: Reg) {
-        if (src == dst) {
+        if src == dst {
             return;
         }
         self.add_op_args(Opcode::CP, src as u8, dst as u8, 0);
