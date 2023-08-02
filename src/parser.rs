@@ -645,6 +645,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
         error!(parser, "expected variable name");
         return Option::None;
     }
+    let old_len = parser.vars.len();
     let _ = _check_unique(parser, &name, -1);
     parser.next();
     // Obligatory 'in'
@@ -678,6 +679,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     eat!(parser, Rparan, "missing ')' in loop")?;
     // Body
     let body = parse_body(parser)?;
+    parser.vars.truncate(old_len);
     // Return
     return Some(ASTNode::LoopStmt(name, Box::new(iter), Box::new(body)));
 }

@@ -70,7 +70,7 @@ pub enum Opcode {
     INX,
     // into ITER ([register "value", register "dst"])
     ITER,
-    // NeXT ([register "iter", register "dst", register "is_empty dst"])
+    // NeXT ([register "iter", register "dst", u8 "jump if not empty"])
     NXT,
     // Set KeY ([register "list", register "index", register "value"])
     SKY,
@@ -1143,10 +1143,8 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             if let Some(val) = iter.iter_next()? {
                 // Add value
                 vm.set_reg(b, val);
-                vm.set_reg(c, Value::Bool(true));
-            } else {
-                // End of list
-                vm.set_reg(c, Value::Bool(false));
+                // Jump because not empty
+                vm.jump((c as u32).try_into().unwrap());
             }
         },
         Opcode::SKY => {

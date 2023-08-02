@@ -598,6 +598,7 @@ fn compile_stmt(
                 // Compile body
                 compile_stmt(compiler, args, else_part, false)?;
                 compiler.fill_jmp(pos, 0, Some(cond));
+                compiler.free_reg(cond);
                 return Some(());
             }
 
@@ -621,45 +622,40 @@ fn compile_stmt(
                 // No else
                 compiler.fill_jmp(pos, 0, Some(cond));
             }
+            compiler.free_reg(cond);
         },
-        /*LoopStmt(var, iter, body) => {
+        LoopStmt(var, iter, body) => {
             // Load iter
-            compile_expr(compiler, iter);
-            compiler.add_op(Opcode::TITR as u8);
-            let pos = compiler.program.ops.len();
-            compiler.add_op(Opcode::NXT as u8);
+            let iter = compile_expr(compiler, iter)?;
+            compiler.add_op_args(Opcode::ITER, iter as u8, iter as u8, 0);
+            let item = compiler.alloc_reg();
+            let start_pos = compiler.program.ops.len();
+            compiler.add_op_args(Opcode::NXT, iter as u8, item as u8, 2);
 
             // Exit jump
-            compiler.add_op(Opcode::JMPNT as u8);
-            let offpos = compiler.program.ops.len();
-            compiler.add_op(0);
-            compiler.add_op(0);
-            compiler.add_op(0);
+            compiler.add_op(Opcode::JMP);
+            let jmp_pos = compiler.program.ops.len();
 
             // Lower scope
-            compiler.add_op(Opcode::LEVI as u8);
-
+            compiler.add_op(Opcode::LEVI);
             // Set the loop var
-            program.push(Value::Str(var.to_string()));
-            compiler.add_op(Opcode::DOS as u8);
+            let varname = compiler.push(Value::Str(var.to_string()));
+            compiler.add_op_args(Opcode::DOS, varname as u8, item as u8, 0);
+            compiler.free_reg(varname);
 
             // Body
-            compile_body(compiler, args, body, true);
-
+            compile_body(compiler, args, body, true)?;
             // Raise scope
-            compiler.add_op(Opcode::RS as u8);
-
+            compiler.add_op(Opcode::RS);
             // Backwards jump
-            compiler.add_op(Opcode::JMPB as u8);
-            compiler.add_op(0);
-            compiler.add_op(0);
-            compiler.add_op(0);
-            compiler.fill_jmp(program.ops.len() - 3, compiler.program.ops.len() - pos - 1);
+            compiler.add_op(Opcode::JMPB);
+            compiler.fill_jmp(compiler.program.ops.len(), compiler.program.ops.len() - start_pos - 1, None);
             // Clean up the iter
-            compiler.fill_jmp(offpos, 0);
-            compiler.add_op(Opcode::DEL as u8);
+            compiler.fill_jmp(jmp_pos, 0, None);
+            compiler.free_reg(iter);
+            compiler.free_reg(item);
         },
-        WhileStmt(cond, body) => {
+        /*WhileStmt(cond, body) => {
             // Start, exit jump + cond
             let pos = compiler.program.ops.len();
             compile_expr(compiler, cond);
