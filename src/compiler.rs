@@ -585,137 +585,129 @@ fn compile_stmt(
             compiler.free_reg(nreg);
             compiler.needs_scope = true;
         },
-        /*IfStmt(cond, body, else_part) => {
+        IfStmt(cond, body, else_part) => {
             // The condition must be a expr, so no need to match against stmts
-            compile_expr(program, cond);
+            let cond = compile_expr(compiler, cond)?;
 
             // This is for when boolean not is forgotten
             if **body == Nop {
-                program.ops.push(Opcode::NOT as u8);
+                compiler.add_op_args(Opcode::NOT, cond as u8, cond as u8, 0);
                 // Push the jump offset (which will be filled later)
-                program.ops.push(Opcode::JMPNT as u8);
-                let pos = program.ops.len();
-                program.ops.push(0);
-                program.ops.push(0);
-                program.ops.push(0);
+                compiler.add_op(Opcode::JMPNT);
+                let pos = compiler.program.ops.len();
                 // Compile body
-                compile_stmt(program, args, else_part, false);
-                program.fill_jmp(pos, 0);
-                return true;
+                compile_stmt(compiler, args, else_part, false)?;
+                compiler.fill_jmp(pos, 0, Some(cond));
+                return Some(());
             }
 
             // Push the jump offset (which will be filled later)
-            program.ops.push(Opcode::JMPNT as u8);
-            let pos = program.ops.len();
-            program.ops.push(0);
-            program.ops.push(0);
-            program.ops.push(0);
+            compiler.add_op(Opcode::JMPNT);
+            let pos = compiler.program.ops.len();
             // Compile true part
-            compile_body(program, args, body, false);
-            let offset = program.ops.len() - pos - 2;
+            compile_body(compiler, args, body, false)?;
 
             // The else
             if **else_part != Nop {
-                program.fill_jmp(pos, offset + 4);
                 // Prep exit offset
-                program.ops.push(Opcode::JMPU as u8);
-                let pos = program.ops.len();
-                program.ops.push(0);
-                program.ops.push(0);
-                program.ops.push(0);
+                compiler.add_op(Opcode::JMP);
+                let exit_pos = compiler.program.ops.len();
+                // Fill else jump
+                compiler.fill_jmp(pos, 0, Some(cond));
                 // Compile else part
-                compile_stmt(program, args, else_part, false);
-                program.fill_jmp(pos, 0);
+                compile_stmt(compiler, args, else_part, false)?;
+                compiler.fill_jmp(exit_pos, 0, None);
             } else {
-                program.fill_jmp(pos, offset);
+                // No else
+                compiler.fill_jmp(pos, 0, Some(cond));
             }
         },
-        LoopStmt(var, iter, body) => {
+        /*LoopStmt(var, iter, body) => {
             // Load iter
-            compile_expr(program, iter);
-            program.ops.push(Opcode::TITR as u8);
-            let pos = program.ops.len();
-            program.ops.push(Opcode::NXT as u8);
+            compile_expr(compiler, iter);
+            compiler.add_op(Opcode::TITR as u8);
+            let pos = compiler.program.ops.len();
+            compiler.add_op(Opcode::NXT as u8);
 
             // Exit jump
-            program.ops.push(Opcode::JMPNT as u8);
-            let offpos = program.ops.len();
-            program.ops.push(0);
-            program.ops.push(0);
-            program.ops.push(0);
+            compiler.add_op(Opcode::JMPNT as u8);
+            let offpos = compiler.program.ops.len();
+            compiler.add_op(0);
+            compiler.add_op(0);
+            compiler.add_op(0);
 
             // Lower scope
-            program.ops.push(Opcode::LEVI as u8);
+            compiler.add_op(Opcode::LEVI as u8);
 
             // Set the loop var
             program.push(Value::Str(var.to_string()));
-            program.ops.push(Opcode::DOS as u8);
+            compiler.add_op(Opcode::DOS as u8);
 
             // Body
-            compile_body(program, args, body, true);
+            compile_body(compiler, args, body, true);
 
             // Raise scope
-            program.ops.push(Opcode::RS as u8);
+            compiler.add_op(Opcode::RS as u8);
 
             // Backwards jump
-            program.ops.push(Opcode::JMPB as u8);
-            program.ops.push(0);
-            program.ops.push(0);
-            program.ops.push(0);
-            program.fill_jmp(program.ops.len() - 3, program.ops.len() - pos - 1);
+            compiler.add_op(Opcode::JMPB as u8);
+            compiler.add_op(0);
+            compiler.add_op(0);
+            compiler.add_op(0);
+            compiler.fill_jmp(program.ops.len() - 3, compiler.program.ops.len() - pos - 1);
             // Clean up the iter
-            program.fill_jmp(offpos, 0);
-            program.ops.push(Opcode::DEL as u8);
+            compiler.fill_jmp(offpos, 0);
+            compiler.add_op(Opcode::DEL as u8);
         },
         WhileStmt(cond, body) => {
             // Start, exit jump + cond
-            let pos = program.ops.len();
-            compile_expr(program, cond);
-            program.ops.push(Opcode::JMPNT as u8);
-            let offpos = program.ops.len();
-            program.ops.push(0);
-            program.ops.push(0);
-            program.ops.push(0);
+            let pos = compiler.program.ops.len();
+            compile_expr(compiler, cond);
+            compiler.add_op(Opcode::JMPNT as u8);
+            let offpos = compiler.program.ops.len();
+            compiler.add_op(0);
+            compiler.add_op(0);
+            compiler.add_op(0);
 
             // Compile body
-            compile_body(program, args, body, false);
+            compile_body(compiler, args, body, false);
 
             // Backwards jump
-            program.ops.push(Opcode::JMPB as u8);
-            program.ops.push(0);
-            program.ops.push(0);
-            program.ops.push(0);
-            program.fill_jmp(program.ops.len() - 3, program.ops.len() - pos - 1);
-            program.fill_jmp(offpos, 0);
+            compiler.add_op(Opcode::JMPB as u8);
+            compiler.add_op(0);
+            compiler.add_op(0);
+            compiler.add_op(0);
+            compiler.fill_jmp(program.ops.len() - 3, compiler.program.ops.len() - pos - 1);
+            compiler.fill_jmp(offpos, 0);
         },*/
         BodyStmt(nodes) => return _compile_body(compiler, args, nodes, false),
         /*FunctiStmt(name, fargs, body) => {
             // Declare function
             program.push(Value::Int(fargs.len() as i32));
             program.push(Value::Str(name.to_string()));
-            program.ops.push(Opcode::FN as u8);
+            compiler.add_op(Opcode::FN as u8);
             // Jump around function
-            program.ops.push(Opcode::JMPU as u8);
-            let pos = program.ops.len();
-            program.ops.push(0);
-            program.ops.push(0);
-            program.ops.push(0);
+            compiler.add_op(Opcode::JMP as u8);
+            let pos = compiler.program.ops.len();
+            compiler.add_op(0);
+            compiler.add_op(0);
+            compiler.add_op(0);
             // Update compiler state
             program.functi = (
-                name.clone(), fargs.len() as u8, program.ops.len() as u32
+                name.clone(), fargs.len() as u8, compiler.program.ops.len() as u32
             );
             // Load args
             for arg in fargs {
                 program.push(Value::Str(arg.to_string()));
-                program.ops.push(Opcode::DV as u8);
+                compiler.add_op(Opcode::DV as u8);
             }
             // Compile body
-            compile_body(program, args, body, true);
+            compile_body(compiler, args, body, true);
             // Return
             program.push(Value::None);
-            program.ops.push(Opcode::RET as u8);
+            compiler.add_op(Opcode::RET as u8);
             // Fill jump
-            program.fill_jmp(pos, 0);
+            compiler.fill_jmp(pos, 0);
         },
         ReturnStmt(ret) => {
             let mut do_tco = false;
@@ -727,40 +719,40 @@ fn compile_stmt(
                 if do_tco {
                     // Tail call
                     for ref arg in args.iter().rev() {
-                        if !compile_expr(program, arg) {
+                        if !compile_expr(compiler, arg) {
                             return false;
                         }
                     }
-                    program.ops.push(Opcode::TCO as u8);
-                    program.ops.push(0);
-                    program.ops.push(0);
-                    program.ops.push(0);
-                    program.fill_jmp(
-                        program.ops.len() - 3,
-                        program.ops.len() - program.functi.2 as usize - 1
+                    compiler.add_op(Opcode::TCO as u8);
+                    compiler.add_op(0);
+                    compiler.add_op(0);
+                    compiler.add_op(0);
+                    compiler.fill_jmp(
+                        compiler.program.ops.len() - 3,
+                        compiler.program.ops.len() - program.functi.2 as usize - 1
                     );
                 }
             }
             if !do_tco {
                 // Compile return value
-                if !compile_expr(program, ret) {
+                if !compile_expr(compiler, ret) {
                     return false;
                 }
             }
             // Return return value
-            program.ops.push(Opcode::RET as u8);
+            compiler.add_op(Opcode::RET as u8);
         },
         ImportStmt() => {
             program.file_table.push((
-                program.inc_start, program.ops.len() as u32, args.name.clone()
+                program.inc_start, compiler.program.ops.len() as u32, args.name.clone()
             ));
-            program.inc_start = program.ops.len() as u32;
+            program.inc_start = compiler.program.ops.len() as u32;
         },
         EndImportStmt(file) => {
             program.file_table.push((
-                program.inc_start, program.ops.len() as u32, file.clone()
+                program.inc_start, compiler.program.ops.len() as u32, file.clone()
             ));
-            program.inc_start = program.ops.len() as u32;
+            program.inc_start = compiler.program.ops.len() as u32;
         },*/
 
         Nop => {
