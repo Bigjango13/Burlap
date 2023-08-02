@@ -741,19 +741,19 @@ fn compile_stmt(
             }
             // Return return value
             compiler.add_op(Opcode::RET as u8);
-        },
+        },*/
         ImportStmt() => {
-            program.file_table.push((
-                program.inc_start, compiler.program.ops.len() as u32, args.name.clone()
+            compiler.program.file_table.push((
+                compiler.inc_start, compiler.program.ops.len() as u32, args.name.clone()
             ));
-            program.inc_start = compiler.program.ops.len() as u32;
+            compiler.inc_start = compiler.program.ops.len() as u32;
         },
         EndImportStmt(file) => {
-            program.file_table.push((
-                program.inc_start, compiler.program.ops.len() as u32, file.clone()
+            compiler.program.file_table.push((
+                compiler.inc_start, compiler.program.ops.len() as u32, file.clone()
             ));
-            program.inc_start = compiler.program.ops.len() as u32;
-        },*/
+            compiler.inc_start = compiler.program.ops.len() as u32;
+        },
 
         Nop => {
             // Nop isn't turned into the NOP instruction because it's useless
