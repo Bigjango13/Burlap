@@ -375,15 +375,15 @@ fn compile_binop(
         // Harder ones that don't have a single instruction
         TokenType::NotEquals => {
             compiler.add_op_args(Opcode::EQ, lreg, rreg, rreg);
-            compiler.add_op_args(Opcode::NOT, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::NOT, rreg, rreg, 0);
         },
         TokenType::LtEquals => {
-            compiler.add_op_args(Opcode::LT, lreg, rreg, rreg);
-            compiler.add_op_args(Opcode::NOT, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::GT, rreg, lreg, rreg);
+            compiler.add_op_args(Opcode::NOT, rreg, rreg, 0);
         },
         TokenType::GtEquals => {
-            compiler.add_op_args(Opcode::GT, lreg, rreg, rreg);
-            compiler.add_op_args(Opcode::NOT, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::LT, rreg, lreg, rreg);
+            compiler.add_op_args(Opcode::NOT, rreg, rreg, 0);
         },
         // Handled later
         TokenType::Equals => {},
@@ -655,27 +655,25 @@ fn compile_stmt(
             compiler.free_reg(iter);
             compiler.free_reg(item);
         },
-        /*WhileStmt(cond, body) => {
-            // Start, exit jump + cond
-            let pos = compiler.program.ops.len();
-            compile_expr(compiler, cond);
-            compiler.add_op(Opcode::JMPNT as u8);
-            let offpos = compiler.program.ops.len();
-            compiler.add_op(0);
-            compiler.add_op(0);
-            compiler.add_op(0);
+        WhileStmt(cond, body) => {
+            // Start (so it can loop back)
+            let start_pos = compiler.program.ops.len();
+            // Condition
+            let cond = compile_expr(compiler, cond)?;
+            // Exit jump
+            compiler.add_op(Opcode::JMPNT);
+            let exit_jump_pos = compiler.program.ops.len();
 
             // Compile body
-            compile_body(compiler, args, body, false);
+            compile_body(compiler, args, body, false)?;
 
             // Backwards jump
-            compiler.add_op(Opcode::JMPB as u8);
-            compiler.add_op(0);
-            compiler.add_op(0);
-            compiler.add_op(0);
-            compiler.fill_jmp(program.ops.len() - 3, compiler.program.ops.len() - pos - 1);
-            compiler.fill_jmp(offpos, 0);
-        },*/
+            compiler.add_op(Opcode::JMPB);
+            compiler.fill_jmp(compiler.program.ops.len(), compiler.program.ops.len() - start_pos - 1, None);
+            // Exit jump
+            compiler.fill_jmp(exit_jump_pos, 0, Some(cond));
+            compiler.free_reg(cond);
+        },
         BodyStmt(nodes) => return _compile_body(compiler, args, nodes, false),
         /*FunctiStmt(name, fargs, body) => {
             // Declare function
