@@ -73,8 +73,6 @@ pub struct Compiler {
     pub program: Program,
 
     // Compiler info
-    // The functi being compiled (name, args, address)
-    //functi: (String, u8, u32),
     // If RS and LEVI are needed
     needs_scope: bool,
     // If VARG and CARG are needed
@@ -132,6 +130,7 @@ impl Compiler {
     #[inline]
     fn free_reg(&mut self, reg: Reg) {
         if 16 <= reg as u8 {
+            //self.add_op(Opcode::POP);
             return;
         }
         self.regs[reg as usize] = true;
@@ -455,8 +454,9 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
             // Get address
             let (address, name) = if let ASTNode::VarExpr(ref n) = **expr {
                 // Lookup function address
+                let n = n.clone().split("::").nth(1).unwrap().to_string();
                 if let Some(addr) = compiler.program.functis.iter().find_map(
-                    |i| if &i.0 == n && i.2 == args.len() as i32 { Some(i.1) } else { None }
+                    |i| if i.0 == n && i.2 == args.len() as i32 { Some(i.1) } else { None }
                 ) {
                     (addr, "".to_string())
                 } else if args.len() == 0 && n == "args" {
@@ -675,35 +675,27 @@ fn compile_stmt(
             compiler.free_reg(cond);
         },
         BodyStmt(nodes) => return _compile_body(compiler, args, nodes, false),
-        /*FunctiStmt(name, fargs, body) => {
-            // Declare function
-            program.push(Value::Int(fargs.len() as i32));
-            program.push(Value::Str(name.to_string()));
-            compiler.add_op(Opcode::FN as u8);
+        FunctiStmt(name, fargs, body) => {
             // Jump around function
-            compiler.add_op(Opcode::JMP as u8);
+            compiler.add_op(Opcode::JMP);
             let pos = compiler.program.ops.len();
-            compiler.add_op(0);
-            compiler.add_op(0);
-            compiler.add_op(0);
-            // Update compiler state
-            program.functi = (
-                name.clone(), fargs.len() as u8, compiler.program.ops.len() as u32
-            );
-            // Load args
+            // Declare function
+            compiler.program.functis.push((name.clone(), compiler.program.ops.len(), fargs.len() as i32));
+            // Load args from stack
             for arg in fargs {
-                program.push(Value::Str(arg.to_string()));
-                compiler.add_op(Opcode::DV as u8);
+                let name = compiler.push(Value::Str(arg.to_string()));
+                compiler.add_op_args(Opcode::DV, name as u8, Reg::Stack as u8, 0);
+                compiler.free_reg(name);
             }
             // Compile body
-            compile_body(compiler, args, body, true);
+            compile_body(compiler, args, body, true)?;
             // Return
-            program.push(Value::None);
-            compiler.add_op(Opcode::RET as u8);
+            compiler.push_to_stack(Value::None);
+            compiler.add_op(Opcode::RET);
             // Fill jump
-            compiler.fill_jmp(pos, 0);
+            compiler.fill_jmp(pos, 0, None);
         },
-        ReturnStmt(ret) => {
+        /*ReturnStmt(ret) => {
             let mut do_tco = false;
             if let CallExpr(expr, args) = *ret.clone() {
                 if let ASTNode::VarExpr(name) = *expr {
