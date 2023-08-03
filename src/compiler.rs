@@ -271,10 +271,10 @@ fn compile_set(compiler: &mut Compiler, lvalue: &ASTNode, value: Reg) -> Option<
         let lreg = compile_expr(compiler, &list)?;
         let ireg = compile_expr(compiler, &index)?;
         compiler.add_op_args(Opcode::SKY, lreg as u8, ireg as u8, value as u8);
-        compiler.free_reg(lreg);
+        compiler.free_reg(value);
         compiler.free_reg(ireg);
         // Indexes are attached to something, make sure it reattaches
-        return compile_set(compiler, &list, value);
+        return compile_set(compiler, &list, lreg);
     }
     panic!("Cannot compile_set for something other then a variable or index");
 }
@@ -445,7 +445,7 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
         // Calls
         CallExpr(expr, args) => {
             // Push the args (in reverse order)
-            for arg in args {
+            for arg in args.iter().rev() {
                 // TODO: Find a way to force it to compile on the stack so it doesn't copy
                 let a = compile_expr(compiler, arg)?;
                 compiler.copy(a, Reg::Stack);
@@ -494,7 +494,7 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
         // List
         ListExpr(keys, values, fast) => {
             // Build the list
-            for at in (0..values.len()).rev() {
+            for at in 0..values.len() {
                 let a = compile_expr(compiler, &values[at])?;
                 compiler.copy(a, Reg::Stack);
                 compiler.free_reg(a);
@@ -695,39 +695,37 @@ fn compile_stmt(
             // Fill jump
             compiler.fill_jmp(pos, 0, None);
         },
-        /*ReturnStmt(ret) => {
-            let mut do_tco = false;
+        ReturnStmt(ret) => {
             if let CallExpr(expr, args) = *ret.clone() {
-                if let ASTNode::VarExpr(name) = *expr {
-                    do_tco = name == program.functi.0
-                        && args.len() == program.functi.1 as usize;
-                }
+                let functi = compiler.program.functis.last().unwrap().clone();
+                let do_tco = if let ASTNode::VarExpr(name) = *expr {
+                    name == functi.0 && args.len() == functi.1 as usize
+                } else { false };
+                // Tail call is possible!
                 if do_tco {
-                    // Tail call
+                    // Push args
                     for ref arg in args.iter().rev() {
-                        if !compile_expr(compiler, arg) {
-                            return false;
-                        }
+                        let reg = compile_expr(compiler, arg)?;
+                        compiler.copy(reg, Reg::Stack);
+                        compiler.free_reg(reg);
                     }
-                    compiler.add_op(Opcode::TCO as u8);
-                    compiler.add_op(0);
-                    compiler.add_op(0);
-                    compiler.add_op(0);
+                    // Jump
+                    compiler.add_op(Opcode::RCALL);
                     compiler.fill_jmp(
-                        compiler.program.ops.len() - 3,
-                        compiler.program.ops.len() - program.functi.2 as usize - 1
+                        compiler.program.ops.len(),
+                        compiler.program.ops.len() - functi.2 as usize - 1,
+                        None
                     );
+                    return Some(());
                 }
             }
-            if !do_tco {
-                // Compile return value
-                if !compile_expr(compiler, ret) {
-                    return false;
-                }
-            }
+            // Compile return value
+            let ret = compile_expr(compiler, ret)?;
+            compiler.copy(ret, Reg::Stack);
+            compiler.free_reg(ret);
             // Return return value
-            compiler.add_op(Opcode::RET as u8);
-        },*/
+            compiler.add_op(Opcode::RET);
+        },
         ImportStmt() => {
             compiler.program.file_table.push((
                 compiler.inc_start, compiler.program.ops.len() as u32, args.name.clone()

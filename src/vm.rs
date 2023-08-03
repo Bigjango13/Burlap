@@ -442,7 +442,6 @@ impl Vm {
             args.push(self.stack.pop().unwrap());
             arg_num -= 1;
         }
-        let args = args.clone().into_iter().rev().collect();
         // Call
         let ret = functie(self, args)?;
         self.stack.push(ret);
@@ -1057,8 +1056,12 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         },
         Opcode::CARG => {
             let args = Value::FastList(
-                vm.call_frames.last_mut().unwrap().args.clone()
-                    .expect("No saved args at `args()` call!")
+                if vm.call_frames.len() != 0 {
+                    vm.call_frames.last_mut().unwrap().args.clone()
+                        .expect("No saved args at `args()` call!")
+                } else {
+                    vm.args.program_args.iter().map(|i| Value::Str(i.clone())).collect()
+                }
             );
             vm.set_reg(a, args);
         },
@@ -1094,6 +1097,18 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             let pos = vm.call_frames.pop().unwrap().return_addr;
             vm.at = pos as usize + 1;
             vm.jump = true;
+            // Fix scope
+            loop {
+                let Some((_, _, c)) = vm.scope.last() else {
+                    break;
+                };
+                if *c == 0 {
+                    // Clean scope
+                    vm.raise_scope()?;
+                    break;
+                }
+                vm.raise_scope()?;
+            }
         }
 
         // Lists
