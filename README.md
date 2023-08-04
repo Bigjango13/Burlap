@@ -6,41 +6,43 @@ Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) progr
 
 ## Features
 - [x] Complete sack v0.0.5 support
-- [ ] Complete sack v1.0.0 support
-  - [ ] Types
+- [x] Complete sack v1.0.0 support
+  - [x] Types
     - [x] Strings
     - [x] Number
     - [x] Decimal
     - [x] Bool
     - [x] None
-    - [ ] Lists **(New)**
+    - [x] Lists **(New)**
     - [x] Byte **(New)**
-    - [ ] `type` function **(New)**
+    - [x] `type` function **(New)**
   - [x] Operators
     - [x] Logical operators (`&&`, `||`, `^^`, `!`)
     - [x] Comparison operators (`>`, `<`, `>=`, `<=`, `==`, `!=`)
     - [x] Mathematical operators (`+`, `-`, `*`, `/`, `%`)
     - [x] Variable operators (`=`, `+=`, `-=`, `*=`, `/=`)
-  - [ ] Print
-  - [ ] Input **(New)**
-  - [ ] Len **(New)**
-  - [ ] Args **(New)**
-  - [ ] If/if else/else
-  - [ ] Return
-  - [ ] Functions
-  - [ ] Loops
-    - [ ] Range loops
-    - [ ] While loops **(New)**
-  - [ ] Casting
+  - [x] Print
+  - [x] Input **(New)**
+  - [x] Len **(New)**
+  - [x] Args **(New)**
+  - [x] If/if else/else
+  - [x] Return
+  - [x] Functions
+  - [x] Loops
+    - [x] Range loops
+    - [x] While loops **(New)**
+    - [x] Break **(New)**
+    - [x] Continue **(New)**
+  - [x] Casting
   - [x] Import
   - [x] Scope
-  - [ ] File IO **(New)**
-    - [ ] Open **(New)**
-    - [ ] Read **(New)**
-    - [ ] Write **(New)**
-    - [ ] Close **(New)**
-    - [ ] Flush **(New)**
-    - [ ] Seek **(New)**
+  - [x] File IO **(New)**
+    - [x] Open **(New)**
+    - [z] Read **(New)**
+    - [x] Write **(New)**
+    - [x] Close **(New)**
+    - [x] Flush **(New)**
+    - [x] Seek **(New)**
 - [x] Lexing errors
 - [x] Parsing errors
 - [x] Runtime errors
@@ -111,7 +113,9 @@ The speed test is currently only one test, it can be ran with `burlap tests/spee
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
 - 1.2.1: Register update
-    - Change backend from a stack-based one to a register and stack-based one
+    - Testing branch: Change backend from a stack-based one to a register and stack-based one
+    - Add break/continue
+    - Add `[:x]` syntax for lists
 - 1.2.0: WASM update
     - Add WASM support
     - Add first class functions

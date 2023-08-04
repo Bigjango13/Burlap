@@ -412,6 +412,9 @@ fn parse_list_item(parser: &mut Parser, at: i32) -> (String, Option<ASTNode>) {
         }
     } else {
         // Use number index
+        if parser.current() == Colon {
+            parser.next();
+        }
         name = at.to_string();
     }
     // Parse value
