@@ -123,7 +123,8 @@ type Functie = fn(&mut Vm, Vec<Value>) -> Result<Value, String>;
 // Call frames
 struct CallFrame {
     args: Option<Vec<Value>>,
-    return_addr: usize
+    return_addr: usize,
+    regs: [Value; 16],
 }
 
 #[inline]
@@ -451,7 +452,7 @@ impl Vm {
     // Call a function
     pub fn call(&mut self, addr: usize) {
         // Store return address
-        self.call_frames.push(CallFrame{args: None, return_addr: self.at});
+        self.call_frames.push(CallFrame{args: None, return_addr: self.at, regs: self.regs.clone()});
         // Jump there
         self.at = addr;
         self.jump = true;
@@ -1094,7 +1095,8 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             vm.at = shift3(a, b, c);
         },
         Opcode::RET => {
-            let pos = vm.call_frames.pop().unwrap().return_addr;
+            let frame = vm.call_frames.pop().unwrap();
+            let pos = frame.return_addr;
             vm.at = pos as usize + 1;
             vm.jump = true;
             // Fix scope
@@ -1109,6 +1111,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 }
                 vm.raise_scope()?;
             }
+            vm.regs = frame.regs;
         }
 
         // Lists

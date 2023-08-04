@@ -494,7 +494,7 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
         // List
         ListExpr(keys, values, fast) => {
             // Build the list
-            for at in 0..values.len() {
+            for at in (0..values.len()).rev() {
                 let a = compile_expr(compiler, &values[at])?;
                 compiler.copy(a, Reg::Stack);
                 compiler.free_reg(a);
