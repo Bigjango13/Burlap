@@ -82,7 +82,7 @@ wasm-pack build --target web --no-default-features --features=wasm --release
 
 The output should be in `pkg/`, to run the code is tricker, however an example and more documentation should be available shortly.
 
-The WASM build disables file IO, makes `args()` at global scope return `[wasm]`, and is incompatable with C FFI.
+The WASM build disables file IO, makes `args()` at global scope return `[wasm]`, and is incompatible with C FFI.
 
 ## Running
 

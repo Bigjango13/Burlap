@@ -108,7 +108,7 @@ pub enum Opcode {
     IN,
 
     // Jumps
-    // JuMP ([u24 "addrress"])
+    // JuMP ([u24 "address"])
     JMP,
     // JuMP Backward ([u24 "address"])
     JMPB,
