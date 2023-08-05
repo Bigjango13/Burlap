@@ -16,7 +16,7 @@ use rustc_hash::FxHashMap;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug)]
-#[allow(clippy::upper_case_acronyms, dead_code)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum Opcode {
     // The almighty NOP
     NOP,

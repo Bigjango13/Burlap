@@ -47,6 +47,10 @@ pub enum ASTNode {
     LoopStmt(String, Box<ASTNode>, Box<ASTNode>),
     // While loop, (6 > i, Body(...))
     WhileStmt(Box<ASTNode>, Box<ASTNode>),
+    // Break
+    BreakStmt,
+    // Continue
+    ContinueStmt,
     // ImportStmt, used for the file table as the parser handles imports
     ImportStmt(),
     // EndImportStmt, (filename), used for marking the end of the import
@@ -67,6 +71,7 @@ struct Parser {
     args: Arguments,
     at: usize,
     in_func: bool,
+    in_loop: bool,
     has_err: bool,
     name: String
 }
@@ -537,6 +542,24 @@ fn parse_statement(parser: &mut Parser) -> Option<ASTNode> {
             parser.next();
             Option::None
         },
+        Break => {
+            if !parser.in_loop {
+                error!(parser, "break outside of loop");
+                return Option::None;
+            }
+            parser.next();
+            eat_semicolon!(parser)?;
+            Some(ASTNode::BreakStmt)
+        },
+        Continue => {
+            if !parser.in_loop {
+                error!(parser, "continue outside of loop");
+                return Option::None;
+            }
+            parser.next();
+            eat_semicolon!(parser)?;
+            Some(ASTNode::ContinueStmt)
+        },
         // Return
         Return => parse_return(parser),
         // If
@@ -706,11 +729,15 @@ fn parse_loop(parser: &mut Parser) -> Option<ASTNode> {
     // Start parens
     eat!(parser, Lparan, "missing '(' in loop")?;
     // Get the loop type and call the helper
-    return if parser.current() == While {
+    let old_in_loop = parser.in_loop;
+    parser.in_loop = true;
+    let ret = if parser.current() == While {
         parse_loop_while(parser)
     } else {
         parse_loop_iter(parser)
     };
+    parser.in_loop = old_in_loop;
+    return ret;
 }
 
 // Imports
@@ -923,7 +950,8 @@ pub fn _parse(
     let mut parser = Parser{
         tokens, args: args.clone(), functis, vars,
         at: 0, has_err: false, in_func: false,
-        ast: vec![], name: args.name.clone(),
+        in_loop: false, ast: vec![],
+        name: args.name.clone(),
     };
     // Parse
     while parser.current() != Eof {

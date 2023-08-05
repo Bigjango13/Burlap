@@ -46,6 +46,8 @@
       <keyword>in</keyword>
       <keyword>while</keyword>
       <keyword>return</keyword>
+      <keyword>break</keyword>
+      <keyword>continue</keyword>
     </context>
 
     <!-- Builtin Functions -->

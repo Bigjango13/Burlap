@@ -80,7 +80,11 @@ pub struct Compiler {
     // Where in the byte code the current file started
     inc_start: u32,
     // Registers
-    regs: [bool; 17]
+    regs: [bool; 17],
+    // Break addresses (so the jump can be filled)
+    break_addrs: Vec<usize>,
+    // Loop top (so continue can be filled)
+    loop_top: usize,
 }
 
 impl Compiler {
@@ -88,8 +92,8 @@ impl Compiler {
         Compiler {
             program: Program::new(),
             needs_scope: false, inc_start: 0,
-            //functi: ("".to_string(), 0, 0),
-            regs: [true; 17], needs_args: false
+            regs: [true; 17], needs_args: false,
+            break_addrs: vec![], loop_top: 0,
         }
     }
 
@@ -629,7 +633,9 @@ fn compile_stmt(
             let iter = compile_expr(compiler, iter)?;
             compiler.add_op_args(Opcode::ITER, iter as u8, iter as u8, 0);
             let item = compiler.alloc_reg();
-            let start_pos = compiler.program.ops.len();
+            let old_top = compiler.loop_top;
+            let last_size = compiler.break_addrs.len();
+            compiler.loop_top = compiler.program.ops.len();
             compiler.add_op_args(Opcode::NXT, iter as u8, item as u8, 2);
 
             // Exit jump
@@ -649,7 +655,13 @@ fn compile_stmt(
             compiler.add_op(Opcode::RS);
             // Backwards jump
             compiler.add_op(Opcode::JMPB);
-            compiler.fill_jmp(compiler.program.ops.len(), compiler.program.ops.len() - start_pos - 1, None);
+            compiler.fill_jmp(compiler.program.ops.len(), compiler.program.ops.len() - compiler.loop_top - 1, None);
+            // Fill breaks
+            for addr in &compiler.break_addrs.clone()[last_size..] {
+                compiler.fill_jmp(*addr, 0, None);
+            }
+            compiler.break_addrs.truncate(last_size);
+            compiler.loop_top = old_top;
             // Clean up the iter
             compiler.fill_jmp(jmp_pos, 0, None);
             compiler.free_reg(iter);
@@ -657,7 +669,9 @@ fn compile_stmt(
         },
         WhileStmt(cond, body) => {
             // Start (so it can loop back)
-            let start_pos = compiler.program.ops.len();
+            let old_top = compiler.loop_top;
+            compiler.loop_top = compiler.program.ops.len();
+            let last_size = compiler.break_addrs.len();
             // Condition
             let cond = compile_expr(compiler, cond)?;
             // Exit jump
@@ -669,10 +683,24 @@ fn compile_stmt(
 
             // Backwards jump
             compiler.add_op(Opcode::JMPB);
-            compiler.fill_jmp(compiler.program.ops.len(), compiler.program.ops.len() - start_pos - 1, None);
+            compiler.fill_jmp(compiler.program.ops.len(), compiler.program.ops.len() - compiler.loop_top - 1, None);
+            // Fill breaks
+            for addr in &compiler.break_addrs.clone()[last_size..] {
+                compiler.fill_jmp(*addr, 0, None);
+            }
             // Exit jump
             compiler.fill_jmp(exit_jump_pos, 0, Some(cond));
+            compiler.loop_top = old_top;
             compiler.free_reg(cond);
+        },
+        BreakStmt => {
+            // Filled later
+            compiler.add_op(Opcode::JMP);
+            compiler.break_addrs.push(compiler.program.ops.len());
+        },
+        ContinueStmt => {
+            compiler.add_op(Opcode::JMPB);
+            compiler.fill_jmp(compiler.program.ops.len(), compiler.program.ops.len() - compiler.loop_top - 1, None);
         },
         BodyStmt(nodes) => return _compile_body(compiler, args, nodes, false),
         FunctiStmt(name, fargs, body) => {

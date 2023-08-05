@@ -49,12 +49,13 @@ impl rustyline::highlight::Highlighter for FancyRepl {
             let color = match token.token {
                 // Misc keywords
                 TokenType::Let | TokenType::Func(..)
-                    | TokenType::Import | TokenType::Bool(..)
-                    | TokenType::None => Some("\x1b[32m"),
+                | TokenType::Import | TokenType::Bool(..)
+                | TokenType::None => Some("\x1b[32m"),
                 // Control flow
                 TokenType::If | TokenType::Else | TokenType::In
-                    | TokenType::Str(..) | TokenType::While
-                    | TokenType::Loop => Some("\x1b[1;33m"),
+                | TokenType::Str(..) | TokenType::While
+                | TokenType::Loop | TokenType::Continue
+                | TokenType::Break => Some("\x1b[1;33m"),
                 TokenType::Return => Some("\x1b[35m"),
                 // Comments
                 TokenType::Skipped => Some("\x1b[1;36m"),

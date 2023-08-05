@@ -45,7 +45,6 @@ use crate::parser::{parse, ASTNode};
 use crate::vm::{run, Vm};
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct Arguments {
     source: String,
     name: String,
