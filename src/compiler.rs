@@ -709,6 +709,9 @@ fn compile_stmt(
             let pos = compiler.program.ops.len();
             // Declare function
             compiler.program.functis.push((name.clone(), compiler.program.ops.len(), fargs.len() as i32));
+            // Arg saving
+            let start = compiler.program.ops.len();
+            compiler.add_op(Opcode::NOP);
             // Load args from stack
             for arg in fargs {
                 let name = compiler.push(Value::Str(arg.to_string()));
@@ -720,6 +723,11 @@ fn compile_stmt(
             // Return
             compiler.push_to_stack(Value::None);
             compiler.add_op(Opcode::RET);
+            // Save args
+            if compiler.needs_args {
+                compiler.program.ops[start] = ((Opcode::SARG as u32) << 24) + ((fargs.len() as u32 & 255) << 16);
+                compiler.needs_args = false;
+            }
             // Fill jump
             compiler.fill_jmp(pos, 0, None);
         },
