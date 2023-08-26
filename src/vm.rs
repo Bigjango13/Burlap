@@ -451,8 +451,17 @@ impl Vm {
 
     // Call a function
     pub fn call(&mut self, addr: usize) {
-        // Store return address
-        self.call_frames.push(CallFrame{args: None, return_addr: self.at, regs: self.regs.clone()});
+        // Store reteurn address and registers
+        const NONE: Value = Value::None;
+        let mut regs = [NONE; 16];
+        std::mem::swap(&mut self.regs, &mut regs);
+        self.call_frames.push(
+            CallFrame {
+                args: None,
+                return_addr: self.at,
+                regs
+            }
+        );
         // Jump there
         self.at = addr;
         self.jump = true;
