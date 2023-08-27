@@ -5,6 +5,14 @@ use crate::lexer::{Token, TokenType};
 use TokenType::*;
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct FunctiNode {
+    pub name: String,
+    pub arg_names: Vec<String>,
+    pub body: Box<ASTNode>,
+    pub locals: Vec<String>
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum ASTNode {
     // Expressions
     // String, ("Example")
@@ -36,7 +44,7 @@ pub enum ASTNode {
     // Body, ([Call(Var(print), [String("Hello World")])])
     BodyStmt(Vec<ASTNode>),
     // Function, (foobar, [a, b, c], Body(...))
-    FunctiStmt(String, Vec<String>, Box<ASTNode>),
+    FunctiStmt(Box<FunctiNode>),
     // If/else if, (Binop(x == 1), Body(trueBody), Body(falseBody or nop))
     IfStmt(Box<ASTNode>, Box<ASTNode>, Box<ASTNode>),
     // Let, (x, 47)
@@ -883,7 +891,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
     parser.next();
     // Args
     eat!(parser, Lparan, "expected '(' at start of argument list")?;
-    let mut args: Vec<String> = vec![];
+    let mut arg_names: Vec<String> = vec![];
     loop {
         if let Rparan = parser.current() {
             break;
@@ -891,7 +899,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         // Arg name
         if let Identifier(n) = parser.current() {
             check_unique(parser, &n, -1);
-            args.push(parser.name.clone() + "::" + &n);
+            arg_names.push(parser.name.clone() + "::" + &n);
             parser.next();
         } else {
             error!(parser, "expected argument name");
@@ -908,7 +916,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         }
     }
     parser.next();
-    check_unique(parser, &name, args.len().try_into().unwrap());
+    check_unique(parser, &name, arg_names.len().try_into().unwrap());
     // Body
     if let Lbrace = parser.current() {} else {
         error!(parser, "expected '{' to start function body");
@@ -922,9 +930,14 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
     parser.in_func = true;
     let body = parse_body(parser);
     parser.in_func = false;
-    parser.vars.truncate(parser.vars.len() - args.len());
+    let locals = parser.vars.split_off(parser.vars.len() - arg_names.len());
     // Return
-    return Some(ASTNode::FunctiStmt(name, args, Box::new(body?)));
+    return Some(ASTNode::FunctiStmt(Box::new(FunctiNode {
+        name,
+        arg_names,
+        body: Box::new(body?),
+        locals,
+    })));
 }
 
 // Main parsing

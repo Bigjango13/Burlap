@@ -655,7 +655,11 @@ fn compile_stmt(
             compiler.add_op(Opcode::RS);
             // Backwards jump
             compiler.add_op(Opcode::JMPB);
-            compiler.fill_jmp(compiler.program.ops.len(), compiler.program.ops.len() - compiler.loop_top - 1, None);
+            compiler.fill_jmp(
+                compiler.program.ops.len(),
+                compiler.program.ops.len() - compiler.loop_top - 1,
+                None
+            );
             // Fill breaks
             for addr in &compiler.break_addrs.clone()[last_size..] {
                 compiler.fill_jmp(*addr, 0, None);
@@ -683,7 +687,11 @@ fn compile_stmt(
 
             // Backwards jump
             compiler.add_op(Opcode::JMPB);
-            compiler.fill_jmp(compiler.program.ops.len(), compiler.program.ops.len() - compiler.loop_top - 1, None);
+            compiler.fill_jmp(
+                compiler.program.ops.len(),
+                compiler.program.ops.len() - compiler.loop_top - 1,
+                None
+            );
             // Fill breaks
             for addr in &compiler.break_addrs.clone()[last_size..] {
                 compiler.fill_jmp(*addr, 0, None);
@@ -703,29 +711,34 @@ fn compile_stmt(
             compiler.fill_jmp(compiler.program.ops.len(), compiler.program.ops.len() - compiler.loop_top - 1, None);
         },
         BodyStmt(nodes) => return _compile_body(compiler, args, nodes, false),
-        FunctiStmt(name, fargs, body) => {
+        FunctiStmt(node) => {
             // Jump around function
             compiler.add_op(Opcode::JMP);
             let pos = compiler.program.ops.len();
             // Declare function
-            compiler.program.functis.push((name.clone(), compiler.program.ops.len(), fargs.len() as i32));
+            compiler.program.functis.push((
+                node.name.clone(),
+                compiler.program.ops.len(),
+                node.arg_names.len() as i32
+            ));
             // Arg saving
             let start = compiler.program.ops.len();
             compiler.add_op(Opcode::NOP);
             // Load args from stack
-            for arg in fargs {
+            for arg in &node.arg_names {
                 let name = compiler.push(Value::Str(arg.to_string()));
                 compiler.add_op_args(Opcode::DV, name as u8, Reg::Stack as u8, 0);
                 compiler.free_reg(name);
             }
             // Compile body
-            compile_body(compiler, args, body, true)?;
+            compile_body(compiler, args, &*node.body, true)?;
             // Return
             compiler.push_to_stack(Value::None);
             compiler.add_op(Opcode::RET);
             // Save args
             if compiler.needs_args {
-                compiler.program.ops[start] = ((Opcode::SARG as u32) << 24) + ((fargs.len() as u32 & 255) << 16);
+                compiler.program.ops[start] = ((Opcode::SARG as u32) << 24)
+                    + ((node.arg_names.len() as u32 & 255) << 16);
                 compiler.needs_args = false;
             }
             // Fill jump
