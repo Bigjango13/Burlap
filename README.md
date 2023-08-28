@@ -113,7 +113,7 @@ The speed test is currently only one test, it can be ran with `burlap tests/spee
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
 - 1.2.1: Register update
-    - Testing branch: Change backend from a stack-based one to a register and stack-based one
+    - Change backend from a stack-based one to a register and stack-based one
     - Add break/continue
     - Add `[:x]` syntax for lists
 - 1.2.0: WASM update
