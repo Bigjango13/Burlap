@@ -85,8 +85,6 @@ pub struct Compiler {
     break_addrs: Vec<usize>,
     // Loop top (so continue can be filled)
     loop_top: usize,
-    // Limits registers to just the stack
-    on_stack_only: bool,
 }
 
 impl Compiler {
@@ -96,7 +94,6 @@ impl Compiler {
             needs_scope: false, inc_start: 0,
             regs: [true; 17], needs_args: false,
             break_addrs: vec![], loop_top: 0,
-            on_stack_only: true,
         }
     }
 
@@ -126,10 +123,6 @@ impl Compiler {
 
     // Register allocation
     fn alloc_reg(&mut self) -> Reg {
-        if self.on_stack_only {
-            // Only stack allowed
-            return Reg::Stack;
-        }
         let Some(reg) = self.regs.iter().position(|i| *i) else {
             // No available registers, fallback to stack
             return Reg::Stack;
@@ -455,13 +448,13 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
         },
         // Calls
         CallExpr(expr, args) => {
-            // Push the args onto the stack (in reverse order)
-            let old_on_stack = compiler.on_stack_only;
-            compiler.on_stack_only = true;
+            // Push the args (in reverse order)
             for arg in args.iter().rev() {
-                compile_expr(compiler, arg)?;
+                // TODO: Find a way to force it to compile on the stack so it doesn't copy
+                let a = compile_expr(compiler, arg)?;
+                compiler.copy(a, Reg::Stack);
+                compiler.free_reg(a);
             }
-            compiler.on_stack_only = old_on_stack;
             // Get address
             let (address, name) = if let ASTNode::VarExpr(ref n) = **expr {
                 // Lookup function address
@@ -505,15 +498,14 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
         // List
         ListExpr(keys, values, fast) => {
             // Build the list
-            let old_on_stack = compiler.on_stack_only;
-            compiler.on_stack_only = true;
             for at in (0..values.len()).rev() {
-                compile_expr(compiler, &values[at])?;
+                let a = compile_expr(compiler, &values[at])?;
+                compiler.copy(a, Reg::Stack);
+                compiler.free_reg(a);
                 if !*fast {
                     compiler.push_to_stack(Value::Str(keys[at].clone()));
                 }
             }
-            compiler.on_stack_only = old_on_stack;
             // Push
             let len = values.len();
             let reg = compiler.alloc_reg();
@@ -761,12 +753,11 @@ fn compile_stmt(
                 // Tail call is possible!
                 if do_tco {
                     // Push args
-                    let old_on_stack = compiler.on_stack_only;
-                    compiler.on_stack_only = true;
                     for ref arg in args.iter().rev() {
-                        compile_expr(compiler, arg)?;
+                        let reg = compile_expr(compiler, arg)?;
+                        compiler.copy(reg, Reg::Stack);
+                        compiler.free_reg(reg);
                     }
-                    compiler.on_stack_only = old_on_stack;
                     // Jump
                     compiler.add_op(Opcode::RCALL);
                     compiler.fill_jmp(
@@ -778,10 +769,9 @@ fn compile_stmt(
                 }
             }
             // Compile return value
-            let old_on_stack = compiler.on_stack_only;
-            compiler.on_stack_only = true;
-            compile_expr(compiler, ret)?;
-            compiler.on_stack_only = old_on_stack;
+            let ret = compile_expr(compiler, ret)?;
+            compiler.copy(ret, Reg::Stack);
+            compiler.free_reg(ret);
             // Return return value
             compiler.add_op(Opcode::RET);
         },
