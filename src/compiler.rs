@@ -113,12 +113,24 @@ impl Compiler {
         self.add_op_args(op, 0, 0, 0);
     }
 
-    #[inline]
-    fn copy(&mut self, src: Reg, dst: Reg) {
+    fn move_(&mut self, src: Reg, dst: Reg) {
         if src == dst {
             return;
         }
+        self.copy(src, dst);
+        if src == Reg::Stack {
+            self.add_op(Opcode::POP);
+        }
+    }
+
+    #[inline]
+    fn copy(&mut self, src: Reg, dst: Reg) {
         self.add_op_args(Opcode::CP, src as u8, dst as u8, 0);
+    }
+
+    #[inline]
+    fn dup(&mut self) {
+        self.add_op_args(Opcode::CP, Reg::Stack as u8, Reg::Stack as u8, 0);
     }
 
     // Register allocation
@@ -220,8 +232,8 @@ fn compile_unary(
     Some(match op {
         // -/!
         TokenType::Minus => {
-            let ret = compile_expr(compiler, val)?;
             let tmp = compiler.push(Value::Int(0));
+            let ret = compile_expr(compiler, val)?;
             compiler.add_op_args(Opcode::SUB, tmp as u8, ret as u8, ret as u8);
             compiler.free_reg(tmp);
             ret
@@ -236,6 +248,9 @@ fn compile_unary(
             let ret = compile_expr(compiler, val)?;
             let tmp = compiler.push(Value::Int(1));
             compiler.add_op_args(Opcode::ADD, ret as u8, tmp as u8, ret as u8);
+            if ret == Reg::Stack {
+                compiler.dup();
+            }
             compiler.free_reg(tmp);
             let VarExpr(ref s) = **val else {
                 panic!("++ needs a var, how did you do this?");
@@ -249,6 +264,9 @@ fn compile_unary(
             let ret = compile_expr(compiler, val)?;
             let tmp = compiler.push(Value::Int(1));
             compiler.add_op_args(Opcode::SUB, ret as u8, tmp as u8, ret as u8);
+            if ret == Reg::Stack {
+                compiler.dup();
+            }
             compiler.free_reg(tmp);
             let VarExpr(ref s) = **val else {
                 panic!("-- needs a var, how did you do this?");
@@ -272,8 +290,8 @@ fn compile_set(compiler: &mut Compiler, lvalue: &ASTNode, value: Reg) -> Option<
         compiler.free_reg(value);
         return Some(());
     } else if let IndexExpr(list, index) = lvalue.clone() {
-        let lreg = compile_expr(compiler, &list)?;
         let ireg = compile_expr(compiler, &index)?;
+        let lreg = compile_expr(compiler, &list)?;
         compiler.add_op_args(Opcode::SKY, lreg as u8, ireg as u8, value as u8);
         compiler.free_reg(value);
         compiler.free_reg(ireg);
@@ -294,7 +312,12 @@ fn compile_short_binop(
     // Turn `a() || b()` into `r = a(); if !r { r = b() }; r`
     let lhs = compile_expr(compiler, lhs)?;
     let dup_tmp = compiler.alloc_reg();
-    compiler.add_op_args(Opcode::NOT, lhs as u8, dup_tmp as u8, 0);
+    if dup_tmp == Reg::Stack && lhs == Reg::Stack {
+        compiler.dup();
+        compiler.add_op_args(Opcode::NOT, dup_tmp as u8, dup_tmp as u8, 0);
+    } else {
+        compiler.add_op_args(Opcode::NOT, lhs as u8, dup_tmp as u8, 0);
+    }
     if op != &TokenType::Or {
         // Double not is faster then a copy
         compiler.add_op_args(Opcode::NOT, dup_tmp as u8, dup_tmp as u8, 0);
@@ -304,8 +327,11 @@ fn compile_short_binop(
     let pos = compiler.program.ops.len();
     compiler.free_reg(dup_tmp);
     // It's 'b' (the left)
+    if lhs == Reg::Stack {
+        compiler.add_op(Opcode::POP);
+    }
     let rhs = compile_expr(compiler, rhs)?;
-    compiler.copy(rhs, lhs);
+    compiler.move_(rhs, lhs);
     compiler.free_reg(rhs);
     // End the jump
     compiler.fill_jmp(pos, 0, Some(dup_tmp));
@@ -381,11 +407,11 @@ fn compile_binop(
             compiler.add_op_args(Opcode::NOT, rreg, rreg, 0);
         },
         TokenType::LtEquals => {
-            compiler.add_op_args(Opcode::GT, rreg, lreg, rreg);
+            compiler.add_op_args(Opcode::LT, lreg, rreg, rreg);
             compiler.add_op_args(Opcode::NOT, rreg, rreg, 0);
         },
         TokenType::GtEquals => {
-            compiler.add_op_args(Opcode::LT, rreg, lreg, rreg);
+            compiler.add_op_args(Opcode::GT, lreg, rreg, rreg);
             compiler.add_op_args(Opcode::NOT, rreg, rreg, 0);
         },
         // Handled later
@@ -452,7 +478,7 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
             for arg in args.iter().rev() {
                 // TODO: Find a way to force it to compile on the stack so it doesn't copy
                 let a = compile_expr(compiler, arg)?;
-                compiler.copy(a, Reg::Stack);
+                compiler.move_(a, Reg::Stack);
                 compiler.free_reg(a);
             }
             // Get address
@@ -500,7 +526,7 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
             // Build the list
             for at in (0..values.len()).rev() {
                 let a = compile_expr(compiler, &values[at])?;
-                compiler.copy(a, Reg::Stack);
+                compiler.move_(a, Reg::Stack);
                 compiler.free_reg(a);
                 if !*fast {
                     compiler.push_to_stack(Value::Str(keys[at].clone()));
@@ -529,8 +555,8 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
         // Indexes
         IndexExpr(val, index) => {
             // Push
-            let expr = compile_expr(compiler, val)?;
             let index = compile_expr(compiler, index)?;
+            let expr = compile_expr(compiler, val)?;
             compiler.add_op_args(Opcode::INX, expr as u8, index as u8, expr as u8);
             compiler.free_reg(index);
             expr
@@ -669,6 +695,9 @@ fn compile_stmt(
             // Clean up the iter
             compiler.fill_jmp(jmp_pos, 0, None);
             compiler.free_reg(iter);
+            if iter == Reg::Stack {
+                compiler.add_op(Opcode::POP);
+            }
             compiler.free_reg(item);
         },
         WhileStmt(cond, body) => {
@@ -755,7 +784,7 @@ fn compile_stmt(
                     // Push args
                     for ref arg in args.iter().rev() {
                         let reg = compile_expr(compiler, arg)?;
-                        compiler.copy(reg, Reg::Stack);
+                        compiler.move_(reg, Reg::Stack);
                         compiler.free_reg(reg);
                     }
                     // Jump
@@ -770,7 +799,7 @@ fn compile_stmt(
             }
             // Compile return value
             let ret = compile_expr(compiler, ret)?;
-            compiler.copy(ret, Reg::Stack);
+            compiler.move_(ret, Reg::Stack);
             compiler.free_reg(ret);
             // Return return value
             compiler.add_op(Opcode::RET);
@@ -797,7 +826,7 @@ fn compile_stmt(
             let reg = compile_binop(compiler, lhs, op, rhs, !dirty)?;
             if dirty && reg != Reg::Stack {
                 // Copy to stack
-                compiler.copy(reg, Reg::Stack);
+                compiler.move_(reg, Reg::Stack);
                 compiler.free_reg(reg);
             }
         },
@@ -810,7 +839,7 @@ fn compile_stmt(
                 }
             } else if reg != Reg::Stack {
                 // Move the result to the stack
-                compiler.copy(reg, Reg::Stack);
+                compiler.move_(reg, Reg::Stack);
             }
             compiler.free_reg(reg);
         }

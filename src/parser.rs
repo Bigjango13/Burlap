@@ -689,13 +689,13 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     // Range optimization
     if let ASTNode::CallExpr(expr, args) = iter.clone() {
         let name = if let ASTNode::VarExpr(n) = *expr {
-            n
+            n.clone().split("::").nth(1).unwrap_or(n.as_str()).to_string()
         } else {
             "".to_string()
         };
         if name == *"range" {
+            // Arg check
             if args.len() != 2 {
-                // Arg check
                 error!(
                     parser,
                     format!("range takes 2 args, not {}", args.len()).as_str()
@@ -704,7 +704,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
             }
             // Use the faster range
             iter = ASTNode::CallExpr(
-                Box::new(ASTNode::VarExpr("__burlap_range".to_string())),
+                Box::new(ASTNode::VarExpr("::__burlap_range".to_string())),
                 args
             );
         }
