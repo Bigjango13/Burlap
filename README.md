@@ -102,7 +102,7 @@ To show help, run `burlap -h` or `burlap --help`.
 
 ### Feature test
 
-The feature test can be ran with `burlap tests/test.sk`, after every run a file called `tmp-filename-for-tests` will be made as a part of file io tests. Sack currently doesn't have the ability to deleate files, it will need to be removed manually
+The feature test can be ran with `burlap tests/test.sk`, after every run a file called `tmp-filename-for-tests` will be made as a part of file io tests. Sack currently doesn't have the ability to deleate files, it will need to be removed manually or two tests will fail on the next run.
 
 ### Speed test
 

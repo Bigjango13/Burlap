@@ -242,9 +242,9 @@ impl Vm {
     }
 
     // Unmangle a var name
-    #[cfg(not(target_family = "wasm"))]
+    #[inline]
     fn unmangle(name: &String) -> String {
-        name.clone().split("::").nth(1).unwrap().to_string()
+        name.clone().split("::").last().unwrap().to_string()
     }
 
     // Get a vec of all symbol names
@@ -276,67 +276,48 @@ impl Vm {
     }
 
     // Getting vars
-    fn get_local(&self, name: &String) -> Result<Value, String> {
+    fn get_local(&self, name: &String) -> Option<Value> {
         // Gets a local var
         let mut index = self.var_names.len();
         while index > self.var_min {
             index -= 1;
             if &self.var_names[index] == name {
-                return Ok(self.var_vals[index].clone());
+                return Some(self.var_vals[index].clone());
             }
         }
-        // Failed to get var, return an error
-        return Err(format!("no variable called \"{}\"! This is a bug and should have been detected earlier on", name));
+        // Failed to get var
+        None
     }
 
-    fn get_global(&self, name: &String) -> Result<Value, String> {
+    fn get_global(&self, name: &String) -> Option<Value> {
         // Gets a var in the global scope
-        return match self.globals.get(name) {
-            Some(val) => Ok(val.clone()),
-            _ => Err(format!("no variable called \"{}\"! This is a bug and should have been detected earlier on", name))
-        };
+        self.globals.get(name).cloned()
     }
 
     pub fn get_var(&self, name: &String) -> Result<Value, String> {
-        let real_name = name.clone().split("::").nth(1).unwrap().to_string();
+        if !self.is_global {
+            // Check local scope first
+            if let Some(v) = self.get_local(name) {
+                return Ok(v);
+            }
+        }
+        if let Some(v) = self.get_global(name) {
+            return Ok(v);
+        }
+        // Check function
+        let real_name = Self::unmangle(name);
         if self.functies.contains_key(&real_name)
             || self.program.functis.iter().any(|i| &i.0 == &real_name)
         {
             return Ok(Value::Functi(real_name));
         }
-        if self.is_global {
-            // Don't bother checking local scope
-            return self.get_global(name);
-        }
-        return self.get_local(name).or_else(|_| self.get_global(name));
-    }
-
-    pub fn check_for_var(&self, name: &String) -> bool {
-        // Check functis
-        let real_name = name.clone().split("::").nth(1).unwrap().to_string();
-        if self.functies.contains_key(&real_name)
-            || self.program.functis.iter().any(|i| &i.0 == &real_name)
-        {
-            return true;
-        }
-        if !self.is_global {
-            // Check locals
-            if self.var_names[self.var_min..].contains(name) {
-                return true;
-            }
-        }
-        // Check globals
-        return self.globals.contains_key(name);
+        Err(format!("no variable called \"{}\"! This is a bug and should have been detected earlier on", name))
     }
 
     // Create a variable
     pub fn make_var(
         &mut self, name: &String, val: Value
     ) -> Result<(), String> {
-        // Check if it already exists
-        if self.check_for_var(name) {
-            return Err(format!("cannot redefine \"{}\"", name));
-        }
         // Create
         if self.is_global {
             self.globals.insert(name.clone(), val);
@@ -1262,12 +1243,18 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         },
         Opcode::IN => {
             let rhs = vm.get_reg(b);
-            let lhs = vm.get_reg(a);
-            if let Some(b) = rhs.contains(&lhs) {
+            let lhs = vm.get_reg_mut(a);
+            let contains = lhs.contains(&rhs);
+            // Side effects
+            let ltype = lhs.get_type();
+            if a == 16 {
+                vm.stack.pop().unwrap();
+            }
+            if let Some(b) = contains {
                 vm.set_reg(c, Value::Bool(b));
             } else {
                 return Err(
-                    format!("Cannot use in on {:?} and {:?}", lhs.get_type(), rhs.get_type())
+                    format!("Cannot use in on {:?} and {:?}", ltype, rhs.get_type())
                 );
             }
         },
@@ -1302,8 +1289,13 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             vm.set_reg(c, Value::Bool(lhs.is_truthy() != rhs.is_truthy()));
         },
         Opcode::NOT => {
-            let v = vm.get_reg(a);
-            vm.set_reg(b, Value::Bool(!v.is_truthy()));
+            if a == b {
+                let v = vm.get_reg_mut(a);
+                *v = Value::Bool(!v.is_truthy());
+            } else {
+                let v = vm.get_reg(a);
+                vm.set_reg(b, Value::Bool(!v.is_truthy()));
+            }
         },
 
         // Jumps
@@ -1352,6 +1344,7 @@ pub fn run(vm: &mut Vm) -> bool {
             vm.at = vm.program.ops.len() - 1;
             return false;
         }
+        //println!("Stk: {:?}", vm.stack);
 
         // Move forward
         if vm.jump {

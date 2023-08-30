@@ -96,7 +96,7 @@ impl Compiler {
             needs_scope: false, inc_start: 0,
             regs: [true; 17], needs_args: false,
             break_addrs: vec![], loop_top: 0,
-            on_stack_only: true,
+            on_stack_only: false,
         }
     }
 
@@ -351,14 +351,18 @@ fn compile_short_binop(
     return Some(lhs);
 }
 
-fn compile_binop(
+fn compile_binop<'a>(
     compiler: &mut Compiler,
-    lhs: &Box<ASTNode>, op: &TokenType, rhs: &Box<ASTNode>,
+    mut lhs: &'a Box<ASTNode>, op: &TokenType, mut rhs: &'a Box<ASTNode>,
     clean: bool
 ) -> Option<Reg> {
     // Short circuiting ops are special
     if op == &TokenType::And || op == &TokenType::Or {
         return compile_short_binop(compiler, lhs, op, rhs, clean);
+    }
+    // Makes stuff faster
+    if op == &TokenType::In {
+       (lhs, rhs) = (rhs, lhs);
     }
     // Compile sides
     let lreg = if op != &TokenType::Equals {
