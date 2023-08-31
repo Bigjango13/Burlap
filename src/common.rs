@@ -163,7 +163,7 @@ fn _get_builtins(extended: bool) -> Vec<(String, i32)> {
         ].iter().map(|(n, a)| (n.to_string(), *a)).collect();
         ret.append(&mut tmp);
     }
-    // Extentions
+    // Extensions
     if extended {
         let mut tmp = vec![
             ("__burlap_typed_eq", 2),

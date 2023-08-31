@@ -83,6 +83,10 @@ pub enum TokenType {
     Loop,
     #[token("while")]
     While,
+    #[token("continue")]
+    Continue,
+    #[token("break")]
+    Break,
     #[token("import")]
     Import,
     // Basic operators

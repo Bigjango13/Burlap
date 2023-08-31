@@ -1,5 +1,5 @@
 # Burlap
-> A powerful and user-friendly Sack interpreter, v1.2.0
+> A powerful and user-friendly Sack interpreter, v1.2.1
 
 ## What is Burlap?
 Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) programming language. It aims for a high level of spec compliance, any valid sack program should be able to be run using burlap (it does have a few minor variations from the spec, known differences are listed [here](docs/spec-diff.md))
@@ -31,6 +31,8 @@ Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) progr
   - [x] Loops
     - [x] Range loops
     - [x] While loops **(New)**
+    - [x] Break **(New)**
+    - [x] Continue **(New)**
   - [x] Casting
   - [x] Import
   - [x] Scope
@@ -80,7 +82,7 @@ wasm-pack build --target web --no-default-features --features=wasm --release
 
 The output should be in `pkg/`, to run the code is tricker, however an example and more documentation should be available shortly.
 
-The WASM build disables file IO, makes `args()` at global scope return `[wasm]`, and is incompatable with C FFI.
+The WASM build disables file IO, makes `args()` at global scope return `[wasm]`, and is incompatible with C FFI.
 
 ## Running
 
@@ -100,7 +102,7 @@ To show help, run `burlap -h` or `burlap --help`.
 
 ### Feature test
 
-The feature test can be ran with `burlap tests/test.sk`, after every run a file called `tmp-filename-for-tests` will be made as a part of file io tests. Sack currently doesn't have the ability to deleate files, it will need to be removed manually
+The feature test can be ran with `burlap tests/test.sk`, after every run a file called `tmp-filename-for-tests` will be made as a part of file io tests. Sack currently doesn't have the ability to deleate files, it will need to be removed manually or two tests will fail on the next run.
 
 ### Speed test
 
@@ -110,6 +112,10 @@ The speed test is currently only one test, it can be ran with `burlap tests/spee
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
+- 1.2.1: Register update
+    - Change backend from a stack-based one to a register and stack-based one
+    - Add break/continue
+    - Add `[:x]` syntax for lists
 - 1.2.0: WASM update
     - Add WASM support
     - Add first class functions

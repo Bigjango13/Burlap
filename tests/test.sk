@@ -161,11 +161,19 @@ test("str len", len(str), 5);
 # Iter loop tests
 print("*** Iter Loop Tests ***");
 let i = 0;
-loop (j in range(1, 10)) {
+let j = 0;
+loop (j in range(1, 4)) {
     ++i;
     test("i == j", i, j);
 }
-test("i == 10", i, 10);
+test("i == 4", i, 4);
+test("j == 4", j, 4);
+
+i = 0;
+loop (non_existent_var in range(1, 5)) {
+    i += 1;
+    test("new loop var == iter", non_existent_var, i);
+}
 
 # While loop test
 print("*** While Loop Tests ***");
@@ -175,6 +183,26 @@ loop (while i < 6) {
     ++i;
 }
 test("i == 6", i, 6);
+
+# Break/continue
+print("*** Loop Jump Tests ***");
+let even = [];
+loop (i in range(1, 10)) {
+    if i % 2 == 1 {
+        continue;
+    }
+    even += i;
+}
+test("continue", even, [2, 4, 6, 8, 10]);
+
+let accum = 0;
+loop (while 1) {
+    accum += even[accum];
+    if accum > len(even) {
+        break;
+    }
+}
+test("break", accum, 8);
 
 # Import test
 print("*** Import Tests ***");

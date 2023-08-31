@@ -5,6 +5,14 @@ use crate::lexer::{Token, TokenType};
 use TokenType::*;
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct FunctiNode {
+    pub name: String,
+    pub arg_names: Vec<String>,
+    pub body: Box<ASTNode>,
+    pub locals: Vec<String>
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum ASTNode {
     // Expressions
     // String, ("Example")
@@ -36,7 +44,7 @@ pub enum ASTNode {
     // Body, ([Call(Var(print), [String("Hello World")])])
     BodyStmt(Vec<ASTNode>),
     // Function, (foobar, [a, b, c], Body(...))
-    FunctiStmt(String, Vec<String>, Box<ASTNode>),
+    FunctiStmt(Box<FunctiNode>),
     // If/else if, (Binop(x == 1), Body(trueBody), Body(falseBody or nop))
     IfStmt(Box<ASTNode>, Box<ASTNode>, Box<ASTNode>),
     // Let, (x, 47)
@@ -47,6 +55,10 @@ pub enum ASTNode {
     LoopStmt(String, Box<ASTNode>, Box<ASTNode>),
     // While loop, (6 > i, Body(...))
     WhileStmt(Box<ASTNode>, Box<ASTNode>),
+    // Break
+    BreakStmt,
+    // Continue
+    ContinueStmt,
     // ImportStmt, used for the file table as the parser handles imports
     ImportStmt(),
     // EndImportStmt, (filename), used for marking the end of the import
@@ -67,6 +79,7 @@ struct Parser {
     args: Arguments,
     at: usize,
     in_func: bool,
+    in_loop: bool,
     has_err: bool,
     name: String
 }
@@ -149,13 +162,10 @@ fn get_sym(parser: &mut Parser, name: &String, arg_num: i32) -> SymLookupRes {
     return SymLookupRes::Free;
 }
 
-fn check_unique(parser: &mut Parser, name: &String, arg_num: i32) {
+fn _check_unique(parser: &mut Parser, name: &String, arg_num: i32) -> bool {
     let name = &name.clone().split("::").nth(1).unwrap_or(name.as_str()).to_string();
     match get_sym(parser, name, arg_num) {
-        SymLookupRes::TakenByVar => {error!(
-            parser,
-            format!("the name \"{}\" is already taken by a variable", *name).as_str()
-        );},
+        SymLookupRes::TakenByVar => return false,
         SymLookupRes::TakenByFuncti => {error!(
             parser,
             if arg_num == -1 {
@@ -178,6 +188,16 @@ fn check_unique(parser: &mut Parser, name: &String, arg_num: i32) {
             parser.vars.push(name.clone());
         }
     };
+    return true;
+}
+
+fn check_unique(parser: &mut Parser, name: &String, arg_num: i32) {
+    if !_check_unique(parser, name, arg_num) {
+        error!(
+            parser,
+            format!("the name \"{}\" is already taken by a variable", *name).as_str()
+        );
+    }
 }
 
 fn check_name(parser: &mut Parser, name: &String) {
@@ -324,17 +344,23 @@ fn parse_binop_helper(
     return Some(expr);
 }
 
-fn parse_binop_math(parser: &mut Parser) -> Option<ASTNode> {
-    // Math binops, +, -, *, /, %, in
+fn parse_binop_math2(parser: &mut Parser) -> Option<ASTNode> {
+    // Math 2 binops, *, /, %
     parse_binop_helper(parser, vec![
-        Plus, Minus, Times, Div, Modulo, In
+        Times, Div, Modulo
     ], &parse_unary, true)
 }
-fn parse_binop_cmp(parser: &mut Parser) -> Option<ASTNode> {
-    // Compare binops, ==, !=, <, >, <=, >=
+fn parse_binop_math1(parser: &mut Parser) -> Option<ASTNode> {
+    // Math 1 binops, + and -
     parse_binop_helper(parser, vec![
-        EqualsEquals, NotEquals, Lt, Gt, LtEquals, GtEquals
-    ], &parse_binop_math, true)
+        Plus, Minus,
+    ], &parse_binop_math2, true)
+}
+fn parse_binop_cmp(parser: &mut Parser) -> Option<ASTNode> {
+    // Compare binops, ==, !=, <, >, <=, >=, in
+    parse_binop_helper(parser, vec![
+        EqualsEquals, NotEquals, Lt, Gt, LtEquals, GtEquals, In
+    ], &parse_binop_math1, true)
 }
 fn parse_binop_logic(parser: &mut Parser) -> Option<ASTNode> {
     // Logic binops, &&, ||, ^^
@@ -389,9 +415,9 @@ fn parse_list_item(parser: &mut Parser, at: i32) -> (String, Option<ASTNode>) {
             parser.next();
         } else if let Comma | Rbracket = parser.current() {
             // Named indexes don't need values
-            return (name.clone(), Some(ASTNode::VarExpr(
-                parser.name.clone() + "::" + &name
-            )));
+            let var_name = parser.name.clone() + "::" + &name;
+            check_name(parser, &var_name);
+            return (name.clone(), Some(ASTNode::VarExpr(var_name)));
         } else {
             // It's not a named index (`[myvar + 1]`)
             name = at.to_string();
@@ -399,6 +425,9 @@ fn parse_list_item(parser: &mut Parser, at: i32) -> (String, Option<ASTNode>) {
         }
     } else {
         // Use number index
+        if parser.current() == Colon {
+            parser.next();
+        }
         name = at.to_string();
     }
     // Parse value
@@ -521,6 +550,24 @@ fn parse_statement(parser: &mut Parser) -> Option<ASTNode> {
             parser.next();
             Option::None
         },
+        Break => {
+            if !parser.in_loop {
+                error!(parser, "break outside of loop");
+                return Option::None;
+            }
+            parser.next();
+            eat_semicolon!(parser)?;
+            Some(ASTNode::BreakStmt)
+        },
+        Continue => {
+            if !parser.in_loop {
+                error!(parser, "continue outside of loop");
+                return Option::None;
+            }
+            parser.next();
+            eat_semicolon!(parser)?;
+            Some(ASTNode::ContinueStmt)
+        },
         // Return
         Return => parse_return(parser),
         // If
@@ -632,7 +679,13 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
         error!(parser, "expected variable name");
         return Option::None;
     }
-    check_unique(parser, &name, -1);
+    let old_len = parser.vars.len();
+    let extra_stmt = if _check_unique(parser, &name, -1) {
+        // The varibles doesn't exist yet
+        Some(ASTNode::LetStmt(name.clone(), Box::new(ASTNode::NoneExpr)))
+    } else {
+        Option::None
+    };
     parser.next();
     // Obligatory 'in'
     eat!(parser, In, "missing 'in' keyword in loop")?;
@@ -641,13 +694,13 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     // Range optimization
     if let ASTNode::CallExpr(expr, args) = iter.clone() {
         let name = if let ASTNode::VarExpr(n) = *expr {
-            n
+            n.clone().split("::").nth(1).unwrap_or(n.as_str()).to_string()
         } else {
             "".to_string()
         };
         if name == *"range" {
+            // Arg check
             if args.len() != 2 {
-                // Arg check
                 error!(
                     parser,
                     format!("range takes 2 args, not {}", args.len()).as_str()
@@ -656,7 +709,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
             }
             // Use the faster range
             iter = ASTNode::CallExpr(
-                Box::new(ASTNode::VarExpr("__burlap_range".to_string())),
+                Box::new(ASTNode::VarExpr("::__burlap_range".to_string())),
                 args
             );
         }
@@ -665,8 +718,15 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     eat!(parser, Rparan, "missing ')' in loop")?;
     // Body
     let body = parse_body(parser)?;
+    parser.vars.truncate(old_len);
     // Return
-    return Some(ASTNode::LoopStmt(name, Box::new(iter), Box::new(body)));
+    let ret = ASTNode::LoopStmt(name, Box::new(iter), Box::new(body));
+    Some(if let Some(stmt) = extra_stmt {
+        // TODO: Would it be better to pass this off to codegen?
+        ASTNode::BodyStmt(vec![stmt, ret])
+    } else {
+        ret
+    })
 }
 
 fn parse_loop_while(parser: &mut Parser) -> Option<ASTNode> {
@@ -688,11 +748,15 @@ fn parse_loop(parser: &mut Parser) -> Option<ASTNode> {
     // Start parens
     eat!(parser, Lparan, "missing '(' in loop")?;
     // Get the loop type and call the helper
-    return if parser.current() == While {
+    let old_in_loop = parser.in_loop;
+    parser.in_loop = true;
+    let ret = if parser.current() == While {
         parse_loop_while(parser)
     } else {
         parse_loop_iter(parser)
     };
+    parser.in_loop = old_in_loop;
+    return ret;
 }
 
 // Imports
@@ -838,7 +902,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
     parser.next();
     // Args
     eat!(parser, Lparan, "expected '(' at start of argument list")?;
-    let mut args: Vec<String> = vec![];
+    let mut arg_names: Vec<String> = vec![];
     loop {
         if let Rparan = parser.current() {
             break;
@@ -846,7 +910,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         // Arg name
         if let Identifier(n) = parser.current() {
             check_unique(parser, &n, -1);
-            args.push(parser.name.clone() + "::" + &n);
+            arg_names.push(parser.name.clone() + "::" + &n);
             parser.next();
         } else {
             error!(parser, "expected argument name");
@@ -863,7 +927,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         }
     }
     parser.next();
-    check_unique(parser, &name, args.len().try_into().unwrap());
+    check_unique(parser, &name, arg_names.len().try_into().unwrap());
     // Body
     if let Lbrace = parser.current() {} else {
         error!(parser, "expected '{' to start function body");
@@ -877,9 +941,14 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
     parser.in_func = true;
     let body = parse_body(parser);
     parser.in_func = false;
-    parser.vars.truncate(parser.vars.len() - args.len());
+    let locals = parser.vars.split_off(parser.vars.len() - arg_names.len());
     // Return
-    return Some(ASTNode::FunctiStmt(name, args, Box::new(body?)));
+    return Some(ASTNode::FunctiStmt(Box::new(FunctiNode {
+        name,
+        arg_names,
+        body: Box::new(body?),
+        locals,
+    })));
 }
 
 // Main parsing
@@ -905,7 +974,8 @@ pub fn _parse(
     let mut parser = Parser{
         tokens, args: args.clone(), functis, vars,
         at: 0, has_err: false, in_func: false,
-        ast: vec![], name: args.name.clone(),
+        in_loop: false, ast: vec![],
+        name: args.name.clone(),
     };
     // Parse
     while parser.current() != Eof {
