@@ -58,8 +58,6 @@ pub enum Opcode {
     DV,
     // Set Variable ([register "name", register "value"])
     SV,
-    // Declare Or Set variable ([register "name", register "value"])
-    DOS,
 
     // Lists
     // Load Fast List ([dst, u16 size, values on stack])
@@ -317,7 +315,7 @@ impl Vm {
     // Create a variable
     pub fn make_var(
         &mut self, name: &String, val: Value
-    ) -> Result<(), String> {
+    ) {
         // Create
         if self.is_global {
             self.globals.insert(name.clone(), val);
@@ -325,7 +323,6 @@ impl Vm {
             self.var_names.push(name.clone());
             self.var_vals.push(val);
         }
-        Ok(())
     }
 
     // Set a variable
@@ -1189,7 +1186,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             // Get var
             let val = vm.get_reg(b);
             // Declare
-            vm.make_var(&varname, val)?;
+            vm.make_var(&varname, val);
         },
         Opcode::SV => {
             // Get varname
@@ -1200,19 +1197,6 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             let val = vm.get_reg(b);
             // Set
             vm.set_var(&varname, val)?;
-        },
-        Opcode::DOS => {
-            // Get varname
-            let Value::Str(varname) = vm.get_reg(a) else {
-                return Err("variable name must be string".to_string());
-            };
-            // Get value
-            let val = vm.get_reg(b);
-            // Declare
-            if vm.make_var(&varname, val.clone()).is_err() {
-                // Set
-                vm.set_var(&varname, val)?;
-            }
         },
 
         // Binops

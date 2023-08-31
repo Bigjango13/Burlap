@@ -161,11 +161,19 @@ test("str len", len(str), 5);
 # Iter loop tests
 print("*** Iter Loop Tests ***");
 let i = 0;
-loop (j in range(1, 10)) {
+let j = 0;
+loop (j in range(1, 4)) {
     ++i;
     test("i == j", i, j);
 }
-test("i == 10", i, 10);
+test("i == 4", i, 4);
+test("j == 4", j, 4);
+
+i = 0;
+loop (non_existent_var in range(1, 5)) {
+    i += 1;
+    test("new loop var == iter", non_existent_var, i);
+}
 
 # While loop test
 print("*** While Loop Tests ***");

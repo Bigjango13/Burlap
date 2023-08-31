@@ -597,7 +597,7 @@ fn _compile_body(
     // Raise scope
     if !manual_scope && compiler.needs_scope {
         compiler.add_op(Opcode::RS);
-        compiler.program.ops[scope_pos] = Opcode::LEVI as u8 as u32;
+        compiler.program.ops[scope_pos] = (Opcode::LEVI as u8 as u32) << 24;
     }
     compiler.needs_scope = old_needs_scope;
     return Some(());
@@ -671,6 +671,7 @@ fn compile_stmt(
             let iter = compile_expr(compiler, iter)?;
             compiler.add_op_args(Opcode::ITER, iter as u8, iter as u8, 0);
             let item = compiler.alloc_reg();
+
             let old_top = compiler.loop_top;
             let last_size = compiler.break_addrs.len();
             compiler.loop_top = compiler.program.ops.len();
@@ -680,17 +681,13 @@ fn compile_stmt(
             compiler.add_op(Opcode::JMP);
             let jmp_pos = compiler.program.ops.len();
 
-            // Lower scope
-            compiler.add_op(Opcode::LEVI);
-            // Set the loop var
+            // Set loop var
             let varname = compiler.push(Value::Str(var.to_string()));
-            compiler.add_op_args(Opcode::DOS, varname as u8, item as u8, 0);
+            compiler.add_op_args(Opcode::SV, varname as u8, item as u8, 0);
             compiler.free_reg(varname);
 
             // Body
-            compile_body(compiler, args, body, true)?;
-            // Raise scope
-            compiler.add_op(Opcode::RS);
+            compile_body(compiler, args, body, false)?;
             // Backwards jump
             compiler.add_op(Opcode::JMPB);
             compiler.fill_jmp(

@@ -415,9 +415,9 @@ fn parse_list_item(parser: &mut Parser, at: i32) -> (String, Option<ASTNode>) {
             parser.next();
         } else if let Comma | Rbracket = parser.current() {
             // Named indexes don't need values
-            return (name.clone(), Some(ASTNode::VarExpr(
-                parser.name.clone() + "::" + &name
-            )));
+            let var_name = parser.name.clone() + "::" + &name;
+            check_name(parser, &var_name);
+            return (name.clone(), Some(ASTNode::VarExpr(var_name)));
         } else {
             // It's not a named index (`[myvar + 1]`)
             name = at.to_string();
@@ -680,7 +680,12 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
         return Option::None;
     }
     let old_len = parser.vars.len();
-    let _ = _check_unique(parser, &name, -1);
+    let extra_stmt = if _check_unique(parser, &name, -1) {
+        // The varibles doesn't exist yet
+        Some(ASTNode::LetStmt(name.clone(), Box::new(ASTNode::NoneExpr)))
+    } else {
+        Option::None
+    };
     parser.next();
     // Obligatory 'in'
     eat!(parser, In, "missing 'in' keyword in loop")?;
@@ -715,7 +720,13 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     let body = parse_body(parser)?;
     parser.vars.truncate(old_len);
     // Return
-    return Some(ASTNode::LoopStmt(name, Box::new(iter), Box::new(body)));
+    let ret = ASTNode::LoopStmt(name, Box::new(iter), Box::new(body));
+    Some(if let Some(stmt) = extra_stmt {
+        // TODO: Would it be better to pass this off to codegen?
+        ASTNode::BodyStmt(vec![stmt, ret])
+    } else {
+        ret
+    })
 }
 
 fn parse_loop_while(parser: &mut Parser) -> Option<ASTNode> {
