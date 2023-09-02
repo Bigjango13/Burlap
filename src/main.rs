@@ -41,7 +41,7 @@ use cfg_mod::*;
 
 use crate::compiler::{compile, Compiler};
 use crate::lexer::lex;
-use crate::parser::{parse, ASTNode};
+use crate::parser::{parse, StmtNode};
 use crate::vm::{run, Vm};
 
 #[derive(Clone)]
@@ -67,7 +67,7 @@ impl Arguments {
     }
 }
 
-pub fn to_ast(args: &mut Arguments, functis: Option<&mut Vec<(String, i32)>>) -> Option<Vec<ASTNode>> {
+pub fn to_ast(args: &mut Arguments, functis: Option<&mut Vec<(String, i32)>>) -> Option<Vec<StmtNode>> {
     // Lex
     let Some(tokens) = lex(
         &args.source, args.name.clone(), true,

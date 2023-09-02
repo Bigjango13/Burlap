@@ -8,7 +8,7 @@ use TokenType::*;
 pub struct FunctiNode {
     pub name: String,
     pub arg_names: Vec<String>,
-    pub body: Box<ASTNode>,
+    pub body: Box<StmtNode>,
     pub locals: Vec<String>
 }
 
@@ -42,25 +42,25 @@ pub enum ASTNode {
 
     // Statements
     // Body, ([Call(Var(print), [String("Hello World")])])
-    BodyStmt(Vec<ASTNode>),
+    BodyStmt(Vec<StmtNode>),
     // Function, (foobar, [a, b, c], Body(...))
-    FunctiStmt(Box<FunctiNode>),
+    FunctiStmt(FunctiNode),
     // If/else if, (Binop(x == 1), Body(trueBody), Body(falseBody or nop))
-    IfStmt(Box<ASTNode>, Box<ASTNode>, Box<ASTNode>),
+    IfStmt(Box<ASTNode>, Box<StmtNode>, Box<StmtNode>),
     // Let, (x, 47)
     LetStmt(String, Box<ASTNode>),
     // Return, ("Return Val")
     ReturnStmt(Box<ASTNode>),
-    // Iter loop, (i, range(0, 100), Body(...))
-    LoopStmt(String, Box<ASTNode>, Box<ASTNode>),
+    // Iter loop, (i, range(0, 100), Body(...), already_defined)
+    LoopStmt(String, Box<ASTNode>, Box<StmtNode>, bool),
     // While loop, (6 > i, Body(...))
-    WhileStmt(Box<ASTNode>, Box<ASTNode>),
+    WhileStmt(Box<ASTNode>, Box<StmtNode>),
     // Break
     BreakStmt,
     // Continue
     ContinueStmt,
     // ImportStmt, used for the file table as the parser handles imports
-    ImportStmt(),
+    ImportStmt,
     // EndImportStmt, (filename), used for marking the end of the import
     EndImportStmt(String),
 
@@ -69,11 +69,24 @@ pub enum ASTNode {
     Nop,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct StmtNode {
+    pub node: ASTNode,
+    pub line: usize
+}
+
+fn into_stmt(call: fn(&mut Parser) -> Option<ASTNode>, parser: &mut Parser) -> Option<StmtNode> {
+    let line = parser.tokens[parser.at].stream.line;
+    Some(StmtNode {
+        line, node: call(parser)?
+    })
+}
+
 // Parser state
 pub type VecFunctis = Vec<(String, i32)>;
 struct Parser {
     tokens: Vec<Token>,
-    ast: Vec<ASTNode>,
+    ast: Vec<StmtNode>,
     functis: VecFunctis,
     vars: Vec<String>,
     args: Arguments,
@@ -527,8 +540,9 @@ fn parse_base_expr(parser: &mut Parser) -> Option<ASTNode> {
 }
 
 // Statements
-fn parse_statement(parser: &mut Parser) -> Option<ASTNode> {
-    return match parser.current() {
+fn parse_statement(parser: &mut Parser) -> Option<StmtNode> {
+    let line = parser.tokens[parser.at].stream.line;
+    let node = match parser.current() {
         // Bodies
         Lbrace => parse_body(parser),
         Rbrace => {
@@ -553,20 +567,22 @@ fn parse_statement(parser: &mut Parser) -> Option<ASTNode> {
         Break => {
             if !parser.in_loop {
                 error!(parser, "break outside of loop");
-                return Option::None;
+                Option::None
+            } else {
+                parser.next();
+                eat_semicolon!(parser)?;
+                Some(ASTNode::BreakStmt)
             }
-            parser.next();
-            eat_semicolon!(parser)?;
-            Some(ASTNode::BreakStmt)
         },
         Continue => {
             if !parser.in_loop {
                 error!(parser, "continue outside of loop");
-                return Option::None;
+                Option::None
+            } else {
+                parser.next();
+                eat_semicolon!(parser)?;
+                Some(ASTNode::ContinueStmt)
             }
-            parser.next();
-            eat_semicolon!(parser)?;
-            Some(ASTNode::ContinueStmt)
         },
         // Return
         Return => parse_return(parser),
@@ -586,9 +602,10 @@ fn parse_statement(parser: &mut Parser) -> Option<ASTNode> {
         // Semicolons
         Semicolon => {
             if parser.next() == Eof {
-                return Option::None;
-            };
-            parse_statement(parser)
+                Option::None
+            } else {
+                Some(parse_statement(parser)?.node)
+            }
         }
         // EOF
         Eof => {
@@ -601,7 +618,11 @@ fn parse_statement(parser: &mut Parser) -> Option<ASTNode> {
             eat_semicolon!(parser)?;
             Some(ret)
         }
-    }
+    }?;
+    // Put the node and line together
+    return Some(StmtNode {
+        node, line
+    });
 }
 
 // Bodies
@@ -609,7 +630,7 @@ fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
     // Start
     eat!(parser, Lbrace, "expected { to start body")?;
     // Middle
-    let mut body: Vec<ASTNode> = vec![];
+    let mut body: Vec<StmtNode> = vec![];
     let mut err = false;
     let old_len = parser.vars.len();
     loop {
@@ -625,7 +646,7 @@ fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
             err = true;
             continue;
         };
-        if stmt != ASTNode::Nop {
+        if stmt.node != ASTNode::Nop {
             body.push(stmt);
         }
     }
@@ -649,18 +670,18 @@ fn parse_if(parser: &mut Parser) -> Option<ASTNode> {
     // Condition
     let cond = parse_expr(parser)?;
     // Body
-    let body = parse_body(parser)?;
+    let body = into_stmt(parse_body, parser)?;
     // Else
     let else_body = if let Else = parser.current() {
         match parser.next() {
-            If => parse_if(parser),
-            _ => parse_body(parser)
+            If => into_stmt(parse_if, parser),
+            _ => into_stmt(parse_body, parser)
         }?
     } else {
-        ASTNode::Nop
+        StmtNode { line: parser.tokens[parser.at].stream.line, node: ASTNode::Nop }
     };
     // Nops
-    if body == ASTNode::Nop && else_body == ASTNode::Nop {
+    if body.node == ASTNode::Nop && else_body.node == ASTNode::Nop {
         return Some(cond);
     }
     // Return
@@ -680,12 +701,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
         return Option::None;
     }
     let old_len = parser.vars.len();
-    let extra_stmt = if _check_unique(parser, &name, -1) {
-        // The varibles doesn't exist yet
-        Some(ASTNode::LetStmt(name.clone(), Box::new(ASTNode::NoneExpr)))
-    } else {
-        Option::None
-    };
+    let already_defined = !_check_unique(parser, &name, -1);
     parser.next();
     // Obligatory 'in'
     eat!(parser, In, "missing 'in' keyword in loop")?;
@@ -717,16 +733,10 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     // End parens
     eat!(parser, Rparan, "missing ')' in loop")?;
     // Body
-    let body = parse_body(parser)?;
+    let body = into_stmt(parse_body, parser)?;
     parser.vars.truncate(old_len);
     // Return
-    let ret = ASTNode::LoopStmt(name, Box::new(iter), Box::new(body));
-    Some(if let Some(stmt) = extra_stmt {
-        // TODO: Would it be better to pass this off to codegen?
-        ASTNode::BodyStmt(vec![stmt, ret])
-    } else {
-        ret
-    })
+    Some(ASTNode::LoopStmt(name, Box::new(iter), Box::new(body), already_defined))
 }
 
 fn parse_loop_while(parser: &mut Parser) -> Option<ASTNode> {
@@ -737,7 +747,7 @@ fn parse_loop_while(parser: &mut Parser) -> Option<ASTNode> {
     // End parens
     eat!(parser, Rparan, "missing ')' in loop")?;
     // Body
-    let body = parse_body(parser)?;
+    let body = into_stmt(parse_body, parser)?;
     // Return
     return Some(ASTNode::WhileStmt(Box::new(cond), Box::new(body)));
 }
@@ -760,7 +770,7 @@ fn parse_loop(parser: &mut Parser) -> Option<ASTNode> {
 }
 
 // Imports
-fn parse_import(parser: &mut Parser) -> Option<(String, Vec<ASTNode>)> {
+fn parse_import(parser: &mut Parser) -> Option<(String, Vec<StmtNode>)> {
     // Eat import
     parser.next();
     // The parens part 1
@@ -939,23 +949,23 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         return Option::None;
     }
     parser.in_func = true;
-    let body = parse_body(parser);
+    let body = into_stmt(parse_body, parser);
     parser.in_func = false;
     let locals = parser.vars.split_off(parser.vars.len() - arg_names.len());
     // Return
-    return Some(ASTNode::FunctiStmt(Box::new(FunctiNode {
+    return Some(ASTNode::FunctiStmt(FunctiNode {
         name,
         arg_names,
         body: Box::new(body?),
         locals,
-    })));
+    }));
 }
 
 // Main parsing
 pub fn parse(
     tokens: Vec<Token>,
     args: &Arguments
-) -> Option<(Vec<ASTNode>, VecFunctis)> {
+) -> Option<(Vec<StmtNode>, VecFunctis)> {
     let res = _parse(tokens, args, vec![], vec![])?;
     return Some((res.0, res.1));
 }
@@ -965,7 +975,7 @@ pub fn _parse(
     args: &Arguments,
     functis: VecFunctis,
     vars: Vec<String>
-) -> Option<(Vec<ASTNode>, VecFunctis, Vec<String>)> {
+) -> Option<(Vec<StmtNode>, VecFunctis, Vec<String>)> {
     if tokens.is_empty() {
         return Some((vec![], vec![], vec![]));
     }
@@ -982,9 +992,9 @@ pub fn _parse(
         // Import must be highest scope
         if parser.current() == Import {
             if let Some((path, mut imported_ast)) = parse_import(&mut parser) {
-                parser.ast.push(ASTNode::ImportStmt());
+                parser.ast.push(StmtNode{node: ASTNode::ImportStmt, line: usize::MAX});
                 parser.ast.append(&mut imported_ast);
-                parser.ast.push(ASTNode::EndImportStmt(path));
+                parser.ast.push(StmtNode{node: ASTNode::EndImportStmt(path), line: usize::MAX});
             } else {
                 parser.has_err = true;
             };

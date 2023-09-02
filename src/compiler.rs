@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use crate::Arguments;
 use crate::common::IMPOSSIBLE_STATE;
 use crate::lexer::TokenType;
-use crate::parser::{ASTNode, ASTNode::*};
+use crate::parser::{ASTNode, ASTNode::*, StmtNode};
 use crate::value::Value;
 use crate::vm::Opcode;
 
@@ -19,7 +19,7 @@ pub struct Program {
     pub path: PathBuf,
 
     // Side tables
-    line_table: Vec<(u32, u32, u32)>,
+    line_table: Vec<(u32, u32, usize)>,
     file_table: Vec<(u32, u32, String)>,
 }
 
@@ -46,7 +46,7 @@ impl Program {
         ).and_then(|x| Ok(table[x].2.clone())).ok()
     }
 
-    pub fn get_info(&mut self, index: u32) -> (u32, String) {
+    pub fn get_info(&mut self, index: u32) -> (usize, String) {
         let file = Self::bin_range(index, &self.file_table)
             .unwrap_or("Unknown File".to_string());
         let line = Self::bin_range(index, &self.line_table)
@@ -581,7 +581,7 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
 
 fn _compile_body(
     compiler: &mut Compiler, args: &mut Arguments,
-    nodes: &Vec<ASTNode>, manual_scope: bool
+    nodes: &Vec<StmtNode>, manual_scope: bool
 ) -> Option<()> {
     // Lower scope
     let scope_pos = compiler.program.ops.len();
@@ -603,10 +603,10 @@ fn _compile_body(
     return Some(());
 }
 fn compile_body(
-    compiler: &mut Compiler, args: &mut Arguments, node: &ASTNode, manual_scope: bool
+    compiler: &mut Compiler, args: &mut Arguments, node: &StmtNode, manual_scope: bool
 ) -> Option<()> {
-    let BodyStmt(nodes) = node else {
-        if *node == Nop {
+    let BodyStmt(ref nodes) = node.node else {
+        if node.node == Nop {
             return Some(());
         }
         panic!("compile_body got non-body node!");
@@ -615,9 +615,9 @@ fn compile_body(
 }
 
 fn compile_stmt(
-    compiler: &mut Compiler, args: &mut Arguments, node: &ASTNode, dirty: bool
+    compiler: &mut Compiler, args: &mut Arguments, node: &StmtNode, dirty: bool
 ) -> Option<()> {
-    match node {
+    match &node.node {
         // Statements
         LetStmt(name, val) => {
             let vreg = compile_expr(compiler, val)?;
@@ -632,7 +632,7 @@ fn compile_stmt(
             let cond = compile_expr(compiler, cond)?;
 
             // This is for when boolean not is forgotten
-            if **body == Nop {
+            if body.node == Nop {
                 compiler.add_op_args(Opcode::NOT, cond as u8, cond as u8, 0);
                 // Push the jump offset (which will be filled later)
                 compiler.add_op(Opcode::JMPNT);
@@ -651,7 +651,7 @@ fn compile_stmt(
             compile_body(compiler, args, body, false)?;
 
             // The else
-            if **else_part != Nop {
+            if else_part.node != Nop {
                 // Prep exit offset
                 compiler.add_op(Opcode::JMP);
                 let exit_pos = compiler.program.ops.len();
@@ -666,7 +666,7 @@ fn compile_stmt(
             }
             compiler.free_reg(cond);
         },
-        LoopStmt(var, iter, body) => {
+        LoopStmt(var, iter, body, old_var) => {
             // Load iter
             let iter = compile_expr(compiler, iter)?;
             compiler.add_op_args(Opcode::ITER, iter as u8, iter as u8, 0);
@@ -683,11 +683,16 @@ fn compile_stmt(
 
             // Set loop var
             let varname = compiler.push(Value::Str(var.to_string()));
-            compiler.add_op_args(Opcode::SV, varname as u8, item as u8, 0);
+            if *old_var {
+                compiler.add_op_args(Opcode::SV, varname as u8, item as u8, 0);
+            } else {
+                compiler.add_op(Opcode::LEVI);
+                compiler.add_op_args(Opcode::DV, varname as u8, item as u8, 0);
+            }
             compiler.free_reg(varname);
 
             // Body
-            compile_body(compiler, args, body, false)?;
+            compile_body(compiler, args, body, !*old_var)?;
             // Backwards jump
             compiler.add_op(Opcode::JMPB);
             compiler.fill_jmp(
@@ -706,6 +711,9 @@ fn compile_stmt(
             compiler.free_reg(iter);
             if iter == Reg::Stack {
                 compiler.add_op(Opcode::POP);
+            }
+            if !*old_var {
+                compiler.add_op(Opcode::RS);
             }
             compiler.free_reg(item);
         },
@@ -748,7 +756,7 @@ fn compile_stmt(
             compiler.add_op(Opcode::JMPB);
             compiler.fill_jmp(compiler.program.ops.len(), compiler.program.ops.len() - compiler.loop_top - 1, None);
         },
-        BodyStmt(nodes) => return _compile_body(compiler, args, nodes, false),
+        BodyStmt(nodes) => return _compile_body(compiler, args, &nodes, false),
         FunctiStmt(node) => {
             // Jump around function
             compiler.add_op(Opcode::JMP);
@@ -815,7 +823,7 @@ fn compile_stmt(
             // Return return value
             compiler.add_op(Opcode::RET);
         },
-        ImportStmt() => {
+        ImportStmt => {
             compiler.program.file_table.push((
                 compiler.inc_start, compiler.program.ops.len() as u32, args.name.clone()
             ));
@@ -842,7 +850,7 @@ fn compile_stmt(
             }
         },
         _ => {
-            let reg = compile_expr(compiler, node)?;
+            let reg = compile_expr(compiler, &node.node)?;
             if !dirty {
                 // Remove unused values from the stack
                 if reg == Reg::Stack {
@@ -859,7 +867,7 @@ fn compile_stmt(
 }
 
 pub fn compile(
-    ast: Vec<ASTNode>, args: &mut Arguments, compiler: &mut Compiler
+    ast: Vec<StmtNode>, args: &mut Arguments, compiler: &mut Compiler
 ) -> bool {
     if ast.is_empty() {
         return true;
