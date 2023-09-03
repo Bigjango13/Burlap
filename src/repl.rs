@@ -252,7 +252,7 @@ pub fn repl(args: &mut Arguments) {
             vars.append(&mut new_vars);
             if args.is_debug {
                 // Debug print ast
-                println!("Ast: {:?}", ast);
+                //println!("Ast: {:?}", ast);
             }
             // Compile
             if !compile(ast, args, &mut compiler) {

@@ -86,7 +86,7 @@ pub fn to_ast(args: &mut Arguments, functis: Option<&mut Vec<(String, i32)>>) ->
     }
     if args.is_debug {
         // Debug print ast
-        println!("Ast: {:?}", ast);
+        //println!("Ast: {:?}", ast);
     }
     return Some(ast);
 }

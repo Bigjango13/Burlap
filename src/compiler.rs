@@ -79,6 +79,10 @@ pub struct Compiler {
     needs_args: bool,
     // Where in the byte code the current file started
     inc_start: u32,
+    // Where in the byte code for current line started
+    line_start: u32,
+    // The current line
+    old_line: usize,
     // Registers
     regs: [bool; 17],
     // Break addresses (so the jump can be filled)
@@ -92,11 +96,11 @@ pub struct Compiler {
 impl Compiler {
     pub fn new() -> Compiler {
         Compiler {
-            program: Program::new(),
+            program: Program::new(), old_line: 0,
             needs_scope: false, inc_start: 0,
             regs: [true; 17], needs_args: false,
             break_addrs: vec![], loop_top: 0,
-            on_stack_only: false,
+            on_stack_only: false, line_start: 0,
         }
     }
 
@@ -617,6 +621,13 @@ fn compile_body(
 fn compile_stmt(
     compiler: &mut Compiler, args: &mut Arguments, node: &StmtNode, dirty: bool
 ) -> Option<()> {
+    if node.line != compiler.old_line {
+        compiler.program.line_table.push((
+            compiler.line_start, compiler.program.ops.len() as u32, compiler.old_line
+        ));
+        compiler.line_start = compiler.program.ops.len() as u32;
+        compiler.old_line = node.line;
+    }
     match &node.node {
         // Statements
         LetStmt(name, val) => {
@@ -881,7 +892,8 @@ pub fn compile(
     }
     // If repl, compile the last value without cleaning up
     // Else just compile normally
-    if !compile_stmt(compiler, args, ast.last().unwrap(), args.is_repl).is_some() {
+    let last = ast.last().unwrap();
+    if !compile_stmt(compiler, args, last, args.is_repl).is_some() {
         return false;
     }
     // Jumps go onto the next instruction, so a nop is needed at the end
@@ -889,6 +901,9 @@ pub fn compile(
     // End file
     compiler.program.file_table.push((
         compiler.inc_start, compiler.program.ops.len() as u32, args.name.clone()
+    ));
+    compiler.program.line_table.push((
+        compiler.line_start, compiler.program.ops.len() as u32, last.line
     ));
     return true;
 }

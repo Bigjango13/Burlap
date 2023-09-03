@@ -1307,17 +1307,18 @@ pub fn run(vm: &mut Vm) -> bool {
         return true;
     }
     vm.stack = vec![];
-    if vm.args.is_debug {
+    /*if vm.args.is_debug {
         println!("Consts: {:?}", vm.program.consts);
         println!("Ops: {:?}", vm.program.ops);
-    }
+    }*/
     loop {
         if vm.args.is_debug {
             // Print debugging info
             let opcode = vm.cur_opcode();
+            let (line, filename) = vm.program.get_info(vm.at as u32);
             println!(
-                "{}: {:?}({}, {}, {})",
-                vm.at,
+                "{}:{}: {:?}({}, {}, {})",
+                filename, line,
                 opcode.0, opcode.1, opcode.2, opcode.3
             );
         }

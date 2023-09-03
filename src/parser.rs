@@ -991,10 +991,11 @@ pub fn _parse(
     while parser.current() != Eof {
         // Import must be highest scope
         if parser.current() == Import {
+            let line = parser.tokens[parser.at].stream.line;
             if let Some((path, mut imported_ast)) = parse_import(&mut parser) {
-                parser.ast.push(StmtNode{node: ASTNode::ImportStmt, line: usize::MAX});
+                parser.ast.push(StmtNode{node: ASTNode::ImportStmt, line});
                 parser.ast.append(&mut imported_ast);
-                parser.ast.push(StmtNode{node: ASTNode::EndImportStmt(path), line: usize::MAX});
+                parser.ast.push(StmtNode{node: ASTNode::EndImportStmt(path), line});
             } else {
                 parser.has_err = true;
             };
