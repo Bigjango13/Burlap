@@ -51,7 +51,7 @@ pub struct Arguments {
     path: PathBuf,
     is_debug: bool,
     is_repl: bool,
-    format: bool,
+    backtrace: bool,
     extensions: Vec<String>,
     program_args: Vec<String>
 }
@@ -61,8 +61,8 @@ impl Arguments {
         Arguments {
             source: "".to_string(), is_debug: false,
             is_repl: true, extensions: vec!["color".to_string()],
-            name: "<stdin>".to_string(), format: false,
-            program_args: vec![], path: PathBuf::from(".")
+            name: "<stdin>".to_string(), backtrace: false,
+            program_args: vec![], path: PathBuf::from("."),
         }
     }
 }
@@ -119,12 +119,12 @@ fn get_args() -> Result<Arguments, bool> {
         } else if arg == "--no-color" {
             // Color is always the first argument
             args.extensions.remove(0);
-        } else if arg == "-f" || arg == "--format" {
-            // Format
-            args.format = true;
         } else if arg == "-d" || arg == "--debug" {
             // Debug
             args.is_debug = true;
+        } else if arg == "-b" || arg == "--backtrace" {
+            // Backtrace
+            args.backtrace = true;
         } else if arg == "-h" || arg == "--help" {
             // Print help
             println!("Burlap v{}", env!("CARGO_PKG_VERSION"));
@@ -138,8 +138,8 @@ fn get_args() -> Result<Arguments, bool> {
             println!("\t--use-X\tenables X feature");
             println!("\t--use-all\tenables all features");
             println!("\t- [command]\truns [command]");
-            //println!("\t-f --format\tformat the file instead of running");
             println!("\t-d --debug\truns in debug mode");
+            println!("\t-b --backtrace\tprints backtrace on runtime errors");
             println!();
             println!(
                 "Thank you for using burlap! {}{}",
@@ -207,13 +207,6 @@ fn main() {
     if args.is_repl {
         #[cfg(feature = "repl")]
         {
-            if args.format {
-                print_err(
-                    "formatting requires a file", ErrType::Err,
-                    args.extensions.contains(&"color".to_string())
-                );
-                exit(1);
-            }
             // Repl
             repl(&mut args);
         }

@@ -1306,6 +1306,7 @@ pub fn run(vm: &mut Vm) -> bool {
     if vm.program.ops.is_empty() {
         return true;
     }
+    vm.call_frames = vec![];
     vm.stack = vec![];
     /*if vm.args.is_debug {
         println!("Consts: {:?}", vm.program.consts);
@@ -1325,7 +1326,16 @@ pub fn run(vm: &mut Vm) -> bool {
         // Run
         if let Err(s) = exec_next(vm) {
             let (line, filename) = vm.program.get_info(vm.at as u32);
-            println!("Runtime Error in {}:{}: {}", filename, line, s);
+            println!("Runtime Error at {}:{}: {}", filename, line, s);
+
+            // Backtrace
+            if vm.args.backtrace {
+                for i in vm.call_frames.iter().rev() {
+                    let (line, filename) = vm.program.get_info(i.return_addr as u32 + 1);
+                    println!("Triggered by call at {}:{}", filename, line);
+                }
+            }
+
             vm.at = vm.program.ops.len() - 1;
             return false;
         }

@@ -490,7 +490,7 @@ impl_op_ex!(/ |left: &Value, right: &Value| -> Result<Value, String> {
     do_op!(
         left, right, /,
         Err(format!(
-            "Cannot modulo {} and {}",
+            "Cannot divide {} and {}",
             left.get_type(),
             right.get_type()
         ))
