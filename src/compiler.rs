@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use crate::Arguments;
 use crate::common::IMPOSSIBLE_STATE;
 use crate::lexer::TokenType;
-use crate::parser::{ASTNode, ASTNode::*, StmtNode};
+use crate::parser::{ASTNode, ASTNode::*, StmtNode, AST};
 use crate::value::Value;
 use crate::vm::Opcode;
 
@@ -26,7 +26,7 @@ pub struct Program {
 impl Program {
     // Init
     pub fn new() -> Program {
-        Program{
+        Program {
             ops: vec![], consts: vec![],
             functis: Vec::new(),
             path: PathBuf::from("."),
@@ -72,23 +72,28 @@ fn to_reg(i: u8) -> Reg {
 pub struct Compiler {
     pub program: Program,
 
-    // Compiler info
+    // Variables
     // If RS and LEVI are needed
     needs_scope: bool,
     // If VARG and CARG are needed
     needs_args: bool,
+
+    // Side tables
     // Where in the byte code the current file started
     inc_start: u32,
     // Where in the byte code for current line started
     line_start: u32,
     // The current line
     old_line: usize,
-    // Registers
-    regs: [bool; 17],
+
+    // Loops
     // Break addresses (so the jump can be filled)
     break_addrs: Vec<usize>,
     // Loop top (so continue can be filled)
     loop_top: usize,
+
+    // Registers
+    regs: [bool; 17],
     // Limits registers to just the stack
     on_stack_only: bool,
 }
@@ -234,7 +239,6 @@ impl Compiler {
         *op += (i & 255 << 0) as u32;
     }
 }
-
 
 fn compile_unary(
     compiler: &mut Compiler,
@@ -878,21 +882,21 @@ fn compile_stmt(
 }
 
 pub fn compile(
-    ast: Vec<StmtNode>, args: &mut Arguments, compiler: &mut Compiler
+    ast: &AST, args: &mut Arguments, compiler: &mut Compiler
 ) -> bool {
-    if ast.is_empty() {
+    if ast.nodes.is_empty() {
         return true;
     }
     compiler.inc_start = compiler.program.ops.len() as u32;
     // Compile
-    for node in &ast[..ast.len()-1] {
+    for node in &ast.nodes[..ast.nodes.len()-1] {
         if !compile_stmt(compiler, args, node, false).is_some() {
             return false;
         }
     }
     // If repl, compile the last value without cleaning up
     // Else just compile normally
-    let last = ast.last().unwrap();
+    let last = ast.nodes.last().unwrap();
     if !compile_stmt(compiler, args, last, args.is_repl).is_some() {
         return false;
     }

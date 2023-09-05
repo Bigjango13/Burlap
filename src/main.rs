@@ -41,7 +41,7 @@ use cfg_mod::*;
 
 use crate::compiler::{compile, Compiler};
 use crate::lexer::lex;
-use crate::parser::{parse, StmtNode};
+use crate::parser::{parse, AST};
 use crate::vm::{run, Vm};
 
 #[derive(Clone)]
@@ -67,28 +67,15 @@ impl Arguments {
     }
 }
 
-pub fn to_ast(args: &mut Arguments, functis: Option<&mut Vec<(String, i32)>>) -> Option<Vec<StmtNode>> {
+pub fn to_ast(args: &mut Arguments) -> Option<AST> {
     // Lex
-    let Some(tokens) = lex(
+    let tokens = lex(
         &args.source, args.name.clone(), true,
         args.extensions.contains(&"color".to_string()),
-    ) else {
-        return None;
-    };
+    )?;
     args.source = "".to_string();
     // Parse
-    let Some((ast, mut new_functis)) = parse(tokens, args) else {
-        return None;
-    };
-    if functis != None {
-        // Add to function list
-        functis.unwrap().append(&mut new_functis);
-    }
-    if args.is_debug {
-        // Debug print ast
-        //println!("Ast: {:?}", ast);
-    }
-    return Some(ast);
+    return parse(AST::new(), tokens, args);
 }
 
 #[cfg(not(target_family = "wasm"))]
@@ -218,14 +205,14 @@ fn main() {
     } else {
         args.path = PathBuf::from(args.name.clone());
         // Execute file
-        let Some(ast) = to_ast(&mut args, None) else {
+        let Some(ast) = to_ast(&mut args) else {
             exit(1);
         };
         let mut compiler = Compiler::new();
         // Fix import path
         compiler.program.path = args.path.clone();
         compiler.program.path.pop();
-        if !compile(ast, &mut args, &mut compiler) {
+        if !compile(&ast, &mut args, &mut compiler) {
             exit(1);
         }
         // Run
@@ -254,7 +241,7 @@ pub fn burlap_run(src: &str) -> bool {
         THE_SOURCE = Some(src.to_string());
         args.source = THE_SOURCE.as_ref().unwrap().clone();
     }
-    let Some(ast) = to_ast(&mut args, None) else {
+    let Some(ast) = to_ast(&mut args) else {
         return false;
     };
     let mut vm = Vm::new(args.clone());

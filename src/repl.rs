@@ -1,7 +1,7 @@
 use crate::vm::{run, Vm};
 #[cfg(feature = "fancyrepl")]
 use crate::lexer::{lex, TokenType};
-use crate::parser::{VecFunctis, _parse};
+use crate::parser::{parse, AST};
 use crate::compiler::{compile, Compiler, Program};
 use crate::common::{print_err, ErrType};
 use crate::Arguments;
@@ -186,26 +186,35 @@ pub fn get_repl_line() -> &'static mut String {
 pub fn repl(args: &mut Arguments) {
     // Print welcome msg
     println!("Burlap v{}", env!("CARGO_PKG_VERSION"));
+
+    // Set everything up
+    let mut ast = AST::new();
     let mut compiler = Compiler::new();
     let mut vm = Vm::new(args.clone(), Program::new());
     #[cfg(feature = "fancyrepl")]
-    let mut rl = Editor::new().unwrap();
+    let mut rl = {
+        // Use a fancy repl
+        let mut rl = Editor::new().unwrap();
+        // Helpers
+        rl.set_helper(Some(FancyRepl{
+            brackets: MatchingBracketValidator::new(),
+            name: args.name.clone(),
+            color: args.extensions.contains(&"color".to_string()),
+            symbols: vm.get_symbols(true)
+        }));
+        rl
+    };
+    // Don't use a fancy repl
     #[cfg(not(feature = "fancyrepl"))]
     let mut rl = DefaultEditor::new().unwrap();
-    #[cfg(feature = "fancyrepl")]
-    // Helpers
-    rl.set_helper(Some(FancyRepl{
-        brackets: MatchingBracketValidator::new(),
-        name: args.name.clone(),
-        color: args.extensions.contains(&"color".to_string()),
-        symbols: vm.get_symbols(true)
-    }));
+
     // Try to get the home dir
     let hist_file = match home_dir() {
         Some(path) =>
             path.into_os_string().into_string().unwrap() + "/.burlap_history",
         None => "".to_string(),
     };
+
     // Load history
     if !hist_file.is_empty() && rl.load_history(&hist_file).is_err() {
         let color = args.extensions.contains(&"color".to_string());
@@ -215,9 +224,8 @@ pub fn repl(args: &mut Arguments) {
             ErrType::Hint, color
         );
     };
+
     // REPL loop
-    let mut functis: VecFunctis = vec![];
-    let mut vars: Vec<String> = vec![];
     loop {
         // Get input
         let readline = rl.readline(">> ");
@@ -243,19 +251,16 @@ pub fn repl(args: &mut Arguments) {
             };
             args.source = "".to_string();
             // Get AST
-            let Some((ast, mut new_functis, mut new_vars))
-                = _parse(tokens, args, functis.clone(), vars.clone())
-            else {
+            let Some(new_ast) = parse(ast.clone(), tokens, args) else {
                 continue;
             };
-            functis.append(&mut new_functis);
-            vars.append(&mut new_vars);
-            if args.is_debug {
+            ast = new_ast;
+            /*if args.is_debug {
                 // Debug print ast
-                //println!("Ast: {:?}", ast);
-            }
+                println!("Ast: {:?}", ast);
+            }*/
             // Compile
-            if !compile(ast, args, &mut compiler) {
+            if !compile(&ast, args, &mut compiler) {
                 continue;
             }
             // Reset file name (imports mess it up during compiling)
