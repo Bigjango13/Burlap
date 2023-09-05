@@ -150,9 +150,9 @@ impl std::fmt::Debug for Token {
 }
 
 pub fn lex(
-    src: &String, name: String, print_err: bool, color: bool
+    src: &str, name: String, print_err: bool, color: bool
 ) -> Option<Vec<Token>> {
-    let mut lex = TokenType::lexer(src.as_str());
+    let mut lex = TokenType::lexer(src);
     let mut ret: Vec<Token> = vec![];
     // Lines
     let lines = src.lines().collect::<Vec<&str>>();

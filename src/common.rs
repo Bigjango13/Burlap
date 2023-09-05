@@ -61,7 +61,7 @@ pub fn print_err(msg: &str, errtype: ErrType, color: bool) -> String {
         ErrType::Hint => ("\x1b[1;36m", "hint"),
     };
     if color {
-        println!("{}{}:\x1b[0m {}", color_code.clone(), name, msg);
+        println!("{}{}:\x1b[0m {}", color_code, name, msg);
         return color_code.to_string();
     } else {
         println!("{}: {}", name, msg);
@@ -188,7 +188,7 @@ pub fn get_builtins(extended: bool) -> &'static Vec<(String, i32)> {
     unsafe {
         static mut BUILTINS: Option<Vec<(String, i32)>> = None;
         static mut EXTENDED: bool = false;
-        if BUILTINS == None || EXTENDED != extended {
+        if BUILTINS.is_none() || EXTENDED != extended {
             EXTENDED = extended;
             BUILTINS = Some(_get_builtins(extended));
         }

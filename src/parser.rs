@@ -82,9 +82,11 @@ fn into_stmt(call: fn(&mut Parser) -> Option<ASTNode>, parser: &mut Parser) -> O
     })
 }
 
-// The AST itself
 pub type VecFunctis = Vec<(String, i32)>;
-#[derive(Debug, PartialEq, Clone)]
+
+// The AST itself
+#[derive(Debug, PartialEq, Clone, Default)]
+#[allow(clippy::upper_case_acronyms)]
 pub struct AST {
     pub functis: VecFunctis,
     pub vars: Vec<String>,
@@ -170,7 +172,7 @@ enum SymLookupRes {
     Free,
 }
 
-fn get_sym(parser: &mut Parser, name: &String, arg_num: i32) -> SymLookupRes {
+fn get_sym(parser: &mut Parser, name: &str, arg_num: i32) -> SymLookupRes {
     // -1 arg_num means name is a variable
     // Check variables
     if parser.ast.vars.iter().any(|n| n == name) {
@@ -191,59 +193,59 @@ fn get_sym(parser: &mut Parser, name: &String, arg_num: i32) -> SymLookupRes {
     return SymLookupRes::Free;
 }
 
-fn _check_unique(parser: &mut Parser, name: &String, arg_num: i32) -> bool {
-    let name = &name.clone().split("::").nth(1).unwrap_or(name.as_str()).to_string();
+fn _check_unique(parser: &mut Parser, name: &str, arg_num: i32) -> bool {
+    let name = name.split("::").nth(1).unwrap_or(name);
     match get_sym(parser, name, arg_num) {
         SymLookupRes::TakenByVar => return false,
         SymLookupRes::TakenByFuncti => {error!(
             parser,
             if arg_num == -1 {
-                format!("the name \"{}\" is already taken by a function", *name)
+                format!("the name \"{}\" is already taken by a function", name)
             } else {
-                format!("cannot overload \"{}\" with the same number of args", *name)
+                format!("cannot overload \"{}\" with the same number of args", name)
             }.as_str()
         );},
         SymLookupRes::TakenByBuiltin => {error!(
             parser,
             if arg_num == -1 {
-                format!("the name \"{}\" is already taken by a builtin function", *name)
+                format!("the name \"{}\" is already taken by a builtin function", name)
             } else {
-                format!("cannot overload \"{}\" as it is a builtin function", *name)
+                format!("cannot overload \"{}\" as it is a builtin function", name)
             }.as_str()
         );},
         SymLookupRes::Free => if arg_num != -1 {
-            parser.ast.functis.push((name.clone(), arg_num));
+            parser.ast.functis.push((name.to_string(), arg_num));
         } else {
-            parser.ast.vars.push(name.clone());
+            parser.ast.vars.push(name.to_string());
         }
     };
     return true;
 }
 
-fn check_unique(parser: &mut Parser, name: &String, arg_num: i32) {
+fn check_unique(parser: &mut Parser, name: &str, arg_num: i32) {
     if !_check_unique(parser, name, arg_num) {
         error!(
             parser,
-            format!("the name \"{}\" is already taken by a variable", *name).as_str()
+            format!("the name \"{}\" is already taken by a variable", name).as_str()
         );
     }
 }
 
-fn check_name(parser: &mut Parser, name: &String) {
-    let name = &name.clone().split("::").nth(1).unwrap_or(name.as_str()).to_string();
+fn check_name(parser: &mut Parser, name: &str) {
+    let name = name.split("::").nth(1).unwrap_or(name);
     match get_sym(parser, name, -1) {
         SymLookupRes::TakenByVar => (),
         SymLookupRes::TakenByFuncti => (),
         SymLookupRes::TakenByBuiltin => (),
         SymLookupRes::Free => {error!(
             parser,
-            format!("\"{}\" is not defined", *name).as_str()
+            format!("\"{}\" is not defined", name).as_str()
         );}
     };
 }
 
-fn check_call(parser: &mut Parser, name: &String, arg_num: i32) {
-    let name = &name.clone().split("::").nth(1).unwrap_or(name.as_str()).to_string();
+fn check_call(parser: &mut Parser, name: &str, arg_num: i32) {
+    let name = name.split("::").nth(1).unwrap_or(name);
     let mut wrong_args = false;
     // Functions
     for (n, a) in &parser.ast.functis {
@@ -276,7 +278,7 @@ fn check_call(parser: &mut Parser, name: &String, arg_num: i32) {
     if wrong_args {
         error!(
             parser,
-            format!("incorrect number of arguments for \"{}\"", *name).as_str()
+            format!("incorrect number of arguments for \"{}\"", name).as_str()
         );
     }
 }
@@ -446,7 +448,7 @@ fn parse_list_item(parser: &mut Parser, at: i32) -> (String, Option<ASTNode>) {
             // Named indexes don't need values
             let var_name = parser.name.clone() + "::" + &name;
             check_name(parser, &var_name);
-            return (name.clone(), Some(ASTNode::VarExpr(var_name)));
+            return (name, Some(ASTNode::VarExpr(var_name)));
         } else {
             // It's not a named index (`[myvar + 1]`)
             name = at.to_string();

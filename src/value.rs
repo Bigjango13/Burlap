@@ -308,11 +308,7 @@ impl Value {
             return None;
         }
         // Number indexing
-        return match l.get(index.to_int() as usize) {
-            // Extract the value and return
-            Some((_, v)) => Some(v.clone()),
-            None => None
-        };
+        return l.get(index.to_int() as usize).map(|(_, v)| v.clone());
     }
     // ==
     pub fn eq(&self, right: &Value) -> bool {
@@ -396,7 +392,7 @@ impl Value {
                 // Compare values
                 for ab in lhs.iter().zip(rhs.iter()) {
                     let (a, b) = ab;
-                    if !a.eq(&b) {
+                    if !a.eq(b) {
                         return false;
                     }
                 }
@@ -417,7 +413,7 @@ impl_op_ex!(+ |left: &Value, right: &Value| -> Result<Value, String> {
         };
         if let Some(vals) = right.values() {
             // Concat
-            for val in vals.clone() {
+            for val in vals {
                 list.push((list.len().to_string(), val));
             }
         } else {
@@ -440,7 +436,7 @@ impl_op_ex!(+ |left: &Value, right: &Value| -> Result<Value, String> {
     };
     // Strings
     if let Value::Str(s) = right {
-        return Ok(Value::Str(left.to_string()? + &s));
+        return Ok(Value::Str(left.to_string()? + s));
     } else if let Value::Str(s) = left {
         return Ok(Value::Str(s.to_owned() + &right.to_string()?));
     }

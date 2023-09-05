@@ -34,7 +34,7 @@ impl Program {
         }
     }
 
-    fn bin_range<T: Clone>(index: u32, table: &Vec<(u32, u32, T)>) -> Option<T> {
+    fn bin_range<T: Clone>(index: u32, table: &[(u32, u32, T)]) -> Option<T> {
         table.binary_search_by(
             |x| {
                 if x.0 > index {
@@ -43,7 +43,7 @@ impl Program {
                     Ordering::Less
                 } else { Ordering::Equal }
             }
-        ).and_then(|x| Ok(table[x].2.clone())).ok()
+        ).map(|x| table[x].2.clone()).ok()
     }
 
     pub fn get_info(&mut self, index: u32) -> (usize, String) {
@@ -236,13 +236,13 @@ impl Compiler {
             *op += (i & 255 << 16) as u32;
         }
         *op += (i & 255 << 8) as u32;
-        *op += (i & 255 << 0) as u32;
+        *op += (i & 255) as u32;
     }
 }
 
 fn compile_unary(
     compiler: &mut Compiler,
-    op: &TokenType, val: &Box<ASTNode>
+    op: &TokenType, val: &ASTNode
 ) -> Option<Reg> {
     Some(match op {
         // -/!
@@ -267,7 +267,7 @@ fn compile_unary(
                 compiler.dup();
             }
             compiler.free_reg(tmp);
-            let VarExpr(ref s) = **val else {
+            let VarExpr(ref s) = *val else {
                 panic!("++ needs a var, how did you do this?");
             };
             let tmp = compiler.push(Value::Str(s.clone()));
@@ -283,7 +283,7 @@ fn compile_unary(
                 compiler.dup();
             }
             compiler.free_reg(tmp);
-            let VarExpr(ref s) = **val else {
+            let VarExpr(ref s) = *val else {
                 panic!("-- needs a var, how did you do this?");
             };
             let tmp = compiler.push(Value::Str(s.clone()));
@@ -318,7 +318,7 @@ fn compile_set(compiler: &mut Compiler, lvalue: &ASTNode, value: Reg) -> Option<
 
 fn compile_short_binop(
     compiler: &mut Compiler,
-    lhs: &Box<ASTNode>, op: &TokenType, rhs: &Box<ASTNode>,
+    lhs: &ASTNode, op: &TokenType, rhs: &ASTNode,
     clean: bool
 ) -> Option<Reg> {
     // Compiles short circuiting operators (&& and ||)
@@ -361,7 +361,7 @@ fn compile_short_binop(
 
 fn compile_binop<'a>(
     compiler: &mut Compiler,
-    mut lhs: &'a Box<ASTNode>, op: &TokenType, mut rhs: &'a Box<ASTNode>,
+    mut lhs: &'a ASTNode, op: &TokenType, mut rhs: &'a ASTNode,
     clean: bool
 ) -> Option<Reg> {
     // Short circuiting ops are special
@@ -508,7 +508,7 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
                     |i| if i.0 == n && i.2 == args.len() as i32 { Some(i.1) } else { None }
                 ) {
                     (addr, "".to_string())
-                } else if args.len() == 0 && n == "args" {
+                } else if args.is_empty() && n == "args" {
                     // Saving args is needed
                     compiler.needs_args = true;
                     let ret = compiler.alloc_reg();
@@ -523,10 +523,10 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
             // Compile the call
             if address == 0 {
                 // Variable call (VCALL)
-                let expr = if name == "" || name.contains("::"){
+                let expr = if name.is_empty() || name.contains("::"){
                     compile_expr(compiler, expr)?
                 } else {
-                    compiler.push(Value::Functi(name.clone()))
+                    compiler.push(Value::Functi(name))
                 };
                 compiler.add_op_args(Opcode::VCALL, expr as u8, args.len() as u8, 0);
                 compiler.free_reg(expr);
@@ -771,7 +771,7 @@ fn compile_stmt(
             compiler.add_op(Opcode::JMPB);
             compiler.fill_jmp(compiler.program.ops.len(), compiler.program.ops.len() - compiler.loop_top - 1, None);
         },
-        BodyStmt(nodes) => return _compile_body(compiler, args, &nodes, false),
+        BodyStmt(nodes) => return _compile_body(compiler, args, nodes, false),
         FunctiStmt(node) => {
             // Jump around function
             compiler.add_op(Opcode::JMP);
@@ -792,7 +792,7 @@ fn compile_stmt(
                 compiler.free_reg(name);
             }
             // Compile body
-            compile_body(compiler, args, &*node.body, true)?;
+            compile_body(compiler, args, &node.body, true)?;
             // Return
             compiler.push_to_stack(Value::None);
             compiler.add_op(Opcode::RET);
@@ -809,14 +809,14 @@ fn compile_stmt(
             if let CallExpr(expr, args) = *ret.clone() {
                 let functi = compiler.program.functis.last().unwrap().clone();
                 let do_tco = if let ASTNode::VarExpr(name) = *expr {
-                    name == functi.0 && args.len() == functi.1 as usize
+                    name == functi.0 && args.len() == functi.1
                 } else { false };
                 // Tail call is possible!
                 if do_tco {
                     // Push args
                     let old_on_stack = compiler.on_stack_only;
                     compiler.on_stack_only = true;
-                    for ref arg in args.iter().rev() {
+                    for arg in args.iter().rev() {
                         compile_expr(compiler, arg)?;
                     }
                     compiler.on_stack_only = old_on_stack;
@@ -890,14 +890,14 @@ pub fn compile(
     compiler.inc_start = compiler.program.ops.len() as u32;
     // Compile
     for node in &ast.nodes[..ast.nodes.len()-1] {
-        if !compile_stmt(compiler, args, node, false).is_some() {
+        if compile_stmt(compiler, args, node, false).is_none() {
             return false;
         }
     }
     // If repl, compile the last value without cleaning up
     // Else just compile normally
     let last = ast.nodes.last().unwrap();
-    if !compile_stmt(compiler, args, last, args.is_repl).is_some() {
+    if compile_stmt(compiler, args, last, args.is_repl).is_none() {
         return false;
     }
     // Jumps go onto the next instruction, so a nop is needed at the end

@@ -44,7 +44,7 @@ use crate::lexer::lex;
 use crate::parser::{parse, AST};
 use crate::vm::{run, Vm};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Arguments {
     source: String,
     name: String,
@@ -90,12 +90,12 @@ fn get_args() -> Result<Arguments, bool> {
         if !arg.starts_with('-') && file.is_empty() {
             // Files
             file = arg.to_string();
-            args.name = arg.to_string();
+            args.name = arg;
             args.is_repl = false;
             break;
-        } else if arg.starts_with("--use-") {
+        } else if let Some(extension) = arg.strip_prefix("--use-") {
             // Extensions
-            let extension = arg[6..].to_string();
+            let extension = extension.to_string();
             if extension == "all" {
                 // Push all extensions
                 args.extensions.push("auto-none".to_string());

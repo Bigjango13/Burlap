@@ -241,8 +241,8 @@ impl Vm {
 
     // Unmangle a var name
     #[inline]
-    fn unmangle(name: &String) -> String {
-        name.clone().split("::").last().unwrap().to_string()
+    fn unmangle(name: &str) -> String {
+        name.split("::").last().unwrap().to_string()
     }
 
     // Get a vec of all symbol names
@@ -274,12 +274,12 @@ impl Vm {
     }
 
     // Getting vars
-    fn get_local(&self, name: &String) -> Option<Value> {
+    fn get_local(&self, name: &str) -> Option<Value> {
         // Gets a local var
         let mut index = self.var_names.len();
         while index > self.var_min {
             index -= 1;
-            if &self.var_names[index] == name {
+            if self.var_names[index] == name {
                 return Some(self.var_vals[index].clone());
             }
         }
@@ -287,12 +287,12 @@ impl Vm {
         None
     }
 
-    fn get_global(&self, name: &String) -> Option<Value> {
+    fn get_global(&self, name: &str) -> Option<Value> {
         // Gets a var in the global scope
         self.globals.get(name).cloned()
     }
 
-    pub fn get_var(&self, name: &String) -> Result<Value, String> {
+    pub fn get_var(&self, name: &str) -> Result<Value, String> {
         if !self.is_global {
             // Check local scope first
             if let Some(v) = self.get_local(name) {
@@ -305,7 +305,7 @@ impl Vm {
         // Check function
         let real_name = Self::unmangle(name);
         if self.functies.contains_key(&real_name)
-            || self.program.functis.iter().any(|i| &i.0 == &real_name)
+            || self.program.functis.iter().any(|i| i.0 == real_name)
         {
             return Ok(Value::Functi(real_name));
         }
@@ -314,24 +314,24 @@ impl Vm {
 
     // Create a variable
     pub fn make_var(
-        &mut self, name: &String, val: Value
+        &mut self, name: &str, val: Value
     ) {
         // Create
         if self.is_global {
-            self.globals.insert(name.clone(), val);
+            self.globals.insert(name.to_string(), val);
         } else {
-            self.var_names.push(name.clone());
+            self.var_names.push(name.to_string());
             self.var_vals.push(val);
         }
     }
 
     // Set a variable
-    pub fn get_local_index(&mut self, name: &String) -> Option<usize> {
+    pub fn get_local_index(&mut self, name: &str) -> Option<usize> {
         // Sets a local var
         let mut index = self.var_names.len();
         while index > self.var_min {
             index -= 1;
-            if &self.var_names[index] == name {
+            if self.var_names[index] == name {
                 return Some(index);
             }
         }
@@ -339,16 +339,16 @@ impl Vm {
         return None;
     }
 
-    pub fn set_global(&mut self, name: &String, val: Value) -> bool {
+    pub fn set_global(&mut self, name: &str, val: Value) -> bool {
         // Sets a global value
         if !self.globals.contains_key(name) {
             return false;
         }
-        self.globals.insert(name.clone(), val);
+        self.globals.insert(name.to_string(), val);
         return true;
     }
 
-    pub fn set_var(&mut self, name: &String, val: Value) -> Result<(), String>
+    pub fn set_var(&mut self, name: &str, val: Value) -> Result<(), String>
     {
         // Changes a variable to a different value
         if !self.is_global {
@@ -398,7 +398,7 @@ impl Vm {
     }
 
     fn bad_args(
-        &self, name: &String, got: usize, need: usize
+        &self, name: &str, got: usize, need: usize
     ) -> Result<(), String> {
         Err(if got > need {
             format!("too many args for {} (got {} need {})", name, got, need)
@@ -462,9 +462,9 @@ impl Vm {
                     ((op & 0xFF000000) >> 24).try_into().unwrap()
                 )
             },
-            ((op & 0x00FF0000) >> 16).try_into().unwrap(),
-            ((op & 0x0000FF00) >> 8).try_into().unwrap(),
-            ((op & 0x000000FF) >> 0).try_into().unwrap(),
+            ((op & 0xFF0000) >> 16).try_into().unwrap(),
+            ((op & 0xFF00) >> 8).try_into().unwrap(),
+            (op & 0xFF).try_into().unwrap(),
         );
     }
 
@@ -493,7 +493,7 @@ impl Vm {
     pub fn get_reg(&mut self, reg: u8) -> Value {
         if reg >= 16 {
             // Regs over 16 just act as stack
-            self.stack.pop().expect("Overpopped stack!").clone()
+            self.stack.pop().expect("Overpopped stack!")
         } else {
             self.regs[reg as usize].clone()
         }
@@ -524,10 +524,10 @@ fn sk_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         for i in args {
             print!("{} ", i.to_string()?);
         }
-        println!("");
+        println!();
     } else if args.len() != 1 {
         // Invalid args
-        vm.bad_args(&"print".to_string(), args.len(), 1)?;
+        vm.bad_args("print", args.len(), 1)?;
     } else {
         // Normal printing
         println!("{}", args[0].to_string()?);
@@ -539,7 +539,7 @@ fn sk_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_input(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        vm.bad_args(&"input".to_string(), args.len(), 1)?;
+        vm.bad_args("input", args.len(), 1)?;
     }
     // Print the prompt
     print!("{}", args[0].to_string()?);
@@ -556,7 +556,7 @@ fn sk_input(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_type(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        vm.bad_args(&"type".to_string(), args.len(), 1)?;
+        vm.bad_args("type", args.len(), 1)?;
     }
     return Ok(Value::Str(args[0].get_type()));
 }
@@ -565,7 +565,7 @@ fn sk_type(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_len(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        vm.bad_args(&"len".to_string(), args.len(), 1)?;
+        vm.bad_args("len", args.len(), 1)?;
     }
     // Get the len
     let real_len: i32 = if let Value::FastList(l) = &args[0] {
@@ -588,7 +588,7 @@ fn sk_len(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_range(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
         // Invalid args
-        vm.bad_args(&"range".to_string(), args.len(), 2)?;
+        vm.bad_args("range", args.len(), 2)?;
     }
     // Get the values
     let (mut min, max) = (args[0].to_int(), args[1].to_int());
@@ -608,7 +608,7 @@ fn sk_range(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_open(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
         // Invalid args
-        vm.bad_args(&"open".to_string(), args.len(), 2)?;
+        vm.bad_args("open", args.len(), 2)?;
     }
     let Value::Str(ref file) = args[0] else {
         return Err("invalid file name".to_string());
@@ -653,7 +653,7 @@ fn sk_open(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_close(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        vm.bad_args(&"close".to_string(), args.len(), 1)?;
+        vm.bad_args("close", args.len(), 1)?;
     }
     let Value::File(ref mut info) = args[0] else {
         return Err(format!("cannot close {}", args[0].get_type()));
@@ -666,7 +666,7 @@ fn sk_close(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
 fn sk_flush(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        vm.bad_args(&"flush".to_string(), args.len(), 1)?;
+        vm.bad_args("flush", args.len(), 1)?;
     }
     // Burlap doesn't buffer file io
     Ok(Value::None)
@@ -675,7 +675,7 @@ fn sk_flush(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_read(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        vm.bad_args(&"read".to_string(), args.len(), 1)?;
+        vm.bad_args("read", args.len(), 1)?;
     }
     let Value::File(ref mut info) = args[0] else {
         return Err(format!("cannot read from {}", args[0].get_type()));
@@ -706,7 +706,7 @@ fn sk_read(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
 fn sk_seek(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
         // Invalid args
-        vm.bad_args(&"seek".to_string(), args.len(), 2)?;
+        vm.bad_args("seek", args.len(), 2)?;
     }
     // Check and get file
     let Value::File(ref mut info) = args[0].clone() else {
@@ -738,7 +738,7 @@ fn sk_seek(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_write(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
         // Invalid args
-        vm.bad_args(&"write".to_string(), args.len(), 2)?;
+        vm.bad_args("write", args.len(), 2)?;
     }
     // Now check args
     let Value::File(ref mut info) = args[0].clone() else {
@@ -767,7 +767,7 @@ fn sk_write(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_int(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        vm.bad_args(&"int".to_string(), args.len(), 1)?;
+        vm.bad_args("int", args.len(), 1)?;
     }
     return Ok(Value::Int(args[0].to_int()));
 }
@@ -776,7 +776,7 @@ fn sk_int(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_float(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        vm.bad_args(&"float".to_string(), args.len(), 1)?;
+        vm.bad_args("float", args.len(), 1)?;
     }
     return Ok(Value::Float(args[0].to_float()));
 }
@@ -785,7 +785,7 @@ fn sk_float(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        vm.bad_args(&"string".to_string(), args.len(), 1)?;
+        vm.bad_args("string", args.len(), 1)?;
     }
     // Bytes are a special case
     return Ok(Value::Str(if let Value::Byte(byte) = args[0] {
@@ -804,12 +804,12 @@ fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_byte(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        vm.bad_args(&"byte".to_string(), args.len(), 1)?;
+        vm.bad_args("byte", args.len(), 1)?;
     }
     Ok(match &args[0] {
         // Strings
         Value::Str(s) if s.chars().count() == 1 =>
-            Value::Byte(s.chars().nth(0).unwrap() as u8),
+            Value::Byte(s.chars().next().unwrap() as u8),
         Value::Str(s) if s.chars().count() > 1 => {
             let mut ret: Vec<Value> = vec![];
             for chr in s.chars() {
@@ -832,7 +832,7 @@ fn sk_byte(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_ptr(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        vm.bad_args(&"__burlap_ptr".to_string(), args.len(), 1)?;
+        vm.bad_args("__burlap_ptr", args.len(), 1)?;
     }
     if let Value::Ptr(_) = args[0].clone() {
         return Ok(args[0].clone());
@@ -848,7 +848,7 @@ fn sk_ptr(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_typed_eq(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
         // Invalid args
-        vm.bad_args(&"__burlap_typed_eq".to_string(), args.len(), 2)?;
+        vm.bad_args("__burlap_typed_eq", args.len(), 2)?;
     }
     return Ok(Value::Bool(args[0] == args[1]));
 }
@@ -856,7 +856,7 @@ fn sk_typed_eq(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn sk_real_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
-        vm.bad_args(&"__burlap_print".to_string(), args.len(), 1)?;
+        vm.bad_args("__burlap_print", args.len(), 1)?;
     }
     println!("{:?}", args[0]);
     return Ok(Value::None);
@@ -864,7 +864,7 @@ fn sk_real_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 
 fn sk_throw(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
-        vm.bad_args(&"__burlap_throw".to_string(), args.len(), 1)?;
+        vm.bad_args("__burlap_throw", args.len(), 1)?;
     }
     Err(args[0].to_string()?)
 }
@@ -872,7 +872,7 @@ fn sk_throw(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 #[cfg(feature = "cffi")]
 fn sk_libload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
-        vm.bad_args(&"__burlap_load_library".to_string(), args.len(), 1)?;
+        vm.bad_args("__burlap_load_library", args.len(), 1)?;
     }
     return Ok(Value::Ptr(load_library(args[0].to_string()?)?))
 }
@@ -880,7 +880,7 @@ fn sk_libload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 #[cfg(feature = "cffi")]
 fn sk_functiload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
-        vm.bad_args(&"__burlap_load_functi".to_string(), args.len(), 2)?;
+        vm.bad_args("__burlap_load_functi", args.len(), 2)?;
     }
     // First arg must be library handle
     let Value::Ptr(handle) = args[0] else {
@@ -892,7 +892,7 @@ fn sk_functiload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 #[cfg(feature = "cffi")]
 fn sk_call_c(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 3 {
-        vm.bad_args(&"__burlap_ffi_call".to_string(), args.len(), 3)?;
+        vm.bad_args("__burlap_ffi_call", args.len(), 3)?;
     }
     // First arg must be function pointer
     let Value::Ptr(func) = args[0] else {
@@ -913,7 +913,7 @@ fn sk_call_c(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 
 fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
-        vm.bad_args(&"__burlap_range".to_string(), args.len(), 2)?;
+        vm.bad_args("__burlap_range", args.len(), 2)?;
     }
     let (at, max) = (args[0].to_int(), args[1].to_int());
     // For (0, 100) step is 1, for (100, 0) it's -1, etc..
@@ -952,10 +952,8 @@ fn set_key(
             let mut slowlist = Vec::<(String, Value)>::with_capacity(
                 list.len()
             );
-            let mut at = 0;
-            for i in list {
+            for (at, i) in list.iter_mut().enumerate() {
                 slowlist.push((at.to_string(), i.clone()));
-                at += 1;
             }
             // Set
             *vlist = Value::List(slowlist);
@@ -1038,7 +1036,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         },
         Opcode::CARG => {
             let args = Value::FastList(
-                if vm.call_frames.len() != 0 {
+                if !vm.call_frames.is_empty() {
                     vm.call_frames.last_mut().unwrap().args.clone()
                         .expect("No saved args at `args()` call!")
                 } else {
@@ -1078,7 +1076,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         Opcode::RET => {
             let frame = vm.call_frames.pop().unwrap();
             let pos = frame.return_addr;
-            vm.at = pos as usize + 1;
+            vm.at = pos + 1;
             vm.jump = true;
             // Fix scope
             loop {
@@ -1098,7 +1096,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         // Lists
         Opcode::LFL => {
             let mut size = shift2(b, c);
-            let mut list = Vec::<Value>::with_capacity(size as usize);
+            let mut list = Vec::<Value>::with_capacity(size);
             while size > 0 {
                 list.push(vm.stack.pop().unwrap());
                 size -= 1;
@@ -1107,7 +1105,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         },
         Opcode::LL => {
             let mut size = shift2(b, c);
-            let mut list = Vec::<(String, Value)>::with_capacity(size as usize);
+            let mut list = Vec::<(String, Value)>::with_capacity(size);
             // Get the keys and values and put them into the list
             while size > 0 {
                 let Value::Str(key) = vm.stack.pop().unwrap() else {
@@ -1358,7 +1356,7 @@ pub fn run(vm: &mut Vm) -> bool {
                 // Print the result
                 if vm.stack[0] != Value::None {
                     print!("{}", vm.stack[0].to_string()
-                        .and_then(|x| Ok(x + "\n")).unwrap_or("".to_string())
+                        .map(|x| x + "\n").unwrap_or("".to_string())
                     );
                 }
             }
