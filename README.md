@@ -117,6 +117,7 @@ Burlap started because I wanted to learn how to create a programming language. I
 - 1.2.2: Backtrace update
     - Add line numbers to runtime errors
     - Add the `--backtrace` flag
+    - Fixed incorrect line numbers after multiline strings
 - 1.2.1: Register update
     - Change backend from a stack-based one to a register and stack-based one
     - Add break/continue

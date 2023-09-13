@@ -189,6 +189,12 @@ pub fn lex(
                 stream.line += 1;
                 lastat = lex.span().start + 1;
             }
+            if let TokenType::Str(ref str) = token {
+                // Lines can have multiple lines in them
+                let newlines = str.matches("\n").count();
+                stream.line += newlines;
+                lastat = lex.span().start + newlines;
+            }
             if let TokenType::Newline | TokenType::Skipped = token {
                 if print_err {
                     tok = lex.next();
