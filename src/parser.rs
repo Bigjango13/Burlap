@@ -5,14 +5,6 @@ use crate::lexer::{Token, TokenType};
 use TokenType::*;
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct FunctiNode {
-    pub name: String,
-    pub arg_names: Vec<String>,
-    pub body: Box<StmtNode>,
-    pub locals: Vec<String>
-}
-
-#[derive(Debug, PartialEq, Clone)]
 pub enum ASTNode {
     // Expressions
     // String, ("Example")
@@ -69,25 +61,57 @@ pub enum ASTNode {
     Nop,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(PartialEq, Clone)]
+pub struct Variable {
+    // Number of times it's been used
+    pub name: String,
+    pub count: u32,
+}
+
+impl std::fmt::Debug for Variable {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Var({}, count: {})", self.name, self.count)
+    }
+}
+
+#[derive(PartialEq, Clone)]
 struct ExprNode {
     pub node: ASTNode,
     //pub can_fold: bool,
     pub lvalue: bool,
 }
 
-/*fn combine_exprs(lhs: &ExprNode, rhs: &ExprNode) -> ExprNode {
-    ExprNode {
-        node: ASTNode::Nop,
-        //can_fold: lhs.can_fold && rhs.can_fold,
-        lvalue: lhs.lvalue && rhs.lvalue,
+impl std::fmt::Debug for ExprNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.node)
     }
-}*/
+}
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(PartialEq, Clone)]
+pub struct FunctiNode {
+    pub name: String,
+    pub arg_names: Vec<String>,
+    pub body: Box<StmtNode>,
+    pub locals: Vec<Variable>
+}
+
+impl std::fmt::Debug for FunctiNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // FunctiNode is always inside a FunctiStmt, so it doesn't need the wrapper
+        write!(f, "{:?}, args: {:?}, body: {:?}, locals: {:?}", self.name, self.arg_names, self.body, self.locals)
+    }
+}
+
+#[derive(PartialEq, Clone)]
 pub struct StmtNode {
     pub node: ASTNode,
     pub line: usize
+}
+
+impl std::fmt::Debug for StmtNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.node)
+    }
 }
 
 fn into_stmt(call: fn(&mut Parser) -> Option<ASTNode>, parser: &mut Parser) -> Option<StmtNode> {
@@ -97,14 +121,28 @@ fn into_stmt(call: fn(&mut Parser) -> Option<ASTNode>, parser: &mut Parser) -> O
     })
 }
 
-pub type VecFunctis = Vec<(String, i32)>;
+#[derive(PartialEq, Clone, Default)]
+pub struct FunctiData {
+    pub name: String,
+    pub arg_num: i32,
+    pub count: i32,
+}
+
+impl std::fmt::Debug for FunctiData {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // FunctiNode is always inside a FunctiStmt, so it doesn't need the wrapper
+        write!(f, "{{{:?}@{:?}, count: {:?}}}", self.name, self.arg_num, self.count)
+    }
+}
+
+pub type VecFunctis = Vec<FunctiData>;
 
 // The AST itself
 #[derive(Debug, PartialEq, Clone, Default)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct AST {
     pub functis: VecFunctis,
-    pub vars: Vec<String>,
+    pub vars: Vec<Variable>,
     pub nodes: Vec<StmtNode>,
 }
 
@@ -128,6 +166,7 @@ struct Parser {
     has_err: bool,
     name: String,
     ast: AST,
+    functi_locals: Vec<Variable>
 }
 
 impl Parser {
@@ -190,12 +229,15 @@ enum SymLookupRes {
 fn get_sym(parser: &mut Parser, name: &str, arg_num: i32) -> SymLookupRes {
     // -1 arg_num means name is a variable
     // Check variables
-    if parser.ast.vars.iter().any(|n| n == name) {
+    if let Some(v) = parser.ast.vars.iter_mut().find(|i| i.name == name) {
+        // Used again
+        v.count += 1;
         return SymLookupRes::TakenByVar;
     }
     // Check functions
-    if parser.ast.functis.iter()
-        .any(|(n, a)| n == name && (arg_num == -1 || arg_num == *a)) {
+    if let Some(f) = parser.ast.functis.iter_mut()
+        .find(|i| i.name == name && (arg_num == -1 || arg_num == i.arg_num)) {
+        f.count += 1;
         return SymLookupRes::TakenByFuncti;
     }
     // Check builtins
@@ -229,9 +271,14 @@ fn _check_unique(parser: &mut Parser, name: &str, arg_num: i32) -> bool {
             }.as_str()
         );},
         SymLookupRes::Free => if arg_num != -1 {
-            parser.ast.functis.push((name.to_string(), arg_num));
+            parser.ast.functis.push(FunctiData {
+                name: name.to_string(), arg_num, count: 0
+            });
         } else {
-            parser.ast.vars.push(name.to_string());
+            parser.ast.vars.push(Variable {
+                name: name.to_string(),
+                count: 0
+            });
         }
     };
     return true;
@@ -263,9 +310,9 @@ fn check_call(parser: &mut Parser, name: &str, arg_num: i32) {
     let name = name.split("::").nth(1).unwrap_or(name);
     let mut wrong_args = false;
     // Functions
-    for (n, a) in &parser.ast.functis {
-        if n == name {
-            if *a == arg_num {
+    for i in &parser.ast.functis {
+        if i.name == name {
+            if i.arg_num == arg_num {
                 // A correct call was found
                 return;
             }
@@ -284,7 +331,7 @@ fn check_call(parser: &mut Parser, name: &str, arg_num: i32) {
         }
     }
     // Variables
-    if parser.ast.vars.iter().any(|n| n == name) {
+    if parser.ast.vars.iter().any(|i| i.name == name) {
         // No way to check
         return;
     }
@@ -691,7 +738,7 @@ fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
         }
     }
     // End
-    parser.ast.vars.truncate(old_len);
+    parser.functi_locals.append(&mut parser.ast.vars.split_off(old_len));
     eat!(parser, Rbrace, "expected } to end body, not EOF")?;
     if err {
         return Option::None;
@@ -774,7 +821,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     eat!(parser, Rparan, "missing ')' in loop")?;
     // Body
     let body = into_stmt(parse_body, parser)?;
-    parser.ast.vars.truncate(old_len);
+    parser.functi_locals.append(&mut parser.ast.vars.split_off(old_len));
     // Return
     Some(ASTNode::LoopStmt(name, Box::new(iter), Box::new(body), already_defined))
 }
@@ -952,6 +999,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         return Option::None;
     }
     parser.next();
+    parser.functi_locals = vec![];
     // Args
     eat!(parser, Lparan, "expected '(' at start of argument list")?;
     let mut arg_names: Vec<String> = vec![];
@@ -993,7 +1041,9 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
     parser.in_func = true;
     let body = into_stmt(parse_body, parser);
     parser.in_func = false;
-    let locals = parser.ast.vars.split_off(parser.ast.vars.len() - arg_names.len());
+    parser.functi_locals.append(&mut parser.ast.vars.split_off(parser.ast.vars.len() - arg_names.len()));
+    let mut locals = vec![];
+    std::mem::swap(&mut locals, &mut parser.functi_locals);
     // Return
     return Some(ASTNode::FunctiStmt(FunctiNode {
         name,
@@ -1014,6 +1064,7 @@ pub fn parse(ast: AST, tokens: Vec<Token>, args: &Arguments) -> Option<AST> {
         at: 0, has_err: false, ast,
         in_loop: false, in_func: false,
         name: args.name.clone(),
+        functi_locals: vec![],
     };
     // Parse
     while parser.current() != Eof {

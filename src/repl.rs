@@ -255,10 +255,10 @@ pub fn repl(args: &mut Arguments) {
                 continue;
             };
             ast = new_ast;
-            /*if args.is_debug {
+            if args.is_debug {
                 // Debug print ast
                 println!("Ast: {:?}", ast);
-            }*/
+            }
             // Compile
             if !compile(&ast, args, &mut compiler) {
                 continue;
