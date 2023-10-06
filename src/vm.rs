@@ -307,7 +307,7 @@ impl Vm {
         if self.functies.contains_key(&real_name)
             || self.program.functis.iter().any(|i| i.0 == real_name)
         {
-            return Ok(Value::Functi(real_name));
+            return Ok(Value::Functi(Rc::new(real_name)));
         }
         Err(format!("no variable called \"{}\"! This is a bug and should have been detected earlier on", name))
     }
@@ -547,8 +547,8 @@ fn sk_input(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     // Get input
     let mut buffer = String::new();
     return Ok(match io::stdin().read_line(&mut buffer) {
-        Err(_) => Value::Str("".to_string()),
-        _ => Value::Str(buffer.trim_end().to_string())
+        Err(_) => Value::Str(Rc::new("".to_string())),
+        _ => Value::Str(Rc::new(buffer.trim_end().to_string()))
     });
 }
 
@@ -558,7 +558,7 @@ fn sk_type(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         // Invalid args
         vm.bad_args("type", args.len(), 1)?;
     }
-    return Ok(Value::Str(args[0].get_type()));
+    return Ok(Value::Str(Rc::new(args[0].get_type())));
 }
 
 // Len
@@ -601,7 +601,7 @@ fn sk_range(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         min += offset;
     }
     ret.push(Value::Int(min));
-    return Ok(Value::FastList(ret));
+    return Ok(Value::FastList(Rc::new(ret)));
 }
 
 // File IO
@@ -623,12 +623,12 @@ fn sk_open(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         "w" | "wb" => {(
             OpenOptions::new().write(true).create(true).truncate(false)
                 .open(file.clone()),
-            if mode == "w" {2} else {-2}
+            if **mode == "w" {2} else {-2}
         )},
         // Read
         "r" | "rb" => {(
             OpenOptions::new().read(true).open(file.clone()),
-            if mode == "r" {1} else {-1}
+            if **mode == "r" {1} else {-1}
         )},
         // Append
         "a" => {(
@@ -698,9 +698,9 @@ fn sk_read(vm: &mut Vm, mut args: Vec<Value>) -> Result<Value, String> {
         let Ok(string) = String::from_utf8(ret) else {
             return Err("invalid string".to_string());
         };
-        return Ok(Value::Str(string));
+        return Ok(Value::Str(Rc::new(string)));
     }
-    return Ok(Value::FastList(ret.iter().map(|i| Value::Byte(*i)).collect()));
+    return Ok(Value::FastList(Rc::new(ret.iter().map(|i| Value::Byte(*i)).collect())));
 }
 
 fn sk_seek(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
@@ -788,7 +788,7 @@ fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         vm.bad_args("string", args.len(), 1)?;
     }
     // Bytes are a special case
-    return Ok(Value::Str(if let Value::Byte(byte) = args[0] {
+    return Ok(Value::Str(Rc::new(if let Value::Byte(byte) = args[0] {
         (byte as char).to_string()
     } else {
         let Ok(str) = args[0].to_string() else {
@@ -796,7 +796,7 @@ fn sk_string(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
             return Ok(Value::None);
         };
         str
-    }));
+    })));
 }
 
 
@@ -815,7 +815,7 @@ fn sk_byte(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
             for chr in s.chars() {
                 ret.push(Value::Byte(chr as u8));
             }
-            Value::FastList(ret)
+            Value::FastList(Rc::new(ret))
         }
         Value::Str(_) =>
             return Err("cannot convert empty string to bytes".to_string()),
@@ -908,7 +908,7 @@ fn sk_call_c(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
             "Third argument must be string (try using `type()`?)".to_string()
         );
     };
-    return ffi_call(func, c_args, ret_type);
+    return ffi_call(func, c_args, (*ret_type).clone());
 }
 
 fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
@@ -925,13 +925,14 @@ fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn set_key(
     vlist: &mut Value, key: Value, val: Value
 ) -> Result<(), String> {
-    let Value::List(ref mut list) = vlist else {
-        let Value::FastList(ref mut list) = vlist else {
+    let Value::List(ref mut list_rc) = vlist else {
+        let Value::FastList(ref mut list_rc) = vlist else {
             return Err(format!(
                 "failed to index {} with {}",
                 vlist.to_string()?, key.to_string()?
             ));
         };
+        let list = Rc::make_mut(list_rc);
         // Push
         let as_int = key.to_int();
         if key.get_type() == "Number" && as_int >= 0 {
@@ -956,11 +957,12 @@ fn set_key(
                 slowlist.push((at.to_string(), i.clone()));
             }
             // Set
-            *vlist = Value::List(slowlist);
+            *vlist = Value::List(Rc::new(slowlist));
             return set_key(vlist, key, val);
         }
         return Ok(());
     };
+    let list = Rc::make_mut(list_rc);
     // Insert
     if key.get_type() == "Number" {
         let key = key.to_int();
@@ -1036,12 +1038,12 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         },
         Opcode::CARG => {
             let args = Value::FastList(
-                if !vm.call_frames.is_empty() {
+                Rc::new(if !vm.call_frames.is_empty() {
                     vm.call_frames.last_mut().unwrap().args.clone()
                         .expect("No saved args at `args()` call!")
                 } else {
-                    vm.args.program_args.iter().map(|i| Value::Str(i.clone())).collect()
-                }
+                    vm.args.program_args.iter().map(|i| Value::Str(Rc::new(i.clone()))).collect()
+                })
             );
             vm.set_reg(a, args);
         },
@@ -1053,7 +1055,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             let Value::Functi(fn_name) = functi else {
                 return Err(format!("cannot call {}", functi.get_type()));
             };
-            vm.call_name(fn_name, b)?;
+            vm.call_name((*fn_name).clone(), b)?;
         }
         Opcode::RCALL => {
             // Clear scope
@@ -1101,7 +1103,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 list.push(vm.stack.pop().unwrap());
                 size -= 1;
             }
-            vm.set_reg(a, Value::FastList(list));
+            vm.set_reg(a, Value::FastList(Rc::new(list)));
         },
         Opcode::LL => {
             let mut size = shift2(b, c);
@@ -1113,10 +1115,10 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 };
                 let val = vm.stack.pop().unwrap();
                 // Store
-                list.push((key, val));
+                list.push(((*key).clone(), val));
                 size -= 1;
             }
-            vm.set_reg(a, Value::List(list));
+            vm.set_reg(a, Value::List(Rc::new(list)));
         },
         Opcode::INX => {
             let list = vm.get_reg(a);

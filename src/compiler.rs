@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::cmp::Ordering;
 use std::path::PathBuf;
 
@@ -270,7 +271,7 @@ fn compile_unary(
             let VarExpr(ref s) = *val else {
                 panic!("++ needs a var, how did you do this?");
             };
-            let tmp = compiler.push(Value::Str(s.clone()));
+            let tmp = compiler.push(Value::Str(Rc::new(s.clone())));
             compiler.add_op_args(Opcode::SV, tmp as u8, ret as u8, 0);
             compiler.free_reg(tmp);
             ret
@@ -286,7 +287,7 @@ fn compile_unary(
             let VarExpr(ref s) = *val else {
                 panic!("-- needs a var, how did you do this?");
             };
-            let tmp = compiler.push(Value::Str(s.clone()));
+            let tmp = compiler.push(Value::Str(Rc::new(s.clone())));
             compiler.add_op_args(Opcode::SV, tmp as u8, ret as u8, 0);
             compiler.free_reg(tmp);
             ret
@@ -299,7 +300,7 @@ fn compile_unary(
 fn compile_set(compiler: &mut Compiler, lvalue: &ASTNode, value: Reg) -> Option<()> {
     // Recursively set
     if let VarExpr(s) = lvalue.clone() {
-        let nreg = compiler.push(Value::Str(s));
+        let nreg = compiler.push(Value::Str(Rc::new(s)));
         compiler.add_op_args(Opcode::SV, nreg as u8, value as u8, 0);
         compiler.free_reg(nreg);
         compiler.free_reg(value);
@@ -461,13 +462,13 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
     Some(match node {
         // Values
         VarExpr(val) => {
-            let reg = compiler.push(Value::Str(val.clone()));
+            let reg = compiler.push(Value::Str(Rc::new(val.clone())));
             // Load var inplace
             compiler.add_op_args(Opcode::LV, reg as u8, reg as u8, 0);
             reg
         },
         StringExpr(val) => {
-            compiler.push(Value::Str(val.clone()))
+            compiler.push(Value::Str(Rc::new(val.clone())))
         },
         NumberExpr(val) => {
             compiler.push(Value::Int(*val))
@@ -526,7 +527,7 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
                 let expr = if name.is_empty() || name.contains("::"){
                     compile_expr(compiler, expr)?
                 } else {
-                    compiler.push(Value::Functi(name))
+                    compiler.push(Value::Functi(Rc::new(name)))
                 };
                 compiler.add_op_args(Opcode::VCALL, expr as u8, args.len() as u8, 0);
                 compiler.free_reg(expr);
@@ -548,7 +549,7 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
             for at in (0..values.len()).rev() {
                 compile_expr(compiler, &values[at])?;
                 if !*fast {
-                    compiler.push_to_stack(Value::Str(keys[at].clone()));
+                    compiler.push_to_stack(Value::Str(Rc::new(keys[at].clone())));
                 }
             }
             compiler.on_stack_only = old_on_stack;
@@ -636,7 +637,7 @@ fn compile_stmt(
         // Statements
         LetStmt(name, val) => {
             let vreg = compile_expr(compiler, val)?;
-            let nreg = compiler.push(Value::Str(name.to_string()));
+            let nreg = compiler.push(Value::Str(Rc::new(name.to_string())));
             compiler.add_op_args(Opcode::DV, nreg as u8, vreg as u8, 0);
             compiler.free_reg(vreg);
             compiler.free_reg(nreg);
@@ -697,7 +698,7 @@ fn compile_stmt(
             let jmp_pos = compiler.program.ops.len();
 
             // Set loop var
-            let varname = compiler.push(Value::Str(var.to_string()));
+            let varname = compiler.push(Value::Str(Rc::new(var.to_string())));
             if *old_var {
                 compiler.add_op_args(Opcode::SV, varname as u8, item as u8, 0);
             } else {
@@ -787,7 +788,7 @@ fn compile_stmt(
             compiler.add_op(Opcode::NOP);
             // Load args from stack
             for arg in &node.arg_names {
-                let name = compiler.push(Value::Str(arg.to_string()));
+                let name = compiler.push(Value::Str(Rc::new(arg.to_string())));
                 compiler.add_op_args(Opcode::DV, name as u8, Reg::Stack as u8, 0);
                 compiler.free_reg(name);
             }

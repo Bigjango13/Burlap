@@ -1,5 +1,5 @@
 # Burlap
-> A powerful and user-friendly Sack interpreter, v1.2.2
+> A powerful and user-friendly Sack interpreter, v1.2.3
 
 ## What is Burlap?
 Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) programming language. It aims for a high level of spec compliance, any valid sack program should be able to be run using burlap (it does have a few minor variations from the spec, known differences are listed [here](docs/spec-diff.md))
@@ -114,6 +114,9 @@ For profiling, I use [flamegraph-rs](https://github.com/flamegraph-rs/flamegraph
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
+- 1.2.3
+    - Makes lists Copy-On-Write
+    - Reduce `Value` size to 16 bytes
 - 1.2.2: Backtrace update
     - Add line numbers to runtime errors
     - Add the `--backtrace` flag
@@ -128,7 +131,7 @@ Burlap started because I wanted to learn how to create a programming language. I
     - Add function overloading
     - Add better docs about C-FFI
     - Check variable access and function calls (but not variable calls) before runtime
-- 1.1.5: Trying to selfhost update
+- 1.1.5
     - Add `args()`
     - Add `in` as a binop
     - Add `%=` operator
@@ -148,10 +151,10 @@ Burlap started because I wanted to learn how to create a programming language. I
     - Make `len` zero indexed
     - Allow string casts to fail
     - Fixed compiler bug with the `PUSH3` instruction
-- 1.1.3: REPL Update
+- 1.1.3: REPL update
     - Make block errors less noisy
     - Add multiline editing, highlighting, and tab-completion to the REPL
-- 1.1.2: C update
+- 1.1.2: C ffi update
     - Added C iterop
     - Add `__burlap_throw`
     - Fixed global variables for imports
@@ -159,7 +162,7 @@ Burlap started because I wanted to learn how to create a programming language. I
     - Read, write, open, and flush
 - 1.1.0: VM update
     - Rewrite tree walking interpreter into a stack based VM
-- 1.0.0: Rust Evangelism Strike Force update
+- 1.0.0: Rusty updaye
     - Decide to RIIR
     - Lists, while loops, input, imports, and more!
 - 0.0.1: C++ version works for Sack v0.0.5

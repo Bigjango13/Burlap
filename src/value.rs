@@ -22,25 +22,25 @@ impl PartialEq for FileInfo {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     // Normal values
-    Str(String),
+    Str(Rc<String>),
     Int(i32),
     Float(f32),
     Bool(bool),
     Byte(u8),
-    List(Vec<(String, Value)>),
+    List(Rc<Vec<(String, Value)>>),
     None,
     File(Rc<RefCell<FileInfo>>),
-    Functi(String),
+    Functi(Rc<String>),
 
-    // FastList (used for lists with only number keys)
-    FastList(Vec<Value>),
+    // FastList (used for lists with only ordered number keys)
+    FastList(Rc<Vec<Value>>),
 
     // Ptr, used for ffi
     #[cfg(feature = "cffi")]
     Ptr(usize),
 
     // Iterator (used for iter based loops)
-    Iter(Vec<Value>, i32),
+    Iter(Rc<(Vec<Value>, i32)>),
     // RangeType (used for optimized ranges)
     RangeType(i32, i32, i32),
 }
@@ -110,7 +110,7 @@ impl Value {
     // String conversion
     pub fn to_string(&self) -> Result<String, String> {
         Ok(match self {
-            Value::Str(s) => s.clone(),
+            Value::Str(s) => (**s).clone(),
             Value::Int(i) => format!("{}", i),
             Value::Float(f) => format!("{:?}", f),
             Value::Bool(b) => format!("{}", b),
@@ -143,7 +143,7 @@ impl Value {
             Value::FastList(l) => {
                 let mut ret = "[".to_string();
                 // Add each element
-                for val in l {
+                for val in l.iter() {
                     ret += &(val.to_string()? + ", ");
                 }
                 // Remove trailing ", "
@@ -196,9 +196,10 @@ impl Value {
         }.to_string();
     }
     // Lists
+    // TODO: When rust finally stabilizes generators, rewrite this
     pub fn values(&self) -> Option<Vec<Value>> {
         if let Value::FastList(l) = self {
-            return Some(l.clone());
+            return Some((**l).clone());
         }
         if let Value::List(l) = self {
             return Some(l.iter().map(|i| i.1.clone()).collect());
@@ -211,18 +212,20 @@ impl Value {
             return Ok(self.clone());
         }
         if let Value::FastList(list) = self {
-            return Ok(Value::Iter(list.clone(), 0));
+            return Ok(Value::Iter(Rc::new(((**list).clone(), 0))));
         }
         if let Value::Str(str) = self {
             return Ok(Value::Iter(
-                str.lines().map(|s| Value::Str(s.to_string())).collect(), 0
+                Rc::new((
+                    str.lines().map(|s| Value::Str(Rc::new(s.to_string()))).collect(), 0
+                ))
             ));
         }
         let Value::List(list) = self else {
             return Err(format!("Cannot iterate over {}", self.get_type()));
         };
         return Ok(Value::Iter(
-            list.iter().map(|i| i.1.clone()).collect(), 0
+            Rc::new((list.iter().map(|i| i.1.clone()).collect(), 0))
         ));
     }
     pub fn iter_next(&mut self) -> Result<Option<Value>, String> {
@@ -243,12 +246,13 @@ impl Value {
             return Ok(Some(ret));
         }
         // It's not rangetype, must be an iter
-        let Value::Iter(list, ref mut at) = self else {
+        let Value::Iter(ref mut iter) = self else {
             return Err(format!(
                 "Require __burlap_rangetype or __burlap_iter not {}",
                 self.get_type()
             ));
         };
+        let (ref list, ref mut at) = Rc::make_mut(iter);
         // Get the value
         let ret = list.get(*at as usize);
         *at += 1;
@@ -265,7 +269,7 @@ impl Value {
             return Some(vals.iter().any(|i| i.eq(val)));
         } else if let Value::Str(str) = self {
             if let Value::Str(vstr) = val {
-                return Some(str.contains(vstr));
+                return Some(str.contains(&**vstr));
             } else if let Value::Byte(byte) = val {
                 return Some(str.contains(
                     &(*byte as char).to_string()
@@ -279,7 +283,7 @@ impl Value {
         if let Value::Str(str) = self {
             return if let Value::Int(i) = index {
                 if *i >= 0 {
-                    Some(Value::Str(str.chars().nth(*i as usize)?.to_string()))
+                    Some(Value::Str(Rc::new(str.chars().nth(*i as usize)?.to_string())))
                 } else {
                     None
                 }
@@ -300,8 +304,8 @@ impl Value {
         };
         // String indexing (keys)
         if let Value::Str(s) = index {
-            for i in l {
-                if &i.0 == s {
+            for i in &**l {
+                if i.0 == **s {
                     return Some(i.1.clone());
                 }
             }
@@ -408,9 +412,10 @@ impl Value {
 impl_op_ex!(+ |left: &Value, right: &Value| -> Result<Value, String> {
     // Lists
     if let Value::List(_) = left {
-        let Value::List(mut list) = left.clone() else {
+        let Value::List(mut list_rc) = left.clone() else {
             panic!("impossible");
         };
+        let list = Rc::make_mut(&mut list_rc);
         if let Some(vals) = right.values() {
             // Concat
             for val in vals {
@@ -420,11 +425,12 @@ impl_op_ex!(+ |left: &Value, right: &Value| -> Result<Value, String> {
             // Append
             list.push((list.len().to_string(), right.clone()));
         }
-        return Ok(Value::List(list));
+        return Ok(Value::List(list_rc));
     } else if let Value::FastList(_) = left {
-        let Value::FastList(mut list) = left.clone() else {
+        let Value::FastList(mut list_rc) = left.clone() else {
             panic!("impossible");
         };
+        let list = Rc::make_mut(&mut list_rc);
         if let Some(mut vals) = right.values() {
             // Concat
             list.append(&mut vals);
@@ -432,13 +438,13 @@ impl_op_ex!(+ |left: &Value, right: &Value| -> Result<Value, String> {
             // Append
             list.push(right.clone());
         }
-        return Ok(Value::FastList(list));
+        return Ok(Value::FastList(list_rc));
     };
     // Strings
     if let Value::Str(s) = right {
-        return Ok(Value::Str(left.to_string()? + s));
+        return Ok(Value::Str(Rc::new(left.to_string()? + s)));
     } else if let Value::Str(s) = left {
-        return Ok(Value::Str(s.to_owned() + &right.to_string()?));
+        return Ok(Value::Str(Rc::new((**s).to_owned() + &right.to_string()?)));
     }
     // Anything else
     return do_op!(left, right, +, Err(
@@ -460,9 +466,9 @@ impl_op_ex!(* |left: &Value, right: &Value| -> Result<Value, String> {
         Value::Str(s) => {
             if let Value::Int(i_right) = right {
                 Ok(if *i_right > 0 {
-                    Value::Str((*s).repeat((*i_right).try_into().unwrap()))
+                    Value::Str(Rc::new((*s).repeat((*i_right).try_into().unwrap())))
                 } else {
-                    Value::Str("".to_string())
+                    Value::Str(Rc::new("".to_string()))
                 })
             } else {
                 Err(format!(

@@ -1,5 +1,5 @@
+use std::rc::Rc;
 use std::ffi::{CString, CStr};
-
 
 use libffi::middle::{Arg, Cif, CodePtr, Type};
 
@@ -69,7 +69,7 @@ fn get_str_c_type(val: String) -> Option<Type> {
 fn val_to_c(val: &Value) -> Result<Arg, CString> {
     return Ok(match val {
         // char* and void*
-        Value::Str(ref s) => return Err(CString::new(s.clone()).unwrap()),
+        Value::Str(ref s) => return Err(CString::new((**s).clone()).unwrap()),
         Value::Ptr(ref p) => Arg::new(p),
         // Int is i32
         Value::Int(ref i) => Arg::new(i),
@@ -116,9 +116,9 @@ pub fn call(
     let cif = Cif::new(arg_types.into_iter(), ret_t);
     // Call and return
     return Ok(unsafe { match ret.as_str() {
-        "String" => {Value::Str(
+        "String" => {Value::Str(Rc::new(
             ptr_to_string(cif.call(CodePtr(ptr as *mut _), c_args.as_slice()))
-        )},
+        ))},
         "__burlap_ptr" => {Value::Ptr(
             cif.call(CodePtr(ptr as *mut _), c_args.as_slice())
         )},
