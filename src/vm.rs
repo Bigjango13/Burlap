@@ -118,6 +118,15 @@ pub enum Opcode {
 // A functie is a sack functions implemented in rust
 type Functie = fn(&mut Vm, Vec<Value>) -> Result<Value, String>;
 
+struct Scope {
+    // The min of the callers var list
+    old_min: usize,
+    // Where the vars need to be cut off at
+    old_top: usize,
+    // Number between last call scope and current scope
+    count: u8,
+}
+
 // Call frames
 struct CallFrame {
     args: Option<Vec<Value>>,
@@ -157,7 +166,7 @@ pub struct Vm {
     var_vals: Vec<Value>,
     var_min: usize,
     // Scope
-    scope: Vec<(usize, usize, u8)>,
+    scope: Vec<Scope>,
     call_frames: Vec<CallFrame>,
 
     // The program
@@ -365,8 +374,6 @@ impl Vm {
 
     // Scope
     pub fn lower_scope(&mut self, call: bool) {
-        // Impossible for a lowered scope to be global
-        self.is_global = false;
         // Where the vars need to be cut off at
         let old_top = self.var_names.len();
         // Functions can't access higher yet non-global scopes
@@ -374,17 +381,19 @@ impl Vm {
         if call {
             self.var_min = old_top;
         }
+        // Layers after each call
         let count: u8 = if call {
             0
         } else {
-            let (_, _, c) = *self.scope.last().unwrap_or(&(0, 0, 0));
-            c + 1
+            self.scope.last().map(|i| i.count + 1).unwrap_or(0)
         };
-        // Push data so the scope can be raised
-        self.scope.push((old_min, old_top, count));
+        // Can't be global
+        self.is_global = false;
+
+        self.scope.push(Scope{old_min, old_top, count});
     }
     pub fn raise_scope(&mut self) -> Result<(), String> {
-        let Some((old_min, old_top, _)) = self.scope.pop() else {
+        let Some(Scope{old_min, old_top, ..}) = self.scope.pop() else {
             return Err("cannot raise global scope".to_string());
         };
         // Raise scope back up
@@ -1059,18 +1068,17 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         }
         Opcode::RCALL => {
             // Clear scope
-            // TODO: Don't use tuples
             loop {
-                let Some((_, _, c)) = vm.scope.last() else {
+                let Some(Scope{count, ..}) = vm.scope.last() else {
                     break;
                 };
-                if *c == 0 {
+                let clean = *count;
+                vm.raise_scope()?;
+                if clean == 0 {
                     // Clean scope
-                    vm.raise_scope()?;
                     vm.lower_scope(true);
                     break;
                 }
-                vm.raise_scope()?;
             }
             // Jump
             vm.at = shift3(a, b, c);
@@ -1082,15 +1090,15 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             vm.jump = true;
             // Fix scope
             loop {
-                let Some((_, _, c)) = vm.scope.last() else {
+                let Some(Scope{count, ..}) = vm.scope.last() else {
                     break;
                 };
-                if *c == 0 {
+                let clean = *count;
+                vm.raise_scope()?;
+                if clean == 0 {
                     // Clean scope
-                    vm.raise_scope()?;
                     break;
                 }
-                vm.raise_scope()?;
             }
             vm.regs = frame.regs;
         }
