@@ -1060,7 +1060,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         Opcode::SARG => {
             let len = vm.stack.len();
             let args: Vec<Value> = vm.stack[len - a as usize .. len]
-                .iter().rev().cloned().collect();
+                .iter().cloned().collect();
             vm.call_frames.last_mut().unwrap().args = Some(args);
         },
         Opcode::CARG => {

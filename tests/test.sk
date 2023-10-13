@@ -329,5 +329,10 @@ print("*** Args Tests ***");
 test("args len", len(args()), 0);
 test("args[0]", args()[0], "tests/test.sk");
 
+functi args_test(a,b,c) {
+    return args();
+}
+test("args in function", args_test(1,2,3), [1,2,3]);
+
 # End of tests
 testSummary();
