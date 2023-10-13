@@ -251,6 +251,7 @@ pub fn repl(args: &mut Arguments) {
             };
             args.source = "".to_string();
             // Get AST
+            ast.nodes = vec![];
             let Some(new_ast) = parse(ast.clone(), tokens, args) else {
                 continue;
             };

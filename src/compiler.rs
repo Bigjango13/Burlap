@@ -458,6 +458,60 @@ fn compile_binop<'a>(
     return Some(to_reg(rreg));
 }
 
+fn compile_call(compiler: &mut Compiler, expr: &ASTNode, args: &Vec<ASTNode>) -> Option<Reg> {
+    // Push the args onto the stack
+    let old_on_stack = compiler.on_stack_only;
+    compiler.on_stack_only = true;
+    for arg in args.iter() {
+        compile_expr(compiler, arg)?;
+    }
+    compiler.on_stack_only = old_on_stack;
+    // Get address
+    let (address, name) = if let ASTNode::VarExpr(ref n) = *expr {
+        // Lookup function address
+        let n = n.clone().split("::").nth(1).unwrap().to_string();
+        if let Some(addr) = compiler.program.functis.iter().find_map(
+            |i| if i.0 == n && i.2 == args.len() as i32 { Some(i.1) } else { None }
+        ) {
+            (addr, "".to_string())
+        } else if args.is_empty() && n == "args" {
+            // It's `args()`
+            compiler.needs_args = true;
+            let ret = compiler.alloc_reg();
+            // Load saved args
+            compiler.add_op_args(Opcode::CARG, ret as u8, 0, 0);
+            return Some(ret);
+        } else {
+            // Function isn't static
+            (0, n.clone())
+        }
+    } else {
+        // Function isn't static
+        (0, "".to_string())
+    };
+    // Compile the call
+    if address == 0 {
+        // Variable call (VCALL)
+        let expr = if name.is_empty() || name.contains("::") {
+            compile_expr(compiler, expr)?
+        } else {
+            compiler.push(Value::Functi(Rc::new(name)))
+        };
+        compiler.add_op_args(Opcode::VCALL, expr as u8, args.len() as u8, 0);
+        compiler.free_reg(expr);
+        return Some(Reg::Stack);
+    }
+
+    // Normal static call
+    compiler.add_op_args(
+        Opcode::CALL,
+        ((address >> 16) & 255) as u8,
+        ((address >> 8) & 255) as u8,
+        (address & 255) as u8
+    );
+    Some(Reg::Stack)
+}
+
 fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
     Some(match node {
         // Values
@@ -494,59 +548,14 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
         },
         // Calls
         CallExpr(expr, args) => {
-            // Push the args onto the stack (in reverse order)
-            let old_on_stack = compiler.on_stack_only;
-            compiler.on_stack_only = true;
-            for arg in args.iter().rev() {
-                compile_expr(compiler, arg)?;
-            }
-            compiler.on_stack_only = old_on_stack;
-            // Get address
-            let (address, name) = if let ASTNode::VarExpr(ref n) = **expr {
-                // Lookup function address
-                let n = n.clone().split("::").nth(1).unwrap().to_string();
-                if let Some(addr) = compiler.program.functis.iter().find_map(
-                    |i| if i.0 == n && i.2 == args.len() as i32 { Some(i.1) } else { None }
-                ) {
-                    (addr, "".to_string())
-                } else if args.is_empty() && n == "args" {
-                    // Saving args is needed
-                    compiler.needs_args = true;
-                    let ret = compiler.alloc_reg();
-                    compiler.add_op_args(Opcode::CARG, ret as u8, 0, 0);
-                    return Some(ret);
-                } else {
-                    (0, n.clone())
-                }
-            } else {
-                (0, "".to_string())
-            };
-            // Compile the call
-            if address == 0 {
-                // Variable call (VCALL)
-                let expr = if name.is_empty() || name.contains("::"){
-                    compile_expr(compiler, expr)?
-                } else {
-                    compiler.push(Value::Functi(Rc::new(name)))
-                };
-                compiler.add_op_args(Opcode::VCALL, expr as u8, args.len() as u8, 0);
-                compiler.free_reg(expr);
-            } else {
-                compiler.add_op_args(
-                    Opcode::CALL,
-                    ((address >> 16) & 255) as u8,
-                    ((address >> 8) & 255) as u8,
-                    (address & 255) as u8
-               );
-            }
-            Reg::Stack
+            return compile_call(compiler, expr, args);
         },
         // List
         ListExpr(keys, values, fast) => {
             // Build the list
             let old_on_stack = compiler.on_stack_only;
             compiler.on_stack_only = true;
-            for at in (0..values.len()).rev() {
+            for at in 0..values.len() {
                 compile_expr(compiler, &values[at])?;
                 if !*fast {
                     compiler.push_to_stack(Value::Str(Rc::new(keys[at].clone())));
@@ -787,7 +796,7 @@ fn compile_stmt(
             let start = compiler.program.ops.len();
             compiler.add_op(Opcode::NOP);
             // Load args from stack
-            for arg in &node.arg_names {
+            for arg in node.arg_names.iter().rev() {
                 let name = compiler.push(Value::Str(Rc::new(arg.to_string())));
                 compiler.add_op_args(Opcode::DV, name as u8, Reg::Stack as u8, 0);
                 compiler.free_reg(name);
@@ -817,7 +826,7 @@ fn compile_stmt(
                     // Push args
                     let old_on_stack = compiler.on_stack_only;
                     compiler.on_stack_only = true;
-                    for arg in args.iter().rev() {
+                    for arg in &args {
                         compile_expr(compiler, arg)?;
                     }
                     compiler.on_stack_only = old_on_stack;

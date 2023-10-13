@@ -430,6 +430,7 @@ impl Vm {
             args.push(self.stack.pop().unwrap());
             arg_num -= 1;
         }
+        args = args.into_iter().rev().collect();
         // Call
         let ret = functie(self, args)?;
         self.stack.push(ret);
@@ -1111,7 +1112,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 list.push(vm.stack.pop().unwrap());
                 size -= 1;
             }
-            vm.set_reg(a, Value::FastList(Rc::new(list)));
+            vm.set_reg(a, Value::FastList(Rc::new(list.into_iter().rev().collect())));
         },
         Opcode::LL => {
             let mut size = shift2(b, c);
@@ -1126,7 +1127,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 list.push(((*key).clone(), val));
                 size -= 1;
             }
-            vm.set_reg(a, Value::List(Rc::new(list)));
+            vm.set_reg(a, Value::List(Rc::new(list.into_iter().rev().collect())));
         },
         Opcode::INX => {
             let list = vm.get_reg(a);
