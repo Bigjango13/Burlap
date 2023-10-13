@@ -18,7 +18,7 @@ impl PartialEq for FileInfo {
 }
 
 // Value enum for variables
-// TODO: Speed up (pointer tagging?)
+// TODO: Make smaller (pointer tagging?)
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     // Normal values
@@ -43,42 +43,6 @@ pub enum Value {
     Iter(Rc<(Vec<Value>, i32)>),
     // RangeType (used for optimized ranges)
     RangeType(i32, i32, i32),
-}
-
-// Helper for ops
-macro_rules! do_op {
-    ($left:expr, $right:expr, $op:tt, $errval:expr) => {
-        match $left {
-            // Floats
-            Value::Float(f) => {
-                if let Value::Float(f_right) = $right {
-                    // Two floats are easy!
-                    Ok(Value::Float(*f $op *f_right))
-                } else if let Value::Int(i_right) = $right {
-                    // A float and an int are easier
-                    Ok(Value::Float(*f $op (*i_right as f32)))
-                } else {
-                    $errval
-                }
-            },
-            // Ints
-            Value::Int(i) => {
-                if let Value::Float(f_right) = $right {
-                    // Int and float -> float and float
-                    Ok(Value::Float((*i as f32) $op *f_right))
-                } else if let Value::Int(i_right) = $right {
-                    // Two ints
-                    Ok(Value::Int(*i $op *i_right))
-                } else {
-                    $errval
-                }
-            },
-            // Anything else
-            _ => {
-                $errval
-            },
-        }
-    }
 }
 
 // Methods
@@ -410,103 +374,147 @@ impl Value {
 
 // Add
 impl_op_ex!(+ |left: &Value, right: &Value| -> Result<Value, String> {
-    // Lists
-    if let Value::List(_) = left {
-        let Value::List(mut list_rc) = left.clone() else {
-            panic!("impossible");
-        };
-        let list = Rc::make_mut(&mut list_rc);
-        if let Some(vals) = right.values() {
-            // Concat
-            for val in vals {
-                list.push((list.len().to_string(), val));
+    Ok(match (left, right) {
+        // Lists
+        (Value::List(_), _) => {
+            let Value::List(mut rc_list) = left.clone() else {
+                panic!("impossible");
+            };
+            let list = Rc::make_mut(&mut rc_list);
+            if let Some(vals) = right.values() {
+                // Concat
+                for val in vals.clone() {
+                    list.push((list.len().to_string(), val));
+                }
+            } else {
+                // Append
+                list.push((list.len().to_string(), right.clone()));
             }
-        } else {
-            // Append
-            list.push((list.len().to_string(), right.clone()));
-        }
-        return Ok(Value::List(list_rc));
-    } else if let Value::FastList(_) = left {
-        let Value::FastList(mut list_rc) = left.clone() else {
-            panic!("impossible");
-        };
-        let list = Rc::make_mut(&mut list_rc);
-        if let Some(mut vals) = right.values() {
-            // Concat
-            list.append(&mut vals);
-        } else {
-            // Append
-            list.push(right.clone());
-        }
-        return Ok(Value::FastList(list_rc));
-    };
-    // Strings
-    if let Value::Str(s) = right {
-        return Ok(Value::Str(Rc::new(left.to_string()? + s)));
-    } else if let Value::Str(s) = left {
-        return Ok(Value::Str(Rc::new((**s).to_owned() + &right.to_string()?)));
-    }
-    // Anything else
-    return do_op!(left, right, +, Err(
-        format!("Cannot add {} and {}", left.get_type(), right.get_type())
-    ))
+            Value::List(rc_list)
+        },
+        (Value::FastList(_), _) => {
+            let Value::FastList(mut rc_list) = left.clone() else {
+                panic!("impossible");
+            };
+            let list = Rc::make_mut(&mut rc_list);
+            if let Some(mut vals) = right.values() {
+                // Concat
+                list.append(&mut vals);
+            } else {
+                // Append
+                list.push(right.clone());
+            }
+            Value::FastList(rc_list)
+        },
+        // Strings
+        (_, Value::Str(r)) => {
+            Value::Str(Rc::new(left.to_string()? + &*r.clone()))
+        },
+        (Value::Str(l), _) => {
+            let l: String = (**l).clone();
+            Value::Str(Rc::new(l + &right.to_string()?))
+        },
+        // Floats
+        (Value::Float(l), Value::Float(r)) =>
+            Value::Float(*l + *r),
+        (Value::Float(l), Value::Int(r)) =>
+            Value::Float(*l + (*r as f32)),
+        (Value::Int(l), Value::Float(r)) =>
+            Value::Float((*l as f32) + *r),
+        // Int and int
+        (Value::Int(l), Value::Int(r)) =>
+            Value::Int(*l + *r),
+        // Anything else
+        _ => return Err(
+            format!("Cannot add {} and {}", left.get_type(), right.get_type())
+        ),
+    })
 });
 
 // Subtract
 impl_op_ex!(- |left: &Value, right: &Value| -> Result<Value, String> {
-    do_op!(left, right, -,
-        Err(format!("Cannot subtract {} and {}", left.get_type(), right.get_type()))
-    )
+    Ok(match (left, right) {
+        // Floats
+        (Value::Float(l), Value::Float(r)) =>
+            Value::Float(*l - *r),
+        (Value::Float(l), Value::Int(r)) =>
+            Value::Float(*l - (*r as f32)),
+        (Value::Int(l), Value::Float(r)) =>
+            Value::Float((*l as f32) - *r),
+        // Int and int
+        (Value::Int(l), Value::Int(r)) =>
+            Value::Int(*l - *r),
+        // Anything else
+        _ => return Err(
+            format!("Cannot subtract {} and {}", left.get_type(), right.get_type())
+        ),
+    })
 });
 
 // Multiply
 impl_op_ex!(* |left: &Value, right: &Value| -> Result<Value, String> {
-    return match left {
-        // str * number is valid
-        Value::Str(s) => {
-            if let Value::Int(i_right) = right {
-                Ok(if *i_right > 0 {
-                    Value::Str(Rc::new((*s).repeat((*i_right).try_into().unwrap())))
-                } else {
-                    Value::Str(Rc::new("".to_string()))
-                })
+    Ok(match (left, right) {
+        // Str * number
+        (Value::Str(l), Value::Int(r)) => {
+            if *r > 0 {
+                Value::Str(Rc::new((*l).repeat((*r).try_into().unwrap())))
             } else {
-                Err(format!(
-                    "Cannot multiply {} and {}", left.get_type(), right.get_type()
-                ))
+                Value::Str(Rc::new("".to_string()))
             }
-        },
-        _ => do_op!(left, right, *,
-            Err(format!(
-                "Cannot multiply {} and {}", left.get_type(), right.get_type()
-            ))
+        }
+        // Floats
+        (Value::Float(l), Value::Float(r)) =>
+            Value::Float(*l * *r),
+        (Value::Float(l), Value::Int(r)) =>
+            Value::Float(*l * (*r as f32)),
+        (Value::Int(l), Value::Float(r)) =>
+            Value::Float((*l as f32) * *r),
+        // Int and int
+        (Value::Int(l), Value::Int(r)) =>
+            Value::Int(*l * *r),
+        // Anything else
+        _ => return Err(
+            format!("Cannot subtract {} and {}", left.get_type(), right.get_type())
         ),
-    }
+    })
 });
 
 // Div
 impl_op_ex!(/ |left: &Value, right: &Value| -> Result<Value, String> {
-    if let Value::Int(i) = left {
-        return &Value::Float(*i as f32) / right;
-    }
-    do_op!(
-        left, right, /,
-        Err(format!(
-            "Cannot divide {} and {}",
-            left.get_type(),
-            right.get_type()
-        ))
-    )
+    Ok(match (left, right) {
+        // Floats
+        (Value::Float(l), Value::Float(r)) =>
+            Value::Float(*l / *r),
+        (Value::Float(l), Value::Int(r)) =>
+            Value::Float(*l / (*r as f32)),
+        (Value::Int(l), Value::Float(r)) =>
+            Value::Float((*l as f32) / *r),
+        // Int/int is just float/float
+        (Value::Int(l), Value::Int(r)) =>
+            Value::Float((*l as f32) / (*r as f32)),
+        // Anything else
+        _ => return Err(
+            format!("Cannot divide {} and {}", left.get_type(), right.get_type())
+        )
+    })
 });
 
 // Modulo
 impl_op_ex!(% |left: &Value, right: &Value| -> Result<Value, String> {
-    do_op!(
-        left, right, %,
-        Err(format!(
-            "Cannot modulo {} and {}",
-            left.get_type(),
-            right.get_type()
-        ))
-    )
+    Ok(match (left, right) {
+        // Floats
+        (Value::Float(l), Value::Float(r)) =>
+            Value::Float(*l % *r),
+        (Value::Float(l), Value::Int(r)) =>
+            Value::Float(*l % (*r as f32)),
+        (Value::Int(l), Value::Float(r)) =>
+            Value::Float((*l as f32) % *r),
+        // Int/int
+        (Value::Int(l), Value::Int(r)) =>
+            Value::Int(*l % *r),
+        // Anything else
+        _ => return Err(
+            format!("Cannot modulo {} and {}", left.get_type(), right.get_type())
+        )
+    })
 });

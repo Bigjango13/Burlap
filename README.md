@@ -115,8 +115,12 @@ For profiling, I use [flamegraph-rs](https://github.com/flamegraph-rs/flamegraph
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
 - 1.2.3
-    - Makes lists Copy-On-Write
+    - Make lists Copy-On-Write
     - Reduce `Value` size to 16 bytes
+    - Fix REPL duplication bug
+    - Fix `VCALL` for user-defined functions
+    - Fix eval order for lists and calls
+    - Clean up lots of little things
 - 1.2.2: Backtrace update
     - Add line numbers to runtime errors
     - Add the `--backtrace` flag

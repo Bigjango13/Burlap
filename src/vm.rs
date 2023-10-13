@@ -420,21 +420,38 @@ impl Vm {
         &mut self, name: String, mut arg_num: u8
     ) -> Result<(), String> {
         // Check builtins
-        let Some(functie) = self.functies.get(&name) else {
-            // Check non-builtins
-            return Err(format!("no function called \"{}\"", name));
+        if let Some(functie) = self.functies.get(&name) {
+            // Get args
+            let mut args: Vec<Value> = vec![];
+            while arg_num > 0 {
+                args.push(self.stack.pop().unwrap());
+                arg_num -= 1;
+            }
+            args = args.into_iter().rev().collect();
+            // Call
+            let ret = functie(self, args)?;
+            self.stack.push(ret);
+            return Ok(());
         };
-        // Get args
-        let mut args: Vec<Value> = vec![];
-        while arg_num > 0 {
-            args.push(self.stack.pop().unwrap());
-            arg_num -= 1;
+        // Check non-builtins
+        let mut exists: bool = false;
+        for (fname, addr, argn) in &self.program.functis {
+            // Same name
+            if &name == fname {
+                exists = true;
+                // Correct args
+                if argn == &(arg_num as i32) {
+                    // Go to it!
+                    self.call(*addr);
+                    return Ok(());
+                }
+            }
         }
-        args = args.into_iter().rev().collect();
-        // Call
-        let ret = functie(self, args)?;
-        self.stack.push(ret);
-        Ok(())
+        // Die
+        if exists {
+            return Err(format!("incorrect number of arguments for \"{name}\""));
+        }
+        return Err(format!("no function called \"{name}\", this should never happen"));
     }
 
     // Call a function

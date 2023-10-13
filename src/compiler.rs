@@ -15,6 +15,7 @@ pub struct Program {
     pub ops: Vec<u32>,
     pub consts: Vec<Value>,
     // Function locations (name, byte pos, arg num))
+    // TODO: Don't use tuple, i32 -> u8
     pub functis: Vec<(String, usize, i32)>,
     // Import dir
     pub path: PathBuf,
