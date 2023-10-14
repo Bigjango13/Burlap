@@ -40,7 +40,7 @@ pub enum ASTNode {
     // If/else if, (Binop(x == 1), Body(trueBody), Body(falseBody or nop))
     IfStmt(Box<ASTNode>, Box<StmtNode>, Box<StmtNode>),
     // Let, (x, 47)
-    LetStmt(String, Box<ASTNode>),
+    LetStmt(Vec<String>, Vec<ASTNode>),
     // Return, ("Return Val")
     ReturnStmt(Box<ASTNode>),
     // Iter loop, (i, range(0, 100), Body(...), already_defined)
@@ -910,7 +910,23 @@ fn parse_import(parser: &mut Parser) -> Option<(String, Vec<StmtNode>)> {
 
 // Variable definition
 fn parse_let(parser: &mut Parser) -> Option<ASTNode> {
-    // Eat let
+    let mut names = vec![];
+    let mut values = vec![];
+    loop {
+        if let Semicolon = parser.current() {
+            break;
+        }
+        let (name, value) = _parse_let(parser)?;
+        names.push(name);
+        values.push(value);
+    }
+    // Semicolon
+    eat_semicolon!(parser)?;
+    return Some(ASTNode::LetStmt(names, values));
+}
+
+fn _parse_let(parser: &mut Parser) -> Option<(String, ASTNode)> {
+    // Eat let or comma
     parser.next();
     // Get var name
     let name: String;
@@ -924,9 +940,8 @@ fn parse_let(parser: &mut Parser) -> Option<ASTNode> {
     parser.next();
     // Let without value (non-standard)
     if let Semicolon = parser.current() {
-        parser.next();
         if parser.args.extensions.contains(&"auto-none".to_string()) {
-            return Some(ASTNode::LetStmt(name, Box::new(ASTNode::NoneExpr)));
+            return Some((name, ASTNode::NoneExpr));
         } else {
             error!(parser, "let must have value");
             error!(
@@ -934,6 +949,7 @@ fn parse_let(parser: &mut Parser) -> Option<ASTNode> {
                 "this can be disabled by the auto none extension (`-use-auto-none`)",
                 ErrType::Hint
             );
+            parser.next();
             return Option::None;
         }
     }
@@ -941,10 +957,8 @@ fn parse_let(parser: &mut Parser) -> Option<ASTNode> {
     eat!(parser, Equals, "expected '=' in variable declaration")?;
     // Let with value
     let value = parse_expr(parser)?.node;
-    // Semicolon
-    eat_semicolon!(parser)?;
     // Return
-    return Some(ASTNode::LetStmt(name, Box::new(value)));
+    return Some((name, value));
 }
 
 // Returning

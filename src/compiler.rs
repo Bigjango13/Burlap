@@ -645,12 +645,14 @@ fn compile_stmt(
     }
     match &node.node {
         // Statements
-        LetStmt(name, val) => {
-            let vreg = compile_expr(compiler, val)?;
-            let nreg = compiler.push(Value::Str(Rc::new(name.to_string())));
-            compiler.add_op_args(Opcode::DV, nreg as u8, vreg as u8, 0);
-            compiler.free_reg(vreg);
-            compiler.free_reg(nreg);
+        LetStmt(names, vals) => {
+            for (name, val) in names.iter().zip(vals.iter()) {
+                let vreg = compile_expr(compiler, val)?;
+                let nreg = compiler.push(Value::Str(Rc::new(name.to_string())));
+                compiler.add_op_args(Opcode::DV, nreg as u8, vreg as u8, 0);
+                compiler.free_reg(vreg);
+                compiler.free_reg(nreg);
+            }
             compiler.needs_scope = true;
         },
         IfStmt(cond, body, else_part) => {
