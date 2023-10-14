@@ -694,7 +694,39 @@ fn compile_stmt(
             }
             compiler.free_reg(cond);
         },
-        LoopStmt(var, iter, body, old_var) => {
+        LoopStmt(body) if body.node == ASTNode::Nop => {
+            compiler.add_op(Opcode::NOP);
+            compiler.add_op(Opcode::JMPB);
+            compiler.fill_jmp(
+                compiler.program.ops.len(),
+                1,
+                None
+            );
+        },
+        LoopStmt(body) => {
+            let old_top = compiler.loop_top;
+            let last_size = compiler.break_addrs.len();
+            compiler.loop_top = compiler.program.ops.len();
+
+            // Body
+            compile_body(compiler, args, body, false)?;
+
+            // Backwards jump
+            compiler.add_op(Opcode::JMPB);
+            compiler.fill_jmp(
+                compiler.program.ops.len(),
+                compiler.program.ops.len() - compiler.loop_top - 1,
+                None
+            );
+
+            // Fill breaks
+            for addr in &compiler.break_addrs.clone()[last_size..] {
+                compiler.fill_jmp(*addr, 0, None);
+            }
+            compiler.break_addrs.truncate(last_size);
+            compiler.loop_top = old_top;
+        },
+        IterLoopStmt(var, iter, body, old_var) => {
             // Load iter
             let iter = compile_expr(compiler, iter)?;
             compiler.add_op_args(Opcode::ITER, iter as u8, iter as u8, 0);

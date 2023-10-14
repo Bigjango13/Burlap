@@ -43,8 +43,10 @@ pub enum ASTNode {
     LetStmt(Vec<String>, Vec<ASTNode>),
     // Return, ("Return Val")
     ReturnStmt(Box<ASTNode>),
+    // Infinite loop
+    LoopStmt(Box<StmtNode>),
     // Iter loop, (i, range(0, 100), Body(...), already_defined)
-    LoopStmt(String, Box<ASTNode>, Box<StmtNode>, bool),
+    IterLoopStmt(String, Box<ASTNode>, Box<StmtNode>, bool),
     // While loop, (6 > i, Body(...))
     WhileStmt(Box<ASTNode>, Box<StmtNode>),
     // Break
@@ -654,6 +656,7 @@ fn parse_statement(parser: &mut Parser) -> Option<StmtNode> {
         Break => {
             if !parser.in_loop {
                 error!(parser, "break outside of loop");
+                parser.next();
                 Option::None
             } else {
                 parser.next();
@@ -664,6 +667,7 @@ fn parse_statement(parser: &mut Parser) -> Option<StmtNode> {
         Continue => {
             if !parser.in_loop {
                 error!(parser, "continue outside of loop");
+                parser.next();
                 Option::None
             } else {
                 parser.next();
@@ -823,7 +827,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     let body = into_stmt(parse_body, parser)?;
     parser.functi_locals.append(&mut parser.ast.vars.split_off(old_len));
     // Return
-    Some(ASTNode::LoopStmt(name, Box::new(iter), Box::new(body), already_defined))
+    Some(ASTNode::IterLoopStmt(name, Box::new(iter), Box::new(body), already_defined))
 }
 
 fn parse_loop_while(parser: &mut Parser) -> Option<ASTNode> {
@@ -842,6 +846,14 @@ fn parse_loop_while(parser: &mut Parser) -> Option<ASTNode> {
 fn parse_loop(parser: &mut Parser) -> Option<ASTNode> {
     // Eat loop
     parser.next();
+    // No condition
+    if parser.current() == Lbrace {
+        let old_in_loop = parser.in_loop;
+        parser.in_loop = true;
+        let body = Box::new(into_stmt(parse_body, parser)?);
+        parser.in_loop = old_in_loop;
+        return Some(ASTNode::LoopStmt(body));
+    }
     // Start parens
     eat!(parser, Lparan, "missing '(' in loop")?;
     // Get the loop type and call the helper
