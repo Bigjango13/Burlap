@@ -471,20 +471,21 @@ fn compile_call(compiler: &mut Compiler, expr: &ASTNode, args: &Vec<ASTNode>) ->
     let (address, name) = if let ASTNode::VarExpr(ref n) = *expr {
         // Lookup function address
         let n = n.clone().split("::").nth(1).unwrap().to_string();
-        if let Some(addr) = compiler.program.functis.iter().find_map(
-            |i| if i.0 == n && i.2 == args.len() as i32 { Some(i.1) } else { None }
-        ) {
-            (addr, "".to_string())
-        } else if args.is_empty() && n == "args" {
+        if args.is_empty() && n == "args" {
             // It's `args()`
             compiler.needs_args = true;
             let ret = compiler.alloc_reg();
             // Load saved args
             compiler.add_op_args(Opcode::CARG, ret as u8, 0, 0);
             return Some(ret);
+        }
+        if let Some(addr) = compiler.program.functis.iter().find_map(
+            |i| if i.0 == n && i.2 == args.len() as i32 { Some(i.1) } else { None }
+        ) {
+            (addr, "".to_string())
         } else {
             // Function isn't static
-            (0, n.clone())
+            (0, "".to_string())
         }
     } else {
         // Function isn't static

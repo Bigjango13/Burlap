@@ -1149,13 +1149,8 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         Opcode::INX => {
             let list = vm.get_reg(a);
             let index = vm.get_reg(b);
-            match list.index(&index) {
-                 Some(x) => vm.set_reg(c, x),
-                 _ => return Err(format!(
-                    "failed to index {} with {}",
-                    list.to_string()?, index.to_string()?
-                )),
-            }
+            let value = list.index(&index).unwrap_or(Value::None);
+            vm.set_reg(c, value);
         },
         Opcode::ITER => {
             // Convert to an iterator
