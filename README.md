@@ -14,7 +14,7 @@ Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) progr
     - [x] Bool
     - [x] None
     - [x] Lists **(New)**
-      - [ ] Multiplication **(New)**
+      - [x] Multiplication **(New)**
       - [ ] Deletion **(New)**
     - [x] Byte **(New)**
     - [x] `type` function **(New)**

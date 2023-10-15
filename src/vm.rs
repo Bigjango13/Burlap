@@ -318,7 +318,7 @@ impl Vm {
         {
             return Ok(Value::Functi(Rc::new(real_name)));
         }
-        Err(format!("no variable called \"{}\"! This is a bug and should have been detected earlier on", name))
+        Err(format!("no variable called \"{}\"! This is a bug in burlap and should have been detected earlier on", name))
     }
 
     // Create a variable
@@ -369,7 +369,7 @@ impl Vm {
         if self.set_global(name, val) {
             return Ok(());
         }
-        return Err(format!("no variable called \"{}\"! This is a bug and should have been detected earlier on", name));
+        return Err(format!("no variable called \"{}\"! This is a bug in burlap and should have been detected earlier on", name));
     }
 
     // Scope
@@ -397,6 +397,7 @@ impl Vm {
             return Err("cannot raise global scope".to_string());
         };
         // Raise scope back up
+        // TODO: Figure out why this doesn't seem to work
         self.is_global = self.scope.is_empty();
         self.var_min = old_min;
         // Remove new vars

@@ -754,6 +754,9 @@ fn compile_stmt(
 
             // Body
             compile_body(compiler, args, body, !*old_var)?;
+            if !*old_var {
+                compiler.add_op(Opcode::RS);
+            }
             // Backwards jump
             compiler.add_op(Opcode::JMPB);
             compiler.fill_jmp(
@@ -772,9 +775,6 @@ fn compile_stmt(
             compiler.free_reg(iter);
             if iter == Reg::Stack {
                 compiler.add_op(Opcode::POP);
-            }
-            if !*old_var {
-                compiler.add_op(Opcode::RS);
             }
             compiler.free_reg(item);
         },

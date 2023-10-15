@@ -451,16 +451,58 @@ impl_op_ex!(- |left: &Value, right: &Value| -> Result<Value, String> {
     })
 });
 
+fn vec_repeat<T: Clone>(vec: &mut Vec<T>, n: i32) {
+    let len = vec.len();
+    if n <= 0 || len <= 0 {
+        *vec = vec![];
+        return;
+    } else if n == 1 {
+        return;
+    }
+    // Loop
+    let mut max = len * (n as usize - 1);
+    loop {
+        let abs_sub = if len > max {len - max} else {max - len};
+        let item = vec[abs_sub % len].clone();
+        vec.push(item);
+        max -= 1;
+        if max == 0 {
+            return;
+        }
+    }
+}
+
 // Multiply
 impl_op_ex!(* |left: &Value, right: &Value| -> Result<Value, String> {
     Ok(match (left, right) {
-        // Str * number
-        (Value::Str(l), Value::Int(r)) => {
+        // Str * int
+        (Value::Str(s), Value::Int(r)) => {
             if *r > 0 {
-                Value::Str(Rc::new((*l).repeat((*r).try_into().unwrap())))
+                Value::Str(Rc::new((*s).repeat((*r).try_into().unwrap())))
             } else {
                 Value::Str(Rc::new("".to_string()))
             }
+        }
+        // List * int
+        (Value::FastList(l), Value::Int(r)) => {
+            // Copy
+            let mut rc_list = l.clone();
+            let list = Rc::make_mut(&mut rc_list);
+            vec_repeat(list, *r);
+            Value::FastList(rc_list)
+        }
+        (Value::List(l), Value::Int(r)) => {
+            // Check if it is valid
+            for (at, (key, _)) in l.iter().enumerate() {
+                if &at.to_string() != key {
+                    return Err(format!("Cannot multiply list with named keys"));
+                }
+            }
+            // Copy
+            let mut rc_list = l.clone();
+            let list = Rc::make_mut(&mut rc_list);
+            vec_repeat(list, *r);
+            Value::List(rc_list)
         }
         // Floats
         (Value::Float(l), Value::Float(r)) =>
@@ -474,7 +516,7 @@ impl_op_ex!(* |left: &Value, right: &Value| -> Result<Value, String> {
             Value::Int(*l * *r),
         // Anything else
         _ => return Err(
-            format!("Cannot subtract {} and {}", left.get_type(), right.get_type())
+            format!("Cannot multiply {} and {}", left.get_type(), right.get_type())
         ),
     })
 });
