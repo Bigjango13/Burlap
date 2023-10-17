@@ -361,5 +361,14 @@ se_test = args_test(side_effect(1), side_effect(2), 0);
 test("Call eval order", accum, "12");
 test("Call total", se_test, ["1", "12", 0]);
 
+# Random tests
+print("*** Rand Tests ***");
+x = rand(1, 5);
+test("rand bounds", 1 <= x && x <= 5, true);
+x = rand(1, 1);
+test("rand(x, x) = x", x, 1);
+x = rand(1, 2);
+test("rand(max, min)", 1 <= x && x <= 2, true);
+
 # End of tests
 testSummary();

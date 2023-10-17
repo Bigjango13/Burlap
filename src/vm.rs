@@ -13,6 +13,7 @@ use crate::compiler::Program;
 use crate::value::{FileInfo, Value};
 
 use rustc_hash::FxHashMap;
+use rand::Rng;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug)]
@@ -192,6 +193,7 @@ impl Vm {
         functies.insert("type".to_string(), sk_type as Functie);
         functies.insert("len".to_string(), sk_len as Functie);
         functies.insert("range".to_string(), sk_range as Functie);
+        functies.insert("rand".to_string(), sk_rand as Functie);
         // File IO
         #[cfg(not(target_family = "wasm"))]
         {
@@ -632,6 +634,19 @@ fn sk_range(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     return Ok(Value::FastList(Rc::new(ret)));
 }
 
+// Rand
+fn sk_rand(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 2 {
+        // Invalid args
+        vm.bad_args("rand", args.len(), 2)?;
+    }
+    let (mut min, mut max) = (args[0].to_int(), args[1].to_int());
+    if min > max {
+        std::mem::swap(&mut min, &mut max);
+    }
+    return Ok(Value::Int(rand::thread_rng().gen_range(min..max+1)));
+}
+
 // File IO
 fn sk_open(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
@@ -953,6 +968,7 @@ fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
 fn set_key(
     vlist: &mut Value, key: Value, val: Value
 ) -> Result<(), String> {
+    // TODO: This code sucks
     let Value::List(ref mut list_rc) = vlist else {
         let Value::FastList(ref mut list_rc) = vlist else {
             return Err(format!(
@@ -1169,24 +1185,13 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             }
         },
         Opcode::SKY => {
-            // If the list is in a reg it can be done without copying the list
-            let mut tmp_list: Option<Value> = None;
             let key: Value;
             let val: Value;
-            let list = if a == 16 {
-                tmp_list = Some(vm.get_reg(a));
-                key = vm.get_reg(b);
-                val = vm.get_reg(c);
-                tmp_list.as_mut().unwrap()
-            } else {
-                key = vm.get_reg(b);
-                val = vm.get_reg(c);
-                &mut vm.regs[a as usize]
-            };
-            set_key(list, key, val)?;
-            if a == 16 {
-                vm.set_reg(a, tmp_list.unwrap());
-            }
+            let mut list = vm.get_reg(a);
+            key = vm.get_reg(b);
+            val = vm.get_reg(c);
+            set_key(&mut list, key, val)?;
+            vm.set_reg(a, list);
         },
 
         // Variables
