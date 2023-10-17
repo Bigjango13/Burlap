@@ -53,8 +53,8 @@ Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) progr
   - [x] History
   - [x] Multiline editing
 - [x] Extra features
-  - [x] C FFI (see the [Building with C FFI](# Building with C FFI) section)
-  - [x] Web Assembly support (see the [Building for WASM](# Building for WASM) section)
+  - [x] C FFI (see the [Building with C FFI](#building-with-c-ffi) section)
+  - [x] Web Assembly support (see the [Building for WASM](#building-for-wasm) section)
   - [x] And [more](docs/extensions.md)!
 
 ## Building
