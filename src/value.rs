@@ -90,7 +90,7 @@ impl Value {
                 // Add each element
                 for val in l.iter() {
                     // The the index isn't a number, print the index
-                    if !val.0.as_bytes()[0].is_ascii_digit() {
+                    if val.0 != "" {
                         ret += &val.0;
                         ret += ": ";
                     }
@@ -384,11 +384,11 @@ impl_op_ex!(+ |left: &Value, right: &Value| -> Result<Value, String> {
             if let Some(vals) = right.values() {
                 // Concat
                 for val in vals.clone() {
-                    list.push((list.len().to_string(), val));
+                    list.push(("".to_string(), val));
                 }
             } else {
                 // Append
-                list.push((list.len().to_string(), right.clone()));
+                list.push(("".to_string(), right.clone()));
             }
             Value::List(rc_list)
         },
@@ -493,9 +493,9 @@ impl_op_ex!(* |left: &Value, right: &Value| -> Result<Value, String> {
         }
         (Value::List(l), Value::Int(r)) => {
             // Check if it is valid
-            for (at, (key, _)) in l.iter().enumerate() {
-                if &at.to_string() != key {
-                    return Err(format!("Cannot multiply list with named keys"));
+            for (key, _) in l.iter() {
+                if key != "" {
+                    return Err(format!("Cannot multiply list with named keys (found a key named \"{key}\")"));
                 }
             }
             // Copy

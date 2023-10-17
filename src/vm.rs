@@ -984,21 +984,27 @@ fn set_key(
             let entry = list.get_mut(as_uint)
                 .map(|s| *s = val.clone());
             if entry.is_none() {
-                if as_uint != list.len() + 1 {
-                    list.push(val);
+                if as_uint == list.len() {
+                    // Push
+                    if val != Value::None {
+                        list.push(val);
+                    }
                 } else {
                     return Err(
                         "cannot assign to out of bounds key".to_string()
                     );
                 }
+            } else if val == Value::None {
+                // Remove that key
+                list.remove(as_uint);
             }
         } else {
             // Convert to normal list
             let mut slowlist = Vec::<(String, Value)>::with_capacity(
                 list.len()
             );
-            for (at, i) in list.iter_mut().enumerate() {
-                slowlist.push((at.to_string(), i.clone()));
+            for i in list {
+                slowlist.push(("".to_string(), i.clone()));
             }
             // Set
             *vlist = Value::List(Rc::new(slowlist));
@@ -1018,25 +1024,40 @@ fn set_key(
         let key = key as usize;
         if key == list.len() {
             // Add new key
-            list.push((key.to_string(), val));
+            if val != Value::None {
+                list.push(("".to_string(), val));
+            }
         } else {
-            // Modify key
-            list[key].1 = val;
+            if val == Value::None {
+                // Delete key
+                list.remove(key);
+            } else {
+                // Modify key
+                list[key].1 = val;
+            }
         }
     } else {
         // Add or create string key
         let key = key.to_string()?;
-        for ref mut i in list.iter_mut() {
+        let mut index = usize::MAX;
+        for (at, ref mut i) in list.iter_mut().enumerate() {
             if i.0 == key {
-                i.1 = val;
-                // *vlist = Value::List(list);
-                return Ok(());
+                if val == Value::None {
+                    index = at;
+                    break;
+                } else {
+                    i.1 = val;
+                    return Ok(());
+                }
             }
         }
         // Modify
-        list.push((key, val));
+        if val != Value::None {
+            list.push((key, val));
+        } else if index != usize::MAX {
+            list.remove(index);
+        }
     }
-    // *vlist = Value::List(list);
     return Ok(());
 }
 
@@ -1143,8 +1164,12 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             let mut size = shift2(b, c);
             let mut list = Vec::<Value>::with_capacity(size);
             while size > 0 {
-                list.push(vm.stack.pop().unwrap());
                 size -= 1;
+                let val = vm.stack.pop().unwrap();
+                if let Value::None = val {
+                    continue;
+                }
+                list.push(val);
             }
             vm.set_reg(a, Value::FastList(Rc::new(list.into_iter().rev().collect())));
         },
@@ -1153,13 +1178,20 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             let mut list = Vec::<(String, Value)>::with_capacity(size);
             // Get the keys and values and put them into the list
             while size > 0 {
+                size -= 1;
                 let Value::Str(key) = vm.stack.pop().unwrap() else {
                     return Err("Non-string list index".to_string());
                 };
                 let val = vm.stack.pop().unwrap();
+                if let Value::None = val {
+                    continue;
+                }
+                let key = (*key).clone();
+                /*if key == "" {
+                    key = (old_size - list.len() - 1).to_string();
+                }*/
                 // Store
-                list.push(((*key).clone(), val));
-                size -= 1;
+                list.push((key, val));
             }
             vm.set_reg(a, Value::List(Rc::new(list.into_iter().rev().collect())));
         },

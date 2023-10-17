@@ -500,7 +500,7 @@ fn parse_binop_set(parser: &mut Parser) -> Option<ASTNode> {
 }
 
 // Lists
-fn parse_list_item(parser: &mut Parser, at: i32) -> (String, Option<ASTNode>) {
+fn parse_list_item(parser: &mut Parser) -> (String, Option<ASTNode>) {
     // Parses a single item in a list
     let mut name: String;
     // Get the key name
@@ -517,7 +517,7 @@ fn parse_list_item(parser: &mut Parser, at: i32) -> (String, Option<ASTNode>) {
             return (name, Some(ASTNode::VarExpr(var_name)));
         } else {
             // It's not a named index (`[myvar + 1]`)
-            name = at.to_string();
+            name = "".to_string();
             parser.at -= 1;
         }
     } else {
@@ -525,7 +525,7 @@ fn parse_list_item(parser: &mut Parser, at: i32) -> (String, Option<ASTNode>) {
         if parser.current() == Colon {
             parser.next();
         }
-        name = at.to_string();
+        name = "".to_string();
     }
     // Parse value
     let val = parse_expr(parser).map(|x| x.node);
@@ -535,12 +535,11 @@ fn parse_list(parser: &mut Parser) -> Option<ASTNode> {
     // Parses a list
     eat!(parser, Lbracket, "expecting [")?;
     // Parse elements
-    let mut at: i32 = 0;
     let mut names: Vec<String> = vec![];
     let mut vals: Vec<ASTNode> = vec![];
     let mut fastlist = true;
     while parser.current() != Rbracket {
-        let (name, val) = parse_list_item(parser, at);
+        let (name, val) = parse_list_item(parser);
         // Invalid element
         if val.is_none() {
             // Parse until the end of the list so there aren't trailing errors
@@ -550,7 +549,7 @@ fn parse_list(parser: &mut Parser) -> Option<ASTNode> {
         // Valid element
         names.push(name.clone());
         if fastlist {
-            fastlist = name.as_bytes()[0].is_ascii_digit();
+            fastlist = name == "";
         }
         vals.push(val?);
         // Eat comma
@@ -567,8 +566,6 @@ fn parse_list(parser: &mut Parser) -> Option<ASTNode> {
             while parser.next() != Semicolon {}
             return Option::None;
         }
-        // Increment index
-        at += 1;
     }
     eat!(parser, Rbracket, "expecting ]")?;
     return Some(ASTNode::ListExpr(names, vals, fastlist));

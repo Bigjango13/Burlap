@@ -1,8 +1,8 @@
 # Burlap
-> A powerful and user-friendly Sack interpreter, v1.2.3
+> A powerful and user-friendly Sack interpreter, v1.2.4
 
 ## What is Burlap?
-Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) programming language. It aims for a high level of spec compliance, any valid sack program should be able to be run using burlap (it does have a few minor variations from the spec, known differences are listed [here](docs/spec-diff.md))
+Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) programming language. It aims for a high level of specification compliance, any valid sack program should be able to be run using Burlap (it does have a few minor variations from the specification, known differences are listed [here](docs/spec-diff.md)). Currently, it is up to date with the specification at commit [75e1781](https://github.com/RandomSoup/sack/tree/75e1781a4b624f5c3ba00450387281cba9f2ba61).
 
 ## Features
 - [x] Complete sack v0.0.5 support
@@ -15,7 +15,7 @@ Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) progr
     - [x] None
     - [x] Lists **(New)**
       - [x] Multiplication **(New)**
-      - [ ] Deletion **(New)**
+      - [x] Deletion **(New)**
     - [x] Byte **(New)**
     - [x] `type` function **(New)**
   - [x] Operators
@@ -115,6 +115,14 @@ For profiling, I use [flamegraph-rs](https://github.com/flamegraph-rs/flamegraph
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
+- 1.2.4
+    - Add `rand(min,max)`
+    - Add list multiplication
+    - Add chain let
+    - Allow `loop` to be syntax sugar for `loop (while true)`
+    - Make stringified numeric keys act as strings instead of numbers
+    - Fix iter-based loops not cleaning up the scope of the iter variable
+    - Fix `args()` being reversed
 - 1.2.3
     - Make lists Copy-On-Write
     - Reduce `Value` size to 16 bytes

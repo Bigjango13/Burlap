@@ -156,7 +156,6 @@ test("str*", str, "E?E?E?");
 test("str[0]", str[1], "?");
 test("str len", len(str), 5);
 
-
 # Iter loop tests
 print("*** Iter Loop Tests ***");
 let i = 0, j = 0;
@@ -268,6 +267,7 @@ test("List + [List]", string([1] + [[2]]), "[1, [2]]");
 # Note: The following list features aren't explicitly in the spec
 test("comparing", range(0, 5), [0, 1, 2, 3, 4, 5]);
 test("comparing with keys", range(0, 5), [O: 0, I: 1, Z: 2, E: 3, A: 4, S: 5]);
+# Mutating
 list[0] = 47;
 test("mutate existing int key", list[0], 47);
 list["x"] = "Foourty Seeeven!";
@@ -283,6 +283,31 @@ test("num in [float]", 47 in [1.0, 47.0, 47.0], true);
 test("FL in [SL]", [4] in [[4,5], [e:4], [4,4]], true);
 test("String in String", "Bob" in "Bobby", true);
 test("Byte in String", 0b01101111 in "Bobby", true);
+# Deleting
+list = [1, 2, none, 3];
+test("FL none ignoring, len", len(list), 2);
+test("FL none ignoring, index", list[0], 1);
+list[len(list) + 1] = none;
+test("FL none append nop", len(list), 2);
+list[0] = none;
+test("FL key del", list[0], 2);
+list = [e: none, j: 4, f: 8, q: 2];
+test("SF none ignoring, len", len(list), 2);
+test("SF none ignoring, index", list[0], 4);
+list[len(list) + 1] = none;
+test("SL none append nop", len(list), 2);
+list[0] = none;
+test("SL num key del", list[0], 8);
+list["q"] = none;
+test("SL num key del", list, [8]);
+# Multiplication
+test("list1 * 0", [1] * 0, []);
+test("list1 * 1", [1] * 1, [1]);
+test("list1 * 2", [1] * 2, [1, 1]);
+test("pattern * 2", [2, 3] * 2, [2, 3, 2, 3]);
+list = [e: 5, 4];
+list["e"] = none;
+test("ex-SL * 2", list * 2, [4, 4]);
 
 # If tests
 print("*** If Tests ***");
