@@ -2,7 +2,7 @@
 > A powerful and user-friendly Sack interpreter, v1.2.4
 
 ## What is Burlap?
-Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) programming language. It aims for a high level of specification compliance, any valid sack program should be able to be run using Burlap (it does have a few minor variations from the specification, known differences are listed [here](docs/spec-diff.md)). Currently, it is up to date with the specification at commit [75e1781](https://github.com/RandomSoup/sack/tree/75e1781a4b624f5c3ba00450387281cba9f2ba61).
+Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) programming language. It aims for a high level of specification compliance, any valid sack program should be able to be run using Burlap (it does have a few minor variations from the specification, known differences are listed [here](docs/spec-diff.md)). Currently, it is up to date with the specification at commit [2d5fceb](https://github.com/RandomSoup/sack/tree/2d5fceb).
 
 ## Features
 - [x] Complete sack v0.0.5 support
@@ -122,6 +122,7 @@ Burlap started because I wanted to learn how to create a programming language. I
     - Allow `loop` to be syntax sugar for `loop (while true)`
     - Make stringified numeric keys act as strings instead of numbers
     - Fix iter-based loops not cleaning up the scope of the iter variable
+    - Fix `let x = x;` being marked as valid by the parser
     - Fix `args()` being reversed
 - 1.2.3
     - Make lists Copy-On-Write

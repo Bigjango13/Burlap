@@ -252,10 +252,10 @@ fn get_sym(parser: &mut Parser, name: &str, arg_num: i32) -> SymLookupRes {
     return SymLookupRes::Free;
 }
 
-fn _check_unique(parser: &mut Parser, name: &str, arg_num: i32) -> bool {
+fn _check_unique(parser: &mut Parser, name: &str, arg_num: i32) -> Result<bool, Variable> {
     let name = name.split("::").nth(1).unwrap_or(name);
     match get_sym(parser, name, arg_num) {
-        SymLookupRes::TakenByVar => return false,
+        SymLookupRes::TakenByVar => return Ok(false),
         SymLookupRes::TakenByFuncti => {error!(
             parser,
             if arg_num == -1 {
@@ -277,22 +277,24 @@ fn _check_unique(parser: &mut Parser, name: &str, arg_num: i32) -> bool {
                 name: name.to_string(), arg_num, count: 0
             });
         } else {
-            parser.ast.vars.push(Variable {
+            return Err(Variable {
                 name: name.to_string(),
                 count: 0
             });
         }
     };
-    return true;
+    return Ok(true);
 }
 
-fn check_unique(parser: &mut Parser, name: &str, arg_num: i32) {
-    if !_check_unique(parser, name, arg_num) {
+fn check_unique(parser: &mut Parser, name: &str, arg_num: i32) -> Result<bool, Variable>{
+    let ret = _check_unique(parser, name, arg_num);
+    if let Ok(false) = ret {
         error!(
             parser,
             format!("the name \"{}\" is already taken by a variable", name).as_str()
         );
     }
+    ret
 }
 
 fn check_name(parser: &mut Parser, name: &str) {
@@ -789,12 +791,17 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
         return Option::None;
     }
     let old_len = parser.ast.vars.len();
-    let already_defined = !_check_unique(parser, &name, -1);
+    let uniq_var = _check_unique(parser, &name, -1);
     parser.next();
     // Obligatory 'in'
     eat!(parser, In, "missing 'in' keyword in loop")?;
     // Iterator
     let mut iter = parse_expr(parser)?.node;
+    if let Err(ref var) = uniq_var {
+        // Var is now valid
+        parser.ast.vars.push(var.clone());
+    }
+    let already_defined = !uniq_var.unwrap_or(true);
     // Range optimization
     if let ASTNode::CallExpr(expr, args) = iter.clone() {
         let name = if let ASTNode::VarExpr(n) = *expr {
@@ -945,10 +952,14 @@ fn _parse_let(parser: &mut Parser) -> Option<(String, ASTNode)> {
         error!(parser, "expected variable name");
         return Option::None;
     }
-    check_unique(parser, &name, -1);
+    let uniq_var = check_unique(parser, &name, -1);
     parser.next();
     // Let without value (non-standard)
     if let Semicolon = parser.current() {
+        if let Err(var) = uniq_var {
+            // Var is now valid
+            parser.ast.vars.push(var.clone());
+        }
         if parser.args.extensions.contains(&"auto-none".to_string()) {
             return Some((name, ASTNode::NoneExpr));
         } else {
@@ -966,6 +977,10 @@ fn _parse_let(parser: &mut Parser) -> Option<(String, ASTNode)> {
     eat!(parser, Equals, "expected '=' in variable declaration")?;
     // Let with value
     let value = parse_expr(parser)?.node;
+    if let Err(var) = uniq_var {
+        // Var is now valid
+        parser.ast.vars.push(var.clone());
+    }
     // Return
     return Some((name, value));
 }
@@ -1032,7 +1047,9 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         }
         // Arg name
         if let Identifier(n) = parser.current() {
-            check_unique(parser, &n, -1);
+            if let Err(var) = check_unique(parser, &n, -1) {
+                parser.ast.vars.push(var.clone());
+            }
             arg_names.push(parser.name.clone() + "::" + &n);
             parser.next();
         } else {
@@ -1050,7 +1067,9 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         }
     }
     parser.next();
-    check_unique(parser, &name, arg_names.len().try_into().unwrap());
+    if let Err(var) = check_unique(parser, &name, arg_names.len().try_into().unwrap()) {
+        parser.ast.vars.push(var.clone());
+    }
     // Body
     if let Lbrace = parser.current() {} else {
         error!(parser, "expected '{' to start function body");
