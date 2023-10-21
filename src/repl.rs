@@ -277,6 +277,7 @@ pub fn repl(args: &mut Arguments) {
             }
             if args.dis {
                 dis(&vm.program, vm.at);
+                vm.at = vm.program.ops.len() - 1;
             } else {
                 run(&mut vm);
             }
