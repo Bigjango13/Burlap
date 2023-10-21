@@ -1,5 +1,5 @@
 # Burlap
-> A powerful and user-friendly Sack interpreter, v1.2.4
+> A powerful and user-friendly Sack interpreter, v1.2.5
 
 ## What is Burlap?
 Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) programming language. It aims for a high level of specification compliance, any valid sack program should be able to be run using Burlap (it does have a few minor variations from the specification, known differences are listed [here](docs/spec-diff.md)). Currently, it is up to date with the specification at commit [2d5fceb](https://github.com/RandomSoup/sack/tree/2d5fceb).
@@ -115,6 +115,8 @@ For profiling, I use [flamegraph-rs](https://github.com/flamegraph-rs/flamegraph
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
+- 1.2.5
+    - Add a disassembler
 - 1.2.4
     - Add `rand(min,max)`
     - Add list multiplication

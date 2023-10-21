@@ -4,6 +4,7 @@ use crate::lexer::{lex, TokenType};
 use crate::parser::{parse, AST};
 use crate::compiler::{compile, Compiler, Program};
 use crate::common::{print_err, ErrType};
+use crate::dis::dis;
 use crate::Arguments;
 
 #[cfg(feature = "fancyrepl")]
@@ -274,7 +275,11 @@ pub fn repl(args: &mut Arguments) {
             if vm.at != 0 {
                 vm.at += 1;
             }
-            run(&mut vm);
+            if args.dis {
+                dis(&vm.program, vm.at);
+            } else {
+                run(&mut vm);
+            }
             // Update symbols
             #[cfg(feature = "fancyrepl")]
             {

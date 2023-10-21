@@ -19,6 +19,7 @@ mod cfg_mod {
     pub mod cffi;
     #[cfg(feature = "repl")]
     pub mod repl;
+    pub mod dis;
 
     pub use std::fs;
     pub use std::env;
@@ -27,6 +28,7 @@ mod cfg_mod {
     #[cfg(feature = "repl")]
     pub use crate::repl::repl;
     pub use crate::common::{print_err, ErrType};
+    pub use crate::dis::dis;
 }
 
 #[cfg(target_family = "wasm")]
@@ -52,6 +54,7 @@ pub struct Arguments {
     is_debug: bool,
     is_repl: bool,
     backtrace: bool,
+    dis: bool,
     extensions: Vec<String>,
     program_args: Vec<String>
 }
@@ -59,7 +62,7 @@ pub struct Arguments {
 impl Arguments {
     pub fn new() -> Arguments {
         Arguments {
-            source: "".to_string(), is_debug: false,
+            source: "".to_string(), is_debug: false, dis: false,
             is_repl: true, extensions: vec!["color".to_string()],
             name: "<stdin>".to_string(), backtrace: false,
             program_args: vec![], path: PathBuf::from("."),
@@ -109,6 +112,9 @@ fn get_args() -> Result<Arguments, bool> {
         } else if arg == "-d" || arg == "--debug" {
             // Debug
             args.is_debug = true;
+        } else if arg == "-a" || arg == "--disassemble" {
+            // Disassemble
+            args.dis = true;
         } else if arg == "-b" || arg == "--backtrace" {
             // Backtrace
             args.backtrace = true;
@@ -127,6 +133,7 @@ fn get_args() -> Result<Arguments, bool> {
             println!("\t- [command]\truns [command]");
             println!("\t-d --debug\truns in debug mode");
             println!("\t-b --backtrace\tprints backtrace on runtime errors");
+            println!("\t-a --disassemble\tprints disassembly instead of running");
             println!();
             println!(
                 "Thank you for using burlap! {}{}",
@@ -215,10 +222,15 @@ fn main() {
         if !compile(&ast, &mut args, &mut compiler) {
             exit(1);
         }
+        if args.dis {
+            // Disassemble
+            dis(&compiler.program, 0);
+            exit(0);
+        }
         // Run
         let mut vm = Vm::new(args.clone(), compiler.program);
         if !run(&mut vm) {
-            exit(1);
+            exit(2);
         }
     }
 }

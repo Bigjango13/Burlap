@@ -136,12 +136,12 @@ struct CallFrame {
 }
 
 #[inline]
-fn shift2(a: u8, b: u8) -> usize {
+pub fn shift2(a: u8, b: u8) -> usize {
     return ((a as usize) << 8) + (b as usize);
 }
 
 #[inline]
-fn shift3(a: u8, b: u8, c: u8) -> usize {
+pub fn shift3(a: u8, b: u8, c: u8) -> usize {
     return ((a as usize) << 16) + ((b as usize) << 8) + (c as usize);
 }
 
