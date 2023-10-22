@@ -9,7 +9,7 @@ pub enum TokenType {
     // Special tokens
     Invalid,
     Eof,
-    #[regex(r"(#[^\n]*)|([ \t\f]+)")]
+    #[regex(r"(#[^\n]*)|([ \t\f\r]+)")]
     Skipped,
     #[token("\n")]
     Newline,
