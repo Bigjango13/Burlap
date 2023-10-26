@@ -22,7 +22,7 @@ fn dis_binop(name: &str, a: u8, b: u8, c: u8) -> String {
     }
 }
 
-fn dis_single(program: &Program, at: usize) -> String {
+pub fn dis_single(program: &Program, at: usize) -> String {
     let op = program.ops[at];
     let (op, a, b, c) = decode_op(op);
     match op {

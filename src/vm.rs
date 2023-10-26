@@ -10,6 +10,7 @@ use crate::cffi::{load_functi, load_library};
 #[cfg(feature = "cffi")]
 use crate::cffi::call as ffi_call;
 use crate::compiler::Program;
+use crate::dis::dis_single;
 use crate::value::{FileInfo, Value};
 
 use rustc_hash::FxHashMap;
@@ -1374,13 +1375,9 @@ pub fn run(vm: &mut Vm) -> bool {
     loop {
         if vm.args.is_debug {
             // Print debugging info
-            let opcode = vm.cur_opcode();
             let (line, filename) = vm.program.get_info(vm.at as u32);
-            println!(
-                "{}:{}: {:?}({}, {}, {})",
-                filename, line,
-                opcode.0, opcode.1, opcode.2, opcode.3
-            );
+            let op = dis_single(&vm.program, vm.at);
+            println!("{filename}:{line}: {op}");
         }
         // Run
         if let Err(s) = exec_next(vm) {

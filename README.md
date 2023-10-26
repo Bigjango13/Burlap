@@ -117,6 +117,7 @@ Burlap started because I wanted to learn how to create a programming language. I
 
 - 1.2.5
     - Add a disassembler
+    - Make the debug log use the disassembler
     - Fix CRFL line endings
 - 1.2.4
     - Add `rand(min,max)`
