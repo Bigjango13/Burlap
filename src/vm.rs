@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::fs::OpenOptions;
 use std::io::{Write, Read, Seek, SeekFrom};
 use std::io;
+use std::path::PathBuf;
 
 use crate::Arguments;
 #[cfg(feature = "cffi")]
@@ -918,7 +919,11 @@ fn sk_libload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         vm.bad_args("__burlap_load_library", args.len(), 1)?;
     }
-    return Ok(Value::Ptr(load_library(args[0].to_string()?)?))
+    let (_, file) = vm.program.get_info(vm.at as u32);
+    let mut path = PathBuf::from("./".to_owned() + &file);
+    path.pop();
+    path.push(args[0].to_string()?);
+    return Ok(Value::Ptr(load_library(path.to_str().unwrap().to_string())?))
 }
 
 #[cfg(feature = "cffi")]

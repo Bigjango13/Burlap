@@ -126,6 +126,7 @@ Burlap started because I wanted to learn how to create a programming language. I
     - Add chain let
     - Allow `loop` to be syntax sugar for `loop (while true)`
     - Make stringified numeric keys act as strings instead of numbers
+    - Make `__burlap_load_lib` relative to the file calling it
     - Fix iter-based loops not cleaning up the scope of the iter variable
     - Fix `let x = x;` being marked as valid by the parser
     - Fix `args()` being reversed
