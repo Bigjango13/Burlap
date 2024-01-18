@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::fs::OpenOptions;
 use std::io::{Write, Read, Seek, SeekFrom};
 use std::io;
+#[cfg(feature = "cffi")]
 use std::path::PathBuf;
 
 use crate::Arguments;
