@@ -329,12 +329,10 @@ fn compile_short_binop(
     // Turn `a() || b()` into `r = a(); if !r { r = b() }; r`
     let lhs = compile_expr(compiler, lhs)?;
     let dup_tmp = compiler.alloc_reg();
-    if dup_tmp == Reg::Stack && lhs == Reg::Stack {
+    if lhs == Reg::Stack {
         compiler.dup();
-        compiler.add_op_args(Opcode::NOT, dup_tmp as u8, dup_tmp as u8, 0);
-    } else {
-        compiler.add_op_args(Opcode::NOT, lhs as u8, dup_tmp as u8, 0);
     }
+    compiler.add_op_args(Opcode::NOT, lhs as u8, dup_tmp as u8, 0);
     if op != &TokenType::Or {
         // Double not is faster then a copy
         compiler.add_op_args(Opcode::NOT, dup_tmp as u8, dup_tmp as u8, 0);
