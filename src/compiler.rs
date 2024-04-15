@@ -1,11 +1,12 @@
 use std::rc::Rc;
 use std::cmp::Ordering;
 use std::path::PathBuf;
+use std::ptr::null_mut;
 
 use crate::Arguments;
 use crate::common::IMPOSSIBLE_STATE;
 use crate::lexer::TokenType;
-use crate::parser::{ASTNode, ASTNode::*, StmtNode, AST};
+use crate::parser::{ASTNode, ASTNode::*, StmtNode, AST, FunctiData};
 use crate::value::Value;
 use crate::vm::Opcode;
 
@@ -32,7 +33,8 @@ impl Program {
             ops: vec![], consts: vec![],
             functis: Vec::new(),
             path: PathBuf::from("."),
-            line_table: vec![], file_table: vec![],
+            line_table: vec![],
+            file_table: vec![],
         }
     }
 
@@ -75,8 +77,6 @@ pub struct Compiler {
     pub program: Program,
 
     // Variables
-    // If RS and LEVI are needed
-    needs_scope: bool,
     // If VARG and CARG are needed
     needs_args: bool,
 
@@ -98,16 +98,22 @@ pub struct Compiler {
     regs: [bool; 17],
     // Limits registers to just the stack
     on_stack_only: bool,
+
+    // The ast
+    ast: *mut AST,
+
+    // The current funci
+    functi: Option<FunctiData>,
 }
 
 impl Compiler {
     pub fn new() -> Compiler {
         Compiler {
             program: Program::new(), old_line: 0,
-            needs_scope: false, inc_start: 0,
             regs: [true; 17], needs_args: false,
             break_addrs: vec![], loop_top: 0,
             on_stack_only: false, line_start: 0,
+            inc_start: 0, ast: null_mut(), functi: None
         }
     }
 
@@ -240,6 +246,51 @@ impl Compiler {
         *op += (i & 255 << 8) as u32;
         *op += (i & 255) as u32;
     }
+
+    fn _var(&mut self, var: &String, reg: Reg, mut op: Opcode) -> Option<()> {
+        // Get the offset
+        let ast = self.get_ast();
+        let mut offset = ast.get_var_offset(var.clone(), (&self.functi).as_ref());
+        if offset.is_none() && !self.functi.is_none() {
+            // Check global too
+            offset = offset.or_else(||
+                ast.get_var_offset(var.clone(), None)
+            );
+            op = if op == Opcode::SV_L { Opcode::SV_G } else { Opcode::LV_G };
+        }
+        let offset = offset?;
+        self.add_op_args(
+            op,
+            ((offset >> 8) & 255) as u8,
+            (offset & 255) as u8,
+            reg as u8
+        );
+        Some(())
+    }
+
+    fn set_var(&mut self, var: &String, reg: Reg) {
+        let op = if self.functi.is_none() { Opcode::SV_G } else { Opcode::SV_L };
+        //let var = var.clone().split("::").nth(1).unwrap_or(var).to_string();
+        self._var(&var, reg, op).unwrap();
+    }
+
+    fn load_var(&mut self, var: &String, reg: Reg) {
+        let op = if self.functi.is_none() { Opcode::LV_G } else { Opcode::LV_L };
+        if self._var(var, reg, op).is_none() {
+            // It's a function
+            let name = var.clone().split("::").nth(1).unwrap_or(var).to_string();
+            let rname = self.push(Value::Functi(Rc::new(name.clone())));
+            if rname != reg {
+                self.copy(rname, reg);
+            }
+            self.free_reg(rname);
+        }
+    }
+
+    #[inline]
+    fn get_ast(&mut self) -> &'static mut AST {
+        return unsafe { self.ast.as_mut().unwrap() };
+    }
 }
 
 fn compile_unary(
@@ -272,9 +323,7 @@ fn compile_unary(
             let VarExpr(ref s) = *val else {
                 panic!("++ needs a var, how did you do this?");
             };
-            let tmp = compiler.push(Value::Str(Rc::new(s.clone())));
-            compiler.add_op_args(Opcode::SV, tmp as u8, ret as u8, 0);
-            compiler.free_reg(tmp);
+            compiler.set_var(s, ret);
             ret
         },
         TokenType::MinusMinus => {
@@ -288,9 +337,7 @@ fn compile_unary(
             let VarExpr(ref s) = *val else {
                 panic!("-- needs a var, how did you do this?");
             };
-            let tmp = compiler.push(Value::Str(Rc::new(s.clone())));
-            compiler.add_op_args(Opcode::SV, tmp as u8, ret as u8, 0);
-            compiler.free_reg(tmp);
+            compiler.set_var(s, ret);
             ret
         },
         _ => panic!("{}", IMPOSSIBLE_STATE),
@@ -301,9 +348,7 @@ fn compile_unary(
 fn compile_set(compiler: &mut Compiler, lvalue: &ASTNode, value: Reg) -> Option<()> {
     // Recursively set
     if let VarExpr(s) = lvalue.clone() {
-        let nreg = compiler.push(Value::Str(Rc::new(s)));
-        compiler.add_op_args(Opcode::SV, nreg as u8, value as u8, 0);
-        compiler.free_reg(nreg);
+        compiler.set_var(&s, value);
         compiler.free_reg(value);
         return Some(());
     } else if let IndexExpr(list, index) = lvalue.clone() {
@@ -516,9 +561,8 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
     Some(match node {
         // Values
         VarExpr(val) => {
-            let reg = compiler.push(Value::Str(Rc::new(val.clone())));
-            // Load var inplace
-            compiler.add_op_args(Opcode::LV, reg as u8, reg as u8, 0);
+            let reg = compiler.alloc_reg();
+            compiler.load_var(val, reg);
             reg
         },
         StringExpr(val) => {
@@ -599,29 +643,16 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
 
 fn _compile_body(
     compiler: &mut Compiler, args: &mut Arguments,
-    nodes: &Vec<StmtNode>, manual_scope: bool
+    nodes: &Vec<StmtNode>
 ) -> Option<()> {
-    // Lower scope
-    let scope_pos = compiler.program.ops.len();
-    let old_needs_scope = compiler.needs_scope;
-    compiler.needs_scope = false;
-    if !manual_scope {
-        compiler.add_op(Opcode::NOP);
-    }
     // Compile all nodes
     for node in nodes {
         compile_stmt(compiler, args, node, false)?;
     }
-    // Raise scope
-    if !manual_scope && compiler.needs_scope {
-        compiler.add_op(Opcode::RS);
-        compiler.program.ops[scope_pos] = (Opcode::LEVI as u8 as u32) << 24;
-    }
-    compiler.needs_scope = old_needs_scope;
     return Some(());
 }
 fn compile_body(
-    compiler: &mut Compiler, args: &mut Arguments, node: &StmtNode, manual_scope: bool
+    compiler: &mut Compiler, args: &mut Arguments, node: &StmtNode
 ) -> Option<()> {
     let BodyStmt(ref nodes) = node.node else {
         if node.node == Nop {
@@ -629,7 +660,7 @@ fn compile_body(
         }
         panic!("compile_body got non-body node!");
     };
-    _compile_body(compiler, args, nodes, manual_scope)
+    _compile_body(compiler, args, nodes)
 }
 
 fn compile_stmt(
@@ -647,12 +678,8 @@ fn compile_stmt(
         LetStmt(names, vals) => {
             for (name, val) in names.iter().zip(vals.iter()) {
                 let vreg = compile_expr(compiler, val)?;
-                let nreg = compiler.push(Value::Str(Rc::new(name.to_string())));
-                compiler.add_op_args(Opcode::DV, nreg as u8, vreg as u8, 0);
-                compiler.free_reg(vreg);
-                compiler.free_reg(nreg);
+                compiler.set_var(name, vreg);
             }
-            compiler.needs_scope = true;
         },
         IfStmt(cond, body, else_part) => {
             // The condition must be a expr, so no need to match against stmts
@@ -675,7 +702,7 @@ fn compile_stmt(
             compiler.add_op(Opcode::JMPNT);
             let pos = compiler.program.ops.len();
             // Compile true part
-            compile_body(compiler, args, body, false)?;
+            compile_body(compiler, args, body)?;
 
             // The else
             if else_part.node != Nop {
@@ -708,7 +735,7 @@ fn compile_stmt(
             compiler.loop_top = compiler.program.ops.len();
 
             // Body
-            compile_body(compiler, args, body, false)?;
+            compile_body(compiler, args, body)?;
 
             // Backwards jump
             compiler.add_op(Opcode::JMPB);
@@ -725,7 +752,7 @@ fn compile_stmt(
             compiler.break_addrs.truncate(last_size);
             compiler.loop_top = old_top;
         },
-        IterLoopStmt(var, iter, body, old_var) => {
+        IterLoopStmt(var, iter, body, _already_def) => {
             // Load iter
             let iter = compile_expr(compiler, iter)?;
             compiler.add_op_args(Opcode::ITER, iter as u8, iter as u8, 0);
@@ -741,20 +768,10 @@ fn compile_stmt(
             let jmp_pos = compiler.program.ops.len();
 
             // Set loop var
-            let varname = compiler.push(Value::Str(Rc::new(var.to_string())));
-            if *old_var {
-                compiler.add_op_args(Opcode::SV, varname as u8, item as u8, 0);
-            } else {
-                compiler.add_op(Opcode::LEVI);
-                compiler.add_op_args(Opcode::DV, varname as u8, item as u8, 0);
-            }
-            compiler.free_reg(varname);
+            compiler.set_var(var, item);
 
             // Body
-            compile_body(compiler, args, body, !*old_var)?;
-            if !*old_var {
-                compiler.add_op(Opcode::RS);
-            }
+            compile_body(compiler, args, body)?;
             // Backwards jump
             compiler.add_op(Opcode::JMPB);
             compiler.fill_jmp(
@@ -788,7 +805,7 @@ fn compile_stmt(
             let exit_jump_pos = compiler.program.ops.len();
 
             // Compile body
-            compile_body(compiler, args, body, false)?;
+            compile_body(compiler, args, body)?;
 
             // Backwards jump
             compiler.add_op(Opcode::JMPB);
@@ -815,8 +832,12 @@ fn compile_stmt(
             compiler.add_op(Opcode::JMPB);
             compiler.fill_jmp(compiler.program.ops.len(), compiler.program.ops.len() - compiler.loop_top - 1, None);
         },
-        BodyStmt(nodes) => return _compile_body(compiler, args, nodes, false),
+        BodyStmt(nodes) => return _compile_body(compiler, args, nodes),
         FunctiStmt(node) => {
+            let data = compiler.get_ast().get_functi(node.name.clone()).unwrap();
+            // TODO: Assert that old_functi is never Some(...)
+            let old_functi = compiler.functi.clone();
+            compiler.functi = Some(data.clone());
             // Jump around function
             compiler.add_op(Opcode::JMP);
             let pos = compiler.program.ops.len();
@@ -824,30 +845,34 @@ fn compile_stmt(
             compiler.program.functis.push((
                 node.name.clone(),
                 compiler.program.ops.len(),
-                node.arg_names.len() as i32
+                data.arg_num
             ));
             // Arg saving
             let start = compiler.program.ops.len();
             compiler.add_op(Opcode::NOP);
             // Load args from stack
-            for arg in node.arg_names.iter().rev() {
-                let name = compiler.push(Value::Str(Rc::new(arg.to_string())));
-                compiler.add_op_args(Opcode::DV, name as u8, Reg::Stack as u8, 0);
-                compiler.free_reg(name);
-            }
+            let arg_num = data.arg_num as usize;
+            let lclen = data.locals.len() - arg_num;
+            compiler.add_op_args(
+                Opcode::PLC,
+                ((lclen >> 8) & 255) as u8,
+                (lclen & 255) as u8,
+                (arg_num & 255) as u8
+            );
             // Compile body
-            compile_body(compiler, args, &node.body, true)?;
+            compile_body(compiler, args, &node.body)?;
             // Return
             compiler.push_to_stack(Value::None);
             compiler.add_op(Opcode::RET);
             // Save args
             if compiler.needs_args {
                 compiler.program.ops[start] = ((Opcode::SARG as u32) << 24)
-                    + ((node.arg_names.len() as u32 & 255) << 16);
+                    + ((arg_num as u32 & 255) << 16);
                 compiler.needs_args = false;
             }
             // Fill jump
             compiler.fill_jmp(pos, 0, None);
+            compiler.functi = old_functi;
         },
         ReturnStmt(ret) => {
             if let CallExpr(expr, args) = *ret.clone() {
@@ -926,15 +951,24 @@ fn compile_stmt(
 }
 
 pub fn compile(
-    ast: &AST, args: &mut Arguments, compiler: &mut Compiler
+    ast: &mut AST, args: &mut Arguments, compiler: &mut Compiler
 ) -> bool {
     if ast.nodes.is_empty() {
         return true;
     }
+    let gblen = ast.all_vars.len();
+    compiler.add_op_args(
+        Opcode::PGB,
+        ((gblen >> 8) & 255) as u8,
+        (gblen & 255) as u8,
+        0
+    );
+    compiler.ast = ast;
     compiler.inc_start = compiler.program.ops.len() as u32;
     // Compile
     for node in &ast.nodes[..ast.nodes.len()-1] {
         if compile_stmt(compiler, args, node, false).is_none() {
+            compiler.ast = null_mut();
             return false;
         }
     }
@@ -942,6 +976,7 @@ pub fn compile(
     // Else just compile normally
     let last = ast.nodes.last().unwrap();
     if compile_stmt(compiler, args, last, args.is_repl).is_none() {
+        compiler.ast = null_mut();
         return false;
     }
     // Jumps go onto the next instruction, so a nop is needed at the end
@@ -953,5 +988,6 @@ pub fn compile(
     compiler.program.line_table.push((
         compiler.line_start, compiler.program.ops.len() as u32, last.line
     ));
+    compiler.ast = null_mut();
     return true;
 }

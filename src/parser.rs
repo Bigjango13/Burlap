@@ -1,4 +1,6 @@
 use std::fs::read_to_string;
+use std::mem::swap;
+
 use crate::{Arguments, to_ast};
 use crate::common::{err, ErrType, IMPOSSIBLE_STATE, get_builtins};
 use crate::lexer::{Token, TokenType};
@@ -92,15 +94,13 @@ impl std::fmt::Debug for ExprNode {
 #[derive(PartialEq, Clone)]
 pub struct FunctiNode {
     pub name: String,
-    pub arg_names: Vec<String>,
     pub body: Box<StmtNode>,
-    pub locals: Vec<Variable>
 }
 
 impl std::fmt::Debug for FunctiNode {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         // FunctiNode is always inside a FunctiStmt, so it doesn't need the wrapper
-        write!(f, "{:?}, args: {:?}, body: {:?}, locals: {:?}", self.name, self.arg_names, self.body, self.locals)
+        write!(f, "{:?}, body: {:?}", self.name, self.body)
     }
 }
 
@@ -127,13 +127,13 @@ fn into_stmt(call: fn(&mut Parser) -> Option<ASTNode>, parser: &mut Parser) -> O
 pub struct FunctiData {
     pub name: String,
     pub arg_num: i32,
+    pub locals: Vec<Variable>,
     pub count: i32,
 }
 
 impl std::fmt::Debug for FunctiData {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        // FunctiNode is always inside a FunctiStmt, so it doesn't need the wrapper
-        write!(f, "{{{:?}@{:?}, count: {:?}}}", self.name, self.arg_num, self.count)
+        write!(f, "{{{:?}@{:?}, count: {:?}, locals: {:?}}}", self.name, self.arg_num, self.count, self.locals)
     }
 }
 
@@ -144,17 +144,39 @@ pub type VecFunctis = Vec<FunctiData>;
 #[allow(clippy::upper_case_acronyms)]
 pub struct AST {
     pub functis: VecFunctis,
-    pub vars: Vec<Variable>,
     pub nodes: Vec<StmtNode>,
+    pub cur_vars: Vec<Variable>,
+    pub all_vars: Vec<Variable>,
 }
 
 impl AST {
     pub fn new() -> AST {
         AST {
             functis: vec![],
-            vars: vec![],
+            cur_vars: vec![],
+            all_vars: vec![],
             nodes: vec![]
         }
+    }
+
+    pub fn get_functi(&self, name: String) -> Option<&FunctiData> {
+        self.functis.iter().find(|&i| i.name == name)
+    }
+
+    pub fn get_var_offset(&self, name: String, functi: Option<&FunctiData>) -> Option<u16> {
+        let name = name.split("::").nth(1).unwrap_or(&name);
+        if let Some(functi) = functi {
+            // Local level, find fn first
+            &functi.locals
+        } else {
+            // Global level
+            &self.all_vars
+        }.iter().position(|i| i.name == name).and_then(|i| u16::try_from(i).ok())
+    }
+
+    pub fn add_var(&mut self, var: Variable) {
+        self.cur_vars.push(var.clone());
+        self.all_vars.push(var);
     }
 }
 
@@ -231,7 +253,7 @@ enum SymLookupRes {
 fn get_sym(parser: &mut Parser, name: &str, arg_num: i32) -> SymLookupRes {
     // -1 arg_num means name is a variable
     // Check variables
-    if let Some(v) = parser.ast.vars.iter_mut().find(|i| i.name == name) {
+    if let Some(v) = parser.ast.cur_vars.iter_mut().find(|i| i.name == name) {
         // Used again
         v.count += 1;
         return SymLookupRes::TakenByVar;
@@ -274,7 +296,7 @@ fn _check_unique(parser: &mut Parser, name: &str, arg_num: i32) -> Result<bool, 
         );},
         SymLookupRes::Free => if arg_num != -1 {
             parser.ast.functis.push(FunctiData {
-                name: name.to_string(), arg_num, count: 0
+                name: name.to_string(), arg_num, count: 0, locals: vec![]
             });
         } else {
             return Err(Variable {
@@ -297,17 +319,19 @@ fn check_unique(parser: &mut Parser, name: &str, arg_num: i32) -> Result<bool, V
     ret
 }
 
-fn check_name(parser: &mut Parser, name: &str) {
+fn check_name(parser: &mut Parser, name: &str) -> bool {
     let name = name.split("::").nth(1).unwrap_or(name);
     match get_sym(parser, name, -1) {
-        SymLookupRes::TakenByVar => (),
-        SymLookupRes::TakenByFuncti => (),
-        SymLookupRes::TakenByBuiltin => (),
+        SymLookupRes::TakenByVar => true,
+        SymLookupRes::TakenByFuncti => false,
+        SymLookupRes::TakenByBuiltin => false,
         SymLookupRes::Free => {error!(
             parser,
             format!("\"{}\" is not defined", name).as_str()
-        );}
-    };
+        );
+        true
+        }
+    }
 }
 
 fn check_call(parser: &mut Parser, name: &str, arg_num: i32) {
@@ -335,7 +359,7 @@ fn check_call(parser: &mut Parser, name: &str, arg_num: i32) {
         }
     }
     // Variables
-    if parser.ast.vars.iter().any(|i| i.name == name) {
+    if parser.ast.cur_vars.iter().any(|i| i.name == name) {
         // No way to check
         return;
     }
@@ -579,9 +603,8 @@ fn parse_base_expr(parser: &mut Parser) -> Option<ExprNode> {
     let node = match parser.current() {
         // Inbuilt type
         Identifier(v) => {
-            check_name(parser, &v);
+            lvalue = check_name(parser, &v);
             parser.next();
-            lvalue = true;
             ASTNode::VarExpr(
                 parser.name.clone() + "::" + &v
             )
@@ -722,7 +745,7 @@ fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
     // Middle
     let mut body: Vec<StmtNode> = vec![];
     let mut err = false;
-    let old_len = parser.ast.vars.len();
+    let old_len = parser.ast.cur_vars.len();
     loop {
         // Exit loop on } or EOF
         if let Rbrace | Eof = parser.current() {
@@ -741,7 +764,7 @@ fn parse_body(parser: &mut Parser) -> Option<ASTNode> {
         }
     }
     // End
-    parser.functi_locals.append(&mut parser.ast.vars.split_off(old_len));
+    parser.functi_locals.append(&mut parser.ast.cur_vars.split_off(old_len));
     eat!(parser, Rbrace, "expected } to end body, not EOF")?;
     if err {
         return Option::None;
@@ -790,7 +813,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
         error!(parser, "expected variable name");
         return Option::None;
     }
-    let old_len = parser.ast.vars.len();
+    let old_len = parser.ast.cur_vars.len();
     let uniq_var = _check_unique(parser, &name, -1);
     parser.next();
     // Obligatory 'in'
@@ -799,7 +822,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     let mut iter = parse_expr(parser)?.node;
     if let Err(ref var) = uniq_var {
         // Var is now valid
-        parser.ast.vars.push(var.clone());
+        parser.ast.add_var(var.clone());
     }
     let already_defined = !uniq_var.unwrap_or(true);
     // Range optimization
@@ -829,7 +852,7 @@ fn parse_loop_iter(parser: &mut Parser) -> Option<ASTNode> {
     eat!(parser, Rparan, "missing ')' in loop")?;
     // Body
     let body = into_stmt(parse_body, parser)?;
-    parser.functi_locals.append(&mut parser.ast.vars.split_off(old_len));
+    parser.functi_locals.append(&mut parser.ast.cur_vars.split_off(old_len));
     // Return
     Some(ASTNode::IterLoopStmt(name, Box::new(iter), Box::new(body), already_defined))
 }
@@ -914,7 +937,8 @@ fn parse_import(parser: &mut Parser) -> Option<(String, Vec<StmtNode>)> {
     // Return
     let mut new_ast = to_ast(&mut parser.args)?;
     parser.ast.functis.append(&mut new_ast.functis);
-    parser.ast.vars.append(&mut new_ast.vars);
+    parser.ast.cur_vars.append(&mut new_ast.cur_vars);
+    parser.ast.all_vars.append(&mut new_ast.all_vars);
     let name = parser.args.name.clone();
     parser.args.name = old_name;
     parser.args.path = old_path;
@@ -958,7 +982,7 @@ fn _parse_let(parser: &mut Parser) -> Option<(String, ASTNode)> {
     if let Semicolon = parser.current() {
         if let Err(var) = uniq_var {
             // Var is now valid
-            parser.ast.vars.push(var.clone());
+            parser.ast.add_var(var.clone());
         }
         if parser.args.extensions.contains(&"auto-none".to_string()) {
             return Some((name, ASTNode::NoneExpr));
@@ -979,7 +1003,7 @@ fn _parse_let(parser: &mut Parser) -> Option<(String, ASTNode)> {
     let value = parse_expr(parser)?.node;
     if let Err(var) = uniq_var {
         // Var is now valid
-        parser.ast.vars.push(var.clone());
+        parser.ast.add_var(var.clone());
     }
     // Return
     return Some((name, value));
@@ -1048,7 +1072,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         // Arg name
         if let Identifier(n) = parser.current() {
             if let Err(var) = check_unique(parser, &n, -1) {
-                parser.ast.vars.push(var.clone());
+                parser.ast.add_var(var.clone());
             }
             arg_names.push(parser.name.clone() + "::" + &n);
             parser.next();
@@ -1068,8 +1092,9 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
     }
     parser.next();
     if let Err(var) = check_unique(parser, &name, arg_names.len().try_into().unwrap()) {
-        parser.ast.vars.push(var.clone());
+        parser.ast.add_var(var.clone());
     }
+    let fn_index = parser.ast.functis.len() - 1;
     // Body
     if let Lbrace = parser.current() {} else {
         error!(parser, "expected '{' to start function body");
@@ -1083,15 +1108,15 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
     parser.in_func = true;
     let body = into_stmt(parse_body, parser);
     parser.in_func = false;
-    parser.functi_locals.append(&mut parser.ast.vars.split_off(parser.ast.vars.len() - arg_names.len()));
-    let mut locals = vec![];
-    std::mem::swap(&mut locals, &mut parser.functi_locals);
+    parser.functi_locals.append(&mut parser.ast.cur_vars.split_off(parser.ast.cur_vars.len() - arg_names.len()));
+    swap(
+        &mut parser.ast.functis[fn_index].locals,
+        &mut parser.functi_locals
+    );
     // Return
     return Some(ASTNode::FunctiStmt(FunctiNode {
         name,
-        arg_names,
         body: Box::new(body?),
-        locals,
     }));
 }
 

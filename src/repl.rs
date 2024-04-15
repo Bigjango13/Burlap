@@ -262,7 +262,7 @@ pub fn repl(args: &mut Arguments) {
                 println!("Ast: {:?}", ast);
             }
             // Compile
-            if !compile(&ast, args, &mut compiler) {
+            if !compile(&mut ast, args, &mut compiler) {
                 continue;
             }
             // Reset file name (imports mess it up during compiling)

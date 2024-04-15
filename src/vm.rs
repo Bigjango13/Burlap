@@ -19,8 +19,8 @@ use rustc_hash::FxHashMap;
 use rand::Rng;
 
 #[repr(u8)]
-#[derive(Copy, Clone, Debug)]
-#[allow(clippy::upper_case_acronyms)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[allow(clippy::upper_case_acronyms, non_camel_case_types)]
 pub enum Opcode {
     // The almighty NOP
     NOP,
@@ -34,12 +34,6 @@ pub enum Opcode {
     CP,
     // POP
     POP,
-
-    // Scope (Call scope is handled by CALL and RET)
-    // Raise Scope
-    RS,
-    // LowEr VarIable scope
-    LEVI,
 
     // Functions
     // Save ARGs ([u8 "arg count"])
@@ -56,12 +50,17 @@ pub enum Opcode {
     RET,
 
     // Variables
-    // Load Variable ([register "name", register "dst"])
-    LV,
-    // Declare Variable ([register "name", register "value"])
-    DV,
-    // Set Variable ([register "name", register "value"])
-    SV,
+    // Load Variable Local/Global ([u16 "offset", register "dst"])
+    LV_L,
+    LV_G,
+    // Set Variable Local/Global ([u16 "offset", register "value"])
+    SV_L,
+    SV_G,
+    // Push LoCals (u16 "amount", u8 "arg number")
+    PLC,
+    // Push GloBals (u16 "amount")
+    // Only used once in normal programs, needed more for interactive sessions (such as the REPL)
+    PGB,
 
     // Lists
     // Load Fast List ([dst, u16 size, values on stack])
@@ -122,20 +121,12 @@ pub enum Opcode {
 // A functie is a sack functions implemented in rust
 type Functie = fn(&mut Vm, Vec<Value>) -> Result<Value, String>;
 
-struct Scope {
-    // The min of the callers var list
-    old_min: usize,
-    // Where the vars need to be cut off at
-    old_top: usize,
-    // Number between last call scope and current scope
-    count: u8,
-}
-
 // Call frames
 struct CallFrame {
     args: Option<Vec<Value>>,
     return_addr: usize,
     regs: [Value; 16],
+    local_size: usize,
 }
 
 #[inline]
@@ -160,17 +151,12 @@ pub struct Vm {
     pub in_func: bool,
 
     // Variables
-    // Global vars
-    is_global: bool,
-    globals: FxHashMap<String, Value>,
+    globals: Vec<Value>,
+    locals: Vec<Value>,
     // Functies
     functies: FxHashMap<String, Functie>,
-    // Non-global variables
-    var_names: Vec<String>,
-    var_vals: Vec<Value>,
-    var_min: usize,
-    // Scope
-    scope: Vec<Scope>,
+
+    // Call frames
     call_frames: Vec<CallFrame>,
 
     // The program
@@ -244,17 +230,16 @@ impl Vm {
         }
         const NONE: Value = Value::None;
         Vm {
+            stack: vec![], call_frames: vec![], jump: false,
+            at: 0, filename: "".to_string(), locals: vec![],
             args, has_err: false, in_func: false, functies,
-            is_global: true, globals: FxHashMap::default(),
-            var_names: vec![], var_vals: vec![], jump: false,
-            stack: vec![], scope: vec![], call_frames: vec![],
-            at: 0, var_min: 0, program, filename: "".to_string(),
-            regs: [NONE; 16]
+            globals: vec![], regs: [NONE; 16], program,
         }
     }
 
     // Unmangle a var name
     #[inline]
+    #[allow(dead_code)]
     fn unmangle(name: &str) -> String {
         name.split("::").last().unwrap().to_string()
     }
@@ -262,21 +247,22 @@ impl Vm {
     // Get a vec of all symbol names
     #[cfg(feature = "fancyrepl")]
     pub fn get_symbols(&self, add_keywords: bool) -> Vec<String> {
+        let mut ret: Vec<String> = vec![];
+        /*
         // Globals
-        let mut ret: Vec<String>
-            = self.globals.keys().map(|x| Self::unmangle(x)).collect();
-        // Functies
-        ret.extend(
-            self.functies.keys().cloned().collect::<Vec<String>>()
-        );
+        ret.extend(self.globals.iter().map(|x| Self::unmangle(x))
+            .collect::<Vec<String>>());
+        // Locals
+        ret.extend(self.var_names.iter().map(|x| Self::unmangle(x))
+            .collect::<Vec<String>>());
+        */
         // Functions
         ret.extend(
             self.program.functis.iter().map(|i| i.0.clone())
             .collect::<Vec<String>>()
         );
-        // Locals
-        ret.extend(self.var_names.iter().map(|x| Self::unmangle(x))
-            .collect::<Vec<String>>());
+        // Functies
+        ret.extend(self.functies.keys().cloned().collect::<Vec<String>>());
         // Keywords
         if add_keywords {
             ret.extend(vec![
@@ -287,131 +273,24 @@ impl Vm {
         return ret;
     }
 
-    // Getting vars
-    fn get_local(&self, name: &str) -> Option<Value> {
-        // Gets a local var
-        let mut index = self.var_names.len();
-        while index > self.var_min {
-            index -= 1;
-            if self.var_names[index] == name {
-                return Some(self.var_vals[index].clone());
-            }
-        }
-        // Failed to get var
-        None
+    // Getting/setting vars
+    fn get_var_offset(&mut self, offset: u16, global: bool) -> (&mut Vec<Value>, usize) {
+        let vec = if global { &mut self.globals } else { &mut self.locals };
+        let off: i32 = if !global { vec.len() as i32 - (offset as i32 + 1) } else { offset as i32 };
+        return (vec, off as usize);
+    }
+    
+    pub fn get_var(&mut self, offset: u16, global: bool) -> Value {
+        let (vec, off) = self.get_var_offset(offset, global);
+        return vec[off as usize].clone();
     }
 
-    fn get_global(&self, name: &str) -> Option<Value> {
-        // Gets a var in the global scope
-        self.globals.get(name).cloned()
+    pub fn set_var(&mut self, offset: u16, val: Value, global: bool) {
+        let (vec, off) = self.get_var_offset(offset, global);
+        vec[off as usize] = val;
     }
 
-    pub fn get_var(&self, name: &str) -> Result<Value, String> {
-        if !self.is_global {
-            // Check local scope first
-            if let Some(v) = self.get_local(name) {
-                return Ok(v);
-            }
-        }
-        if let Some(v) = self.get_global(name) {
-            return Ok(v);
-        }
-        // Check function
-        let real_name = Self::unmangle(name);
-        if self.functies.contains_key(&real_name)
-            || self.program.functis.iter().any(|i| i.0 == real_name)
-        {
-            return Ok(Value::Functi(Rc::new(real_name)));
-        }
-        Err(format!("no variable called \"{}\"! This is a bug in burlap and should have been detected earlier on", name))
-    }
-
-    // Create a variable
-    pub fn make_var(
-        &mut self, name: &str, val: Value
-    ) {
-        // Create
-        if self.is_global {
-            self.globals.insert(name.to_string(), val);
-        } else {
-            self.var_names.push(name.to_string());
-            self.var_vals.push(val);
-        }
-    }
-
-    // Set a variable
-    pub fn get_local_index(&mut self, name: &str) -> Option<usize> {
-        // Sets a local var
-        let mut index = self.var_names.len();
-        while index > self.var_min {
-            index -= 1;
-            if self.var_names[index] == name {
-                return Some(index);
-            }
-        }
-        // Failed to get var
-        return None;
-    }
-
-    pub fn set_global(&mut self, name: &str, val: Value) -> bool {
-        // Sets a global value
-        if !self.globals.contains_key(name) {
-            return false;
-        }
-        self.globals.insert(name.to_string(), val);
-        return true;
-    }
-
-    pub fn set_var(&mut self, name: &str, val: Value) -> Result<(), String>
-    {
-        // Changes a variable to a different value
-        if !self.is_global {
-            if let Some(index) = self.get_local_index(name) {
-                self.var_vals[index] = val;
-                return Ok(());
-            }
-        }
-        if self.set_global(name, val) {
-            return Ok(());
-        }
-        return Err(format!("no variable called \"{}\"! This is a bug in burlap and should have been detected earlier on", name));
-    }
-
-    // Scope
-    pub fn lower_scope(&mut self, call: bool) {
-        // Where the vars need to be cut off at
-        let old_top = self.var_names.len();
-        // Functions can't access higher yet non-global scopes
-        let old_min = self.var_min;
-        if call {
-            self.var_min = old_top;
-        }
-        // Layers after each call
-        let count: u8 = if call {
-            0
-        } else {
-            self.scope.last().map(|i| i.count + 1).unwrap_or(0)
-        };
-        // Can't be global
-        self.is_global = false;
-
-        self.scope.push(Scope{old_min, old_top, count});
-    }
-    pub fn raise_scope(&mut self) -> Result<(), String> {
-        let Some(Scope{old_min, old_top, ..}) = self.scope.pop() else {
-            return Err("cannot raise global scope".to_string());
-        };
-        // Raise scope back up
-        // TODO: Figure out why this doesn't seem to work
-        self.is_global = self.scope.is_empty();
-        self.var_min = old_min;
-        // Remove new vars
-        self.var_names.truncate(old_top);
-        self.var_vals.truncate(old_top);
-
-        Ok(())
-    }
-
+    // Functies
     fn bad_args(
         &self, name: &str, got: usize, need: usize
     ) -> Result<(), String> {
@@ -422,6 +301,12 @@ impl Vm {
         })
     }
 
+    // Pops locals from the stack
+    fn pop_locals(&mut self, local_size: usize) {
+        self.locals.truncate(local_size);
+    }
+
+    // Calling
     pub fn call_name(
         &mut self, name: String, mut arg_num: u8
     ) -> Result<(), String> {
@@ -470,14 +355,13 @@ impl Vm {
             CallFrame {
                 args: None,
                 return_addr: self.at,
+                local_size: self.locals.len(),
                 regs
             }
         );
         // Jump there
         self.at = addr;
         self.jump = true;
-        // Lower scope
-        self.lower_scope(true);
     }
 
     /*pub fn cur_op(&mut self) -> u8 {
@@ -1092,15 +976,6 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             vm.stack.pop().unwrap();
         },
 
-        // Scope
-        // Raise scope
-        Opcode::RS => {
-            vm.raise_scope()?;
-        },
-        Opcode::LEVI => {
-            vm.lower_scope(false);
-        },
-
         // Functions
         Opcode::SARG => {
             let len = vm.stack.len();
@@ -1130,19 +1005,6 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             vm.call_name((*fn_name).clone(), b)?;
         }
         Opcode::RCALL => {
-            // Clear scope
-            loop {
-                let Some(Scope{count, ..}) = vm.scope.last() else {
-                    break;
-                };
-                let clean = *count;
-                vm.raise_scope()?;
-                if clean == 0 {
-                    // Clean scope
-                    vm.lower_scope(true);
-                    break;
-                }
-            }
             // Jump
             vm.at = shift3(a, b, c);
         },
@@ -1151,19 +1013,8 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             let pos = frame.return_addr;
             vm.at = pos + 1;
             vm.jump = true;
-            // Fix scope
-            loop {
-                let Some(Scope{count, ..}) = vm.scope.last() else {
-                    break;
-                };
-                let clean = *count;
-                vm.raise_scope()?;
-                if clean == 0 {
-                    // Clean scope
-                    break;
-                }
-            }
             vm.regs = frame.regs;
+            vm.pop_locals(frame.local_size);
         }
 
         // Lists
@@ -1234,35 +1085,44 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         },
 
         // Variables
-        Opcode::LV => {
-            // Get varname
-            let Value::Str(varname) = vm.get_reg(a) else {
-                return Err("variable name must be string".to_string());
-            };
+        t_op @ (Opcode::LV_L | Opcode::LV_G) => {
             // Get var
-            let var = vm.get_var(&varname)?;
+            let var = vm.get_var(shift2(a, b) as u16, t_op == Opcode::LV_G);
             // Load
-            vm.set_reg(b, var);
+            vm.set_reg(c, var);
         },
-        Opcode::DV => {
-            // Get varname
-            let Value::Str(varname) = vm.get_reg(a) else {
-                return Err("variable name must be string".to_string());
-            };
-            // Get var
-            let val = vm.get_reg(b);
-            // Declare
-            vm.make_var(&varname, val);
-        },
-        Opcode::SV => {
-            // Get varname
-            let Value::Str(varname) = vm.get_reg(a) else {
-                return Err("variable name must be string".to_string());
-            };
+        t_op @ (Opcode::SV_L | Opcode::SV_G) => {
             // Get value
-            let val = vm.get_reg(b);
+            let val = vm.get_reg(c);
             // Set
-            vm.set_var(&varname, val)?;
+            vm.set_var(shift2(a, b) as u16, val, t_op == Opcode::SV_G);
+        },
+        t_op @ (Opcode::PLC | Opcode::PGB) => {
+            let (mut len, vec) = if t_op == Opcode::PLC {
+                // Copy args, if needed
+                let vec = &mut vm.locals;
+                let mut c = c;
+                while c != 0 {
+                    let val = vm.stack.pop().unwrap();
+                    vec.push(val);
+                    c -= 1;
+                }
+                // Locals says how many more
+                (shift2(a, b), vec)
+            } else {
+                // Globals says how many total
+                let vec = &mut vm.globals;
+                let mut len = shift2(a, b);
+                if len <= vec.len() { return Ok(()) }
+                len -= vec.len();
+                (len, vec)
+            };
+            // Fill
+            vec.reserve(len);
+            while len != 0 {
+                vec.push(Value::None);
+                len -= 1;
+            }
         },
 
         // Binops

@@ -1,5 +1,5 @@
 # Burlap
-> A powerful and user-friendly Sack interpreter, v1.2.5
+> A powerful and user-friendly Sack interpreter, v1.2.6
 
 ## What is Burlap?
 Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) programming language. It aims for a high level of specification compliance, any valid sack program should be able to be run using Burlap (it does have a few minor variations from the specification, known differences are listed [here](docs/spec-diff.md)). Currently, it is up to date with the specification at commit [2d5fceb](https://github.com/RandomSoup/sack/tree/2d5fceb).
@@ -115,6 +115,8 @@ For profiling, I use [flamegraph-rs](https://github.com/flamegraph-rs/flamegraph
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
+- 1.2.6
+    - Make variables use indexes instead of names (this resulted in a 50% speed up for some things!)
 - 1.2.5
     - Add a disassembler
     - Make the debug log use the disassembler
@@ -200,3 +202,22 @@ Burlap has some extra features that aren't part of the sack language, there is a
 ## Alternatives
 
 - [Skcore](https://github.com/Luminoso-256/scriptinglang) an older sack interpreteter
+
+## Limits
+
+Theses are some of the documented limits, there are some undocumented ones currently:
+- Max number of function args: 255 (u8 limit)
+- Max number of local vars: 65535[^1] (u16 limit)
+- Max number of global vars: 65535 (u16 limit)
+- Max number of constants: 16777215 (u24 limit)
+- Largest unconditional jump possible: 16777215 (u24 limit)
+- Largest conditional jump possible: 65535 (u16 limit)
+
+[^1]: merging the offset of locals on diffrent branches can makes this limit even harder to hit, so far Burlap doesn't do that, but it will (TODO)
+
+Here are some stats that aren't limits (and some are even just impl details), they are here for fun:
+- Number of registers in the VM: 16[^2] (u4 limit, artificial)
+- Number of versions I wrote entirely over ssh: 3[^3]
+
+[^2]: There is also a stack, which is "register" 17
+[^3]: 0.0.1, 1.1.2, and 1.1.3

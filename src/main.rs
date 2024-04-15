@@ -212,14 +212,14 @@ fn main() {
     } else {
         args.path = PathBuf::from(args.name.clone());
         // Execute file
-        let Some(ast) = to_ast(&mut args) else {
+        let Some(mut ast) = to_ast(&mut args) else {
             exit(1);
         };
         let mut compiler = Compiler::new();
         // Fix import path
         compiler.program.path = args.path.clone();
         compiler.program.path.pop();
-        if !compile(&ast, &mut args, &mut compiler) {
+        if !compile(&mut ast, &mut args, &mut compiler) {
             exit(1);
         }
         if args.dis {
@@ -253,12 +253,12 @@ pub fn burlap_run(src: &str) -> bool {
         THE_SOURCE = Some(src.to_string());
         args.source = THE_SOURCE.as_ref().unwrap().clone();
     }
-    let Some(ast) = to_ast(&mut args) else {
+    let Some(mut ast) = to_ast(&mut args) else {
         return false;
     };
     let mut vm = Vm::new(args.clone());
-    let mut compiler = Compiler::new(vm.program);
-    if !compile(ast, &mut args, &mut compiler) {
+    let mut compiler = Compiler::new();
+    if !compile(&mut ast, &mut args, &mut compiler) {
         return false;
     }
     // Run
