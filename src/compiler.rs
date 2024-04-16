@@ -247,18 +247,26 @@ impl Compiler {
         *op += (i & 255) as u32;
     }
 
-    fn _var(&mut self, var: &String, reg: Reg, mut op: Opcode) -> Option<()> {
-        // Get the offset
+    fn get_var_offset(&mut self, var: &String) -> Option<(i32, bool)> {
         let ast = self.get_ast();
         let mut offset = ast.get_var_offset(var.clone(), (&self.functi).as_ref());
-        if offset.is_none() && !self.functi.is_none() {
+        Some(if offset.is_none() && !self.functi.is_none() {
             // Check global too
             offset = offset.or_else(||
                 ast.get_var_offset(var.clone(), None)
             );
+            (offset? as i32, true)
+        } else {
+            (offset? as i32, self.functi.is_none())
+        })
+    }
+
+    fn _var(&mut self, var: &String, reg: Reg, mut op: Opcode) -> Option<()> {
+        // Get the offset
+        let (offset, global) = self.get_var_offset(var)?;
+        if global && (op == Opcode::SV_L || op == Opcode::LV_L) {
             op = if op == Opcode::SV_L { Opcode::SV_G } else { Opcode::LV_G };
         }
-        let offset = offset?;
         self.add_op_args(
             op,
             ((offset >> 8) & 255) as u8,
@@ -503,6 +511,33 @@ fn compile_binop<'a>(
 }
 
 fn compile_call(compiler: &mut Compiler, expr: &ASTNode, args: &Vec<ASTNode>) -> Option<Reg> {
+    if let ASTNode::VarExpr(ref n) = *expr {
+        let n = n.clone().split("::").nth(1).unwrap().to_string();
+        if n == "__burlap_reftype" {
+            let Some(VarExpr(name)) = args.get(0) else {
+                println!("Compiler Error (internal): __burlap_reftype requires a variable");
+                return None;
+            };
+            let Some((offset, global)) = compiler.get_var_offset(name) else {
+                println!("Compiler Error (internal): __burlap_reftype requires a variable");
+                return None;
+            };
+            if global {
+                // Global offsets don't change
+                return Some(compiler.push(Value::RefType(offset, global)));
+            } else {
+                // Local offsets do, and need to be figured out at runtime
+                let reg = compiler.alloc_reg();
+                compiler.add_op_args(
+                    Opcode::ALO,
+                    ((offset >> 8) & 255) as u8,
+                    (offset & 255) as u8,
+                    reg as u8
+                );
+                return Some(reg);
+            }
+        }
+    }
     // Push the args onto the stack
     let old_on_stack = compiler.on_stack_only;
     compiler.on_stack_only = true;

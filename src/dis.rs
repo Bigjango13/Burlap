@@ -40,6 +40,7 @@ pub fn dis_single(program: &Program, at: usize) -> String {
         LV_G => format!("LV(G) {}, r{c}", shift2(a, b)),
         SV_L => format!("SV(L) {}, r{c}", shift2(a, b)),
         SV_G => format!("SV(G) {}, r{c}", shift2(a, b)),
+        ALO => format!("ALO +{}, r{c}", shift2(a, b)),
         PLC => format!("PLC {}, {c}", shift2(a, b)),
         PGB => format!("PGB {}", shift2(a, b)),
         LFL => format!("LFL r{a}, {}", shift2(a, b)),

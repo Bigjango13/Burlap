@@ -117,6 +117,7 @@ Burlap started because I wanted to learn how to create a programming language. I
 
 - 1.2.6
     - Make variables use indexes instead of names (this resulted in a 50% speed up for some things!)
+    - Add `__burlap_reftype`, `__burlap_set_var`, and `__burlap_load_var`.
 - 1.2.5
     - Add a disassembler
     - Make the debug log use the disassembler

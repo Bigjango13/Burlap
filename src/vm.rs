@@ -56,11 +56,13 @@ pub enum Opcode {
     // Set Variable Local/Global ([u16 "offset", register "value"])
     SV_L,
     SV_G,
-    // Push LoCals (u16 "amount", u8 "arg number")
+    // Push LoCals ([u16 "amount", u8 "arg number"])
     PLC,
-    // Push GloBals (u16 "amount")
+    // Push GloBals ([u16 "amount"])
     // Only used once in normal programs, needed more for interactive sessions (such as the REPL)
     PGB,
+    // Add Locals Offset ([u16 "offset", reg "reftype"])
+    ALO,
 
     // Lists
     // Load Fast List ([dst, u16 size, values on stack])
@@ -210,6 +212,12 @@ impl Vm {
             );
             functies.insert(
                 "__burlap_throw".to_string(), sk_throw as Functie
+            );
+            functies.insert(
+                "__burlap_set_var".to_string(), sk_set_var as Functie
+            );
+            functies.insert(
+                "__burlap_load_var".to_string(), sk_load_var as Functie
             );
             #[cfg(feature = "cffi")]
             functies.insert(
@@ -799,6 +807,27 @@ fn sk_throw(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     Err(args[0].to_string()?)
 }
 
+fn sk_set_var(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 2 {
+        vm.bad_args("__burlap_set_var", args.len(), 2)?;
+    }
+    let Value::RefType(offset, global) = args[0] else {
+        return Err("__burlap_set_var requires a __burlap_reftype".to_string());
+    };
+    (if global { &mut vm.globals } else { &mut vm.locals })[offset as usize] = args[1].clone();
+    return Ok(Value::None);
+}
+
+fn sk_load_var(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() != 1 {
+        vm.bad_args("__burlap_load_var", args.len(), 1)?;
+    }
+    let Value::RefType(offset, global) = args[0] else {
+        return Err("__burlap_set_var requires a __burlap_reftype".to_string());
+    };
+    return Ok((if global { &vm.globals } else { &vm.locals })[offset as usize].clone());
+}
+
 #[cfg(feature = "cffi")]
 fn sk_libload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
@@ -1123,6 +1152,12 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
                 vec.push(Value::None);
                 len -= 1;
             }
+        },
+        Opcode::ALO => {
+            // Get offset
+            let offset = shift2(a, b) + vm.locals.len() - 1;
+            // Set
+            vm.set_reg(c, Value::RefType(offset as i32, false));
         },
 
         // Binops

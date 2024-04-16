@@ -1,0 +1,41 @@
+# This file is specific to Burlap, and tests it's internal functions
+
+functi assert(cond) {
+    if !cond {
+        __burlap_throw("Assertion failed! Use the backtrace for more information!");
+    }
+}
+
+# Test reftype global/global (and auto none)
+let ref;
+let global1 = 2, global2 = 5;
+ref = __burlap_reftype(global1);
+assert(__burlap_load_var(ref) == 2);
+__burlap_set_var(ref, 47);
+assert(__burlap_load_var(ref) == 47);
+assert(global1 == 47);
+assert(global2 == 5);
+
+# Test reftype local/local (setup)
+functi reftype_ll(r) {
+    let e = 54;
+    if (r == none) {
+        reftype_ll(__burlap_reftype(e));
+        assert(e == 47);
+    } else {
+        __burlap_set_var(r, 47);
+        assert(e == 54);
+    }
+}
+
+# Test reftype local/global
+functi reftype_lg(r) {
+    assert(r == __burlap_reftype(global1));
+    assert(__burlap_load_var(r) == 5);
+    __burlap_set_var(r, reftype_ll);
+    assert(__burlap_load_var(r) == reftype_ll);
+}
+reftype_lg(__burlap_reftype(global2));
+
+# Test reftype local/local
+global2(none);

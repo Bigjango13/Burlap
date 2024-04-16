@@ -119,6 +119,14 @@ print("Doubled num: " + mynum)
 
 The casting function for the `__burlap_ptr` type, see below.
 
+### `__burlap_load_var(ref)`
+
+Loads the underlying value from `ref` (which must be a `__burlap_reftype`). For an example, see `tests/internals.sk`.
+
+### `__burlap_set_var(ref, value)`
+
+Sets the underlying value of `ref` (which must be a `__burlap_reftype`) to `value`. For an example, see `tests/internals.sk`.
+
 ## Internal Types
 
 These types are internal to burlap, and shouldn't be seen by the average user.
@@ -134,3 +142,7 @@ Used for loops, stores the list and the position.
 ### `__burlap_rangetype`
 
 Used for optimized ranges, stores the position, max value, and step, returned by `__burlap_range`.
+
+### `__burlap_reftype`
+
+Used for references, can be created by calling `__burlap_reftype` with a variable. For an example, see `tests/internals.sk`.

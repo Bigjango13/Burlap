@@ -43,6 +43,8 @@ pub enum Value {
     Iter(Rc<(Vec<Value>, i32)>),
     // RangeType (used for optimized ranges)
     RangeType(i32, i32, i32),
+    // For internal use
+    RefType(i32, bool)
 }
 
 // Methods
@@ -57,6 +59,7 @@ impl Value {
             Value::Byte(b) => *b as i32,
             #[cfg(feature = "cffi")]
             Value::Ptr(ptr) => *ptr as i32,
+            Value::RefType(offset, _) => *offset as i32,
             _ => 0,
         };
     }
@@ -119,6 +122,7 @@ impl Value {
             }
             Value::None => "none".to_string(),
             Value::Functi(n) => format!("Functi({})", n),
+            Value::RefType(offset, global) => format!("RefType({}: {})", ["local", "global"][*global as usize], offset),
             // Anything else
             _ => return Err(
                 format!("Failed to convert {} to string", self.get_type())
@@ -157,6 +161,7 @@ impl Value {
             Value::Ptr(_) => "__burlap_ptr",
             Value::Iter(..) => "__burlap_iter",
             Value::RangeType(..) => "__burlap_rangetype",
+            Value::RefType(..) => "__burlap_reftype",
         }.to_string();
     }
     // Lists
@@ -336,6 +341,14 @@ impl Value {
                     false
                 }
             },
+            // Function
+            Value::Functi(n) => {
+                if let Value::Functi(n_right) = right {
+                    **n == **n_right
+                } else {
+                    false
+                }
+            },
             // Pointers
             #[cfg(feature = "cffi")]
             Value::Ptr(p) => {
@@ -365,6 +378,14 @@ impl Value {
                     }
                 }
                 true
+            },
+            // RefType
+            Value::RefType(offset, global) => {
+                if let Value::RefType(roffset, rglobal) = right {
+                    offset == roffset || global == rglobal
+                } else {
+                    false
+                }
             },
             // Anything else
             _ => false,

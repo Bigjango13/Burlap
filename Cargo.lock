@@ -22,7 +22,7 @@ checksum = "a3e2c3daef883ecc1b5d58c15adae93470a91d425f3532ba1695849656af3fc1"
 
 [[package]]
 name = "burlap"
-version = "1.2.5"
+version = "1.2.6"
 dependencies = [
  "console_error_panic_hook",
  "home",

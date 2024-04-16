@@ -170,6 +170,9 @@ fn _get_builtins(extended: bool) -> Vec<(String, i32)> {
             ("__burlap_typed_eq", 2),
             ("__burlap_print", 1),
             ("__burlap_throw", 1),
+            ("__burlap_reftype", 1),
+            ("__burlap_set_var", 2),
+            ("__burlap_load_var", 1),
         ].iter().map(|(n, a)| (n.to_string(), *a)).collect();
         ret.append(&mut tmp);
         #[cfg(feature = "cffi")] {
