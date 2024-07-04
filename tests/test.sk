@@ -395,5 +395,43 @@ test("rand(x, x) = x", x, 1);
 x = rand(1, 2);
 test("rand(max, min)", 1 <= x && x <= 2, true);
 
+# Count tests
+print("*** Count Tests ***");
+test("count([])", count([]), 0);
+test("count([none])", count([none]), 0);
+test("count([1])", count([1]), 1);
+test("count([1..5])", count([3, 4, 2, 4, 7]), 5);
+test("count('')", count(""), 0);
+test("count('E')", count("E"), 1);
+test("count('...')", count("Hello!"), 6);
+test("count [] 1", count([], 0), 0);
+test("count [] 2", count([], "f"), 0);
+test("count [] 3", count([], []), 0);
+test("count [] 4", count([], none), 0);
+test("count [] 5", count([none], none), 0);
+test("count [] 6", count([e: none], none), 0);
+test("count 0 1l", count([4, 2, 8], 1), 0);
+test("count 0 2l", count([4, 2, 8], "2"), 0);
+test("count 0 3l", count([4, 2, 8], [4, 2, 8]), 0);
+test("count 0 4l", count([4, 2, 8], [4]), 0);
+test("count correct 1l", count([4, 2, 8, 2, 8, 2], 4), 1);
+test("count correct 2l", count([4, 2, 8, 2, 8, 2], 2), 3);
+test("count correct 3l", count([4, 2, 8, 2, 8, 2], 8), 2);
+test("count '' 1", count("", 0), 0);
+test("count '' 2", count("", "f"), 0);
+test("count '' 3", count("", []), 0);
+test("count '' 4", count("", ""), 1);
+test("count 0 1s", count("abciou163ciloveu", 1), 0);
+test("count 0 2s", count("abciou163ciloveu", "2"), 0);
+test("count 0 3s", count("abciou163ciloveu", byte("a")), 0);
+test("count 0 4s", count("abciou163ciloveu", ["b"]), 0);
+test("count 0 5s", count("abciou163ciloveu", "ba"), 0);
+test("count correct 1s", count("abciou163ciloveu", "a"), 1);
+test("count correct 2s", count("abciou163ciloveu", "u"), 2);
+test("count correct 3s", count("abciou163ciloveu", "3"), 1);
+test("count substr 1s", count("abciou163ciloveu", "ou"), 1);
+test("count substr 2s", count("abciou163ciloveu", "ci"), 2);
+test("count substr 3s", count("abciou163ciloveu", "abciou163ciloveu"), 1);
+
 # End of tests
 testSummary();

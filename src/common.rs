@@ -143,6 +143,8 @@ fn _get_builtins(extended: bool) -> Vec<(String, i32)> {
         ("input", 1),
         ("type", 1),
         ("len", 1),
+        ("count", 1),
+        ("count", 2),
         ("rand", 2),
         ("range", 2),
         ("args", 0),

@@ -8,6 +8,7 @@ use std::io;
 use std::path::PathBuf;
 
 use crate::Arguments;
+use crate::common::IMPOSSIBLE_STATE;
 use crate::backend::compiler::Program;
 use crate::backend::vm::dis::dis_single;
 use crate::backend::vm::value::{FileInfo, Value};
@@ -184,6 +185,7 @@ impl Vm {
         functies.insert("input".to_string(), sk_input as Functie);
         functies.insert("type".to_string(), sk_type as Functie);
         functies.insert("len".to_string(), sk_len as Functie);
+        functies.insert("count".to_string(), sk_count as Functie);
         functies.insert("range".to_string(), sk_range as Functie);
         functies.insert("rand".to_string(), sk_rand as Functie);
         // File IO
@@ -487,23 +489,55 @@ fn sk_type(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     return Ok(Value::Str(Rc::new(args[0].get_type())));
 }
 
+fn len_helper(iterable: &Value) -> Option<i32> {
+    // Get the len
+    Some(if let Value::FastList(l) = iterable {
+        l.len()
+    } else if let Value::List(l) = iterable {
+        l.len()
+    } else if let Value::Str(s) = iterable {
+        s.chars().count()
+    } else {
+        return None;
+    } as i32)
+}
+
+// Count
+fn sk_count(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
+    if args.len() == 1 {
+        let Some(size) = len_helper(&args[0]) else {
+            return Err("count() argument 1 must be a list or string".to_string());
+        };
+        return Ok(Value::Int(size));
+    } else if args.len() == 2 {
+        Ok(Value::Int(if let Value::FastList(l) = &args[0] {
+            l.iter().filter(|v| args[1].eq(v)).count()
+        } else if let Value::List(l) = &args[0] {
+            l.iter().filter(|(_, v)| args[1].eq(v)).count()
+        } else if let Value::Str(s) = &args[0] {
+            let Value::Str(s2) = &args[1] else {
+                return Ok(Value::Int(0));
+            };
+            s.as_str().matches(s2.as_str()).count()
+        } else {
+            return Err("count() argument 1 must be a list".to_string());
+        } as i32))   
+    } else {
+        // Invalid args
+        vm.bad_args("count", args.len(), 2)?;
+        panic!("{}", IMPOSSIBLE_STATE)
+    }
+}
+
 // Len
 fn sk_len(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 1 {
         // Invalid args
         vm.bad_args("len", args.len(), 1)?;
     }
-    // Get the len
-    let real_len: i32 = if let Value::FastList(l) = &args[0] {
-        l.len()
-    } else if let Value::List(l) = &args[0] {
-        l.len()
-    } else if let Value::Str(s) = &args[0] {
-        s.chars().count()
-    } else {
-        return Err("len() argument 1 must be a list".to_string());
-    } as i32;
-    // Return
+    let Some(real_len) = len_helper(&args[0]) else {
+        return Err("len() argument 1 must be a list or string".to_string());
+    };
     if real_len == 0 {
         return Ok(Value::None);
     }
