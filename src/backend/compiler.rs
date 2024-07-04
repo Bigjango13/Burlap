@@ -1,3 +1,4 @@
+// This is Burlap's bytecode compiler, it does not compile to C or a native instruction set
 use std::rc::Rc;
 use std::cmp::Ordering;
 use std::path::PathBuf;
@@ -7,8 +8,8 @@ use crate::Arguments;
 use crate::common::IMPOSSIBLE_STATE;
 use crate::lexer::TokenType;
 use crate::parser::{ASTNode, ASTNode::*, StmtNode, AST, FunctiData};
-use crate::value::Value;
-use crate::vm::Opcode;
+use crate::backend::vm::value::Value;
+use crate::backend::vm::vm::Opcode;
 
 #[derive(Debug)]
 pub struct Program {

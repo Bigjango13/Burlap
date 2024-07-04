@@ -1,3 +1,4 @@
+// This is a bytecode VM
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::fs::OpenOptions;
@@ -7,13 +8,13 @@ use std::io;
 use std::path::PathBuf;
 
 use crate::Arguments;
+use crate::backend::compiler::Program;
+use crate::backend::vm::dis::dis_single;
+use crate::backend::vm::value::{FileInfo, Value};
 #[cfg(feature = "cffi")]
-use crate::cffi::{load_functi, load_library};
+use crate::backend::vm::cffi::{load_functi, load_library};
 #[cfg(feature = "cffi")]
-use crate::cffi::call as ffi_call;
-use crate::compiler::Program;
-use crate::dis::dis_single;
-use crate::value::{FileInfo, Value};
+use crate::backend::vm::cffi::call as ffi_call;
 
 use rustc_hash::FxHashMap;
 use rand::Rng;

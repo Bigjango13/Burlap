@@ -1,10 +1,10 @@
-use crate::vm::{run, Vm};
+use crate::backend::vm::vm::{run, Vm};
 #[cfg(feature = "fancyrepl")]
 use crate::lexer::{lex, TokenType};
 use crate::parser::{parse, AST};
-use crate::compiler::{compile, Compiler, Program};
+use crate::backend::compiler::{compile, Compiler, Program};
 use crate::common::{print_err, ErrType};
-use crate::dis::dis;
+use crate::backend::vm::dis::dis;
 use crate::Arguments;
 
 #[cfg(feature = "fancyrepl")]

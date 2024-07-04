@@ -1,10 +1,8 @@
 #![allow(clippy::needless_return, clippy::print_literal)]
 
-mod compiler;
-mod lexer;
-mod parser;
-mod value;
-mod vm;
+pub mod backend;
+pub mod lexer;
+pub mod parser;
 
 #[macro_use]
 extern crate impl_ops;
@@ -19,7 +17,6 @@ mod cfg_mod {
     pub mod cffi;
     #[cfg(feature = "repl")]
     pub mod repl;
-    pub mod dis;
 
     pub use std::fs;
     pub use std::env;
@@ -28,8 +25,9 @@ mod cfg_mod {
     #[cfg(feature = "repl")]
     pub use crate::repl::repl;
     pub use crate::common::{print_err, ErrType};
-    pub use crate::dis::dis;
 }
+#[cfg(not(target_family = "wasm"))]
+use crate::backend::vm::dis::dis;
 
 #[cfg(target_family = "wasm")]
 #[path = ""]
@@ -41,10 +39,10 @@ mod cfg_mod {
 
 use cfg_mod::*;
 
-use crate::compiler::{compile, Compiler};
 use crate::lexer::lex;
 use crate::parser::{parse, AST};
-use crate::vm::{run, Vm};
+use crate::backend::compiler::{compile, Compiler};
+use crate::backend::vm::vm::{run, Vm};
 
 #[derive(Clone, Default)]
 pub struct Arguments {

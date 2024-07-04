@@ -1,5 +1,6 @@
-use crate::vm::{Opcode, shift2, shift3};
-use crate::compiler::Program;
+// This disassembles the VM's bytecode into a human readable form
+use crate::backend::vm::vm::{Opcode, shift2, shift3};
+use crate::backend::compiler::Program;
 use Opcode::*;
 
 fn decode_op(op: u32) -> (Opcode, u8, u8, u8) {

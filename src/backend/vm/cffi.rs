@@ -1,10 +1,11 @@
+// This provides C FFI to the bytecode VM
 use std::rc::Rc;
 use std::ffi::{CString, CStr};
 
 use libffi::middle::{Arg, Cif, CodePtr, Type};
 
 use crate::common::IMPOSSIBLE_STATE;
-use crate::value::Value;
+use crate::backend::vm::value::Value;
 
 unsafe fn ptr_to_string(input: *mut libc::c_char) -> String {
     CStr::from_ptr(input).to_str().unwrap_or("").to_string()
