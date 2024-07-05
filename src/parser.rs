@@ -378,7 +378,8 @@ fn check_call(parser: &mut Parser, name: &str, arg_num: i32) {
 fn parse_callindex_from(parser: &mut Parser, mut ret: ExprNode) -> Option<ExprNode> {
     // Parse call or index
     let is_call = parser.current() == Lparan;
-    let (Lparan | Lbracket) = parser.current() else {
+    let is_colon = parser.current() == Colon;
+    let (Lparan | Lbracket | Colon) = parser.current() else {
         // Not a call or index
         return Some(ret);
     };
@@ -403,6 +404,15 @@ fn parse_callindex_from(parser: &mut Parser, mut ret: ExprNode) -> Option<ExprNo
         parser.next();
         ret.node = ASTNode::CallExpr(Box::new(ret.node), args);
         ret.lvalue = false;
+    } else if is_colon {
+        let Identifier(ident) = parser.current() else {
+            error!(parser, "The colon operator requires a identifier!");
+            return Option::None;
+        };
+        parser.next();
+        ret.node = ASTNode::IndexExpr(
+            Box::new(ret.node), Box::new(ASTNode::StringExpr(ident))
+        );
     } else {
         let expr = parse_expr(parser)?.node;
         eat!(parser, Rbracket, "expected ']' at end of index")?;

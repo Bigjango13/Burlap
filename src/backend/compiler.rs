@@ -487,6 +487,9 @@ fn compile_binop<'a>(
             compiler.add_op_args(Opcode::GT, lreg, rreg, rreg);
             compiler.add_op_args(Opcode::NOT, rreg, rreg, 0);
         },
+        TokenType::Colon => {
+            compiler.add_op_args(Opcode::INX, lreg, rreg, rreg);
+        },
         // Handled later
         TokenType::Equals => {},
         _ => panic!("That operator isn't implemented!"),

@@ -256,6 +256,8 @@ test("invalid number indexing", list[47], none);
 test("key indexing", list['elm'], 4);
 test("invalid key indexing", list['elmer'], none);
 test("var indexing", list[elm], 8);
+test("key index with colon", list:elm, 4);
+test("invalid key index with colon", list:elmo, none);
 # Adding
 test("FL + FL", string([1, 2, 3] + [4, 5]), "[1, 2, 3, 4, 5]");
 test("FL + SL", string([1, 2, 3] + [f: 4, v: 5]), "[1, 2, 3, 4, 5]");
