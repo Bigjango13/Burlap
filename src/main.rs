@@ -217,7 +217,7 @@ fn main() {
         // Fix import path
         compiler.program.path = args.path.clone();
         compiler.program.path.pop();
-        if !compile(&mut ast, &mut args, &mut compiler) {
+        if !compile(&mut ast, &Some(args.name.clone()), &mut compiler, false) {
             exit(1);
         }
         if args.dis {

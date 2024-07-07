@@ -556,6 +556,12 @@ fn parse_list_item(parser: &mut Parser) -> (String, Option<ASTNode>) {
             name = "".to_string();
             parser.at -= 1;
         }
+    } else if let Func(_) = parser.current() {
+        // Method
+        let Some((method, method_name)) = parse_functi(parser, true) else {
+            return ("".to_string(), Option::None);
+        };
+        return (method_name.to_string(), Some(method.clone()));
     } else {
         // Use number index
         if parser.current() == Colon {
@@ -672,7 +678,7 @@ fn parse_statement(parser: &mut Parser) -> Option<StmtNode> {
             Option::None
         },
         // Functions
-        Func(_) => parse_functi(parser),
+        Func(_) => parse_functi(parser, false).map(|i| i.0),
         // Var def
         Let => parse_let(parser),
         // Loop
@@ -1053,9 +1059,9 @@ fn parse_return(parser: &mut Parser) -> Option<ASTNode> {
 }
 
 // Functions
-fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
-    // Disallow functions in functions
-    if parser.in_func {
+fn parse_functi(parser: &mut Parser, anon: bool) -> Option<(ASTNode, String)> {
+    // Disallow named functions in functions
+    if parser.in_func && !anon {
         parser.next();
         error!(parser, "cannot create function in function");
         return Option::None;
@@ -1063,7 +1069,7 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
     // Eat functi
     parser.next();
     // Name
-    let name: String;
+    let mut name: String;
     if let Identifier(n) = parser.current() {
         name = n;
     } else {
@@ -1101,6 +1107,11 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         }
     }
     parser.next();
+    // Anonymise the name
+    let old_name = name.clone();
+    if anon {
+        name = format!("__anon_functi${}", parser.ast.functis.len());
+    }
     if let Err(var) = check_unique(parser, &name, arg_names.len().try_into().unwrap()) {
         parser.ast.add_var(var.clone());
     }
@@ -1115,19 +1126,20 @@ fn parse_functi(parser: &mut Parser) -> Option<ASTNode> {
         );
         return Option::None;
     }
+    let old_in = parser.in_func;
     parser.in_func = true;
     let body = into_stmt(parse_body, parser);
-    parser.in_func = false;
+    parser.in_func = old_in;
     parser.functi_locals.append(&mut parser.ast.cur_vars.split_off(parser.ast.cur_vars.len() - arg_names.len()));
     swap(
         &mut parser.ast.functis[fn_index].locals,
         &mut parser.functi_locals
     );
     // Return
-    return Some(ASTNode::FunctiStmt(FunctiNode {
+    return Some((ASTNode::FunctiStmt(FunctiNode {
         name,
         body: Box::new(body?),
-    }));
+    }), old_name));
 }
 
 // Main parsing

@@ -4,10 +4,9 @@ use std::cmp::Ordering;
 use std::path::PathBuf;
 use std::ptr::null_mut;
 
-use crate::Arguments;
 use crate::common::IMPOSSIBLE_STATE;
 use crate::lexer::TokenType;
-use crate::parser::{ASTNode, ASTNode::*, StmtNode, AST, FunctiData};
+use crate::parser::{ASTNode, ASTNode::*, StmtNode, AST, FunctiData, FunctiNode};
 use crate::backend::vm::value::Value;
 use crate::backend::vm::vm::Opcode;
 
@@ -674,6 +673,14 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
             compiler.free_reg(index);
             expr
         },
+        // Anonymous functions
+        FunctiStmt(node) => {
+            compile_functi(compiler, &None, node, false)?;
+            let reg = compiler.alloc_reg();
+            compiler.load_var(&node.name, reg);
+            reg
+        },
+        // Non-exprs that snuck in
         _ => {
             panic!("Unknown token! {:?}", node);
         }
@@ -681,17 +688,17 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
 }
 
 fn _compile_body(
-    compiler: &mut Compiler, args: &mut Arguments,
+    compiler: &mut Compiler, filename: &Option<String>,
     nodes: &Vec<StmtNode>
 ) -> Option<()> {
     // Compile all nodes
     for node in nodes {
-        compile_stmt(compiler, args, node, false)?;
+        compile_stmt(compiler, filename, node, false)?;
     }
     return Some(());
 }
 fn compile_body(
-    compiler: &mut Compiler, args: &mut Arguments, node: &StmtNode
+    compiler: &mut Compiler, filename: &Option<String>, node: &StmtNode
 ) -> Option<()> {
     let BodyStmt(ref nodes) = node.node else {
         if node.node == Nop {
@@ -699,11 +706,56 @@ fn compile_body(
         }
         panic!("compile_body got non-body node!");
     };
-    _compile_body(compiler, args, nodes)
+    _compile_body(compiler, filename, nodes)
+}
+
+fn compile_functi(
+    compiler: &mut Compiler, filename: &Option<String>, functi: &FunctiNode, _anon: bool
+) -> Option<()> {
+    let data = compiler.get_ast().get_functi(functi.name.clone()).unwrap();
+    // TODO: Assert that old_functi is never Some(...) when anon is false
+    let old_functi = compiler.functi.clone();
+    compiler.functi = Some(data.clone());
+    // Jump around function
+    compiler.add_op(Opcode::JMP);
+    let pos = compiler.program.ops.len();
+    // Declare function
+    compiler.program.functis.push((
+        functi.name.clone(),
+        compiler.program.ops.len(),
+        data.arg_num
+    ));
+    // Arg saving
+    let start = compiler.program.ops.len();
+    compiler.add_op(Opcode::NOP);
+    // Load args from stack
+    let arg_num = data.arg_num as usize;
+    let lclen = data.locals.len() - arg_num;
+    compiler.add_op_args(
+        Opcode::PLC,
+        ((lclen >> 8) & 255) as u8,
+        (lclen & 255) as u8,
+        (arg_num & 255) as u8
+    );
+    // Compile body
+    compile_body(compiler, filename, &functi.body)?;
+    // Return
+    compiler.push_to_stack(Value::None);
+    compiler.add_op(Opcode::RET);
+    // Save args
+    if compiler.needs_args {
+        compiler.program.ops[start] = ((Opcode::SARG as u32) << 24)
+            + ((arg_num as u32 & 255) << 16);
+        compiler.needs_args = false;
+    }
+    // Fill jump
+    compiler.fill_jmp(pos, 0, None);
+    compiler.functi = old_functi;
+    Some(())
 }
 
 fn compile_stmt(
-    compiler: &mut Compiler, args: &mut Arguments, node: &StmtNode, dirty: bool
+    compiler: &mut Compiler, filename: &Option<String>, node: &StmtNode, dirty: bool
 ) -> Option<()> {
     if node.line != compiler.old_line {
         compiler.program.line_table.push((
@@ -731,7 +783,7 @@ fn compile_stmt(
                 compiler.add_op(Opcode::JMPNT);
                 let pos = compiler.program.ops.len();
                 // Compile body
-                compile_stmt(compiler, args, else_part, false)?;
+                compile_stmt(compiler, filename, else_part, false)?;
                 compiler.fill_jmp(pos, 0, Some(cond));
                 compiler.free_reg(cond);
                 return Some(());
@@ -741,7 +793,7 @@ fn compile_stmt(
             compiler.add_op(Opcode::JMPNT);
             let pos = compiler.program.ops.len();
             // Compile true part
-            compile_body(compiler, args, body)?;
+            compile_body(compiler, filename, body)?;
 
             // The else
             if else_part.node != Nop {
@@ -751,7 +803,7 @@ fn compile_stmt(
                 // Fill else jump
                 compiler.fill_jmp(pos, 0, Some(cond));
                 // Compile else part
-                compile_stmt(compiler, args, else_part, false)?;
+                compile_stmt(compiler, filename, else_part, false)?;
                 compiler.fill_jmp(exit_pos, 0, None);
             } else {
                 // No else
@@ -774,7 +826,7 @@ fn compile_stmt(
             compiler.loop_top = compiler.program.ops.len();
 
             // Body
-            compile_body(compiler, args, body)?;
+            compile_body(compiler, filename, body)?;
 
             // Backwards jump
             compiler.add_op(Opcode::JMPB);
@@ -810,7 +862,7 @@ fn compile_stmt(
             compiler.set_var(var, item);
 
             // Body
-            compile_body(compiler, args, body)?;
+            compile_body(compiler, filename, body)?;
             // Backwards jump
             compiler.add_op(Opcode::JMPB);
             compiler.fill_jmp(
@@ -844,7 +896,7 @@ fn compile_stmt(
             let exit_jump_pos = compiler.program.ops.len();
 
             // Compile body
-            compile_body(compiler, args, body)?;
+            compile_body(compiler, filename, body)?;
 
             // Backwards jump
             compiler.add_op(Opcode::JMPB);
@@ -871,47 +923,9 @@ fn compile_stmt(
             compiler.add_op(Opcode::JMPB);
             compiler.fill_jmp(compiler.program.ops.len(), compiler.program.ops.len() - compiler.loop_top - 1, None);
         },
-        BodyStmt(nodes) => return _compile_body(compiler, args, nodes),
+        BodyStmt(nodes) => return _compile_body(compiler, filename, nodes),
         FunctiStmt(node) => {
-            let data = compiler.get_ast().get_functi(node.name.clone()).unwrap();
-            // TODO: Assert that old_functi is never Some(...)
-            let old_functi = compiler.functi.clone();
-            compiler.functi = Some(data.clone());
-            // Jump around function
-            compiler.add_op(Opcode::JMP);
-            let pos = compiler.program.ops.len();
-            // Declare function
-            compiler.program.functis.push((
-                node.name.clone(),
-                compiler.program.ops.len(),
-                data.arg_num
-            ));
-            // Arg saving
-            let start = compiler.program.ops.len();
-            compiler.add_op(Opcode::NOP);
-            // Load args from stack
-            let arg_num = data.arg_num as usize;
-            let lclen = data.locals.len() - arg_num;
-            compiler.add_op_args(
-                Opcode::PLC,
-                ((lclen >> 8) & 255) as u8,
-                (lclen & 255) as u8,
-                (arg_num & 255) as u8
-            );
-            // Compile body
-            compile_body(compiler, args, &node.body)?;
-            // Return
-            compiler.push_to_stack(Value::None);
-            compiler.add_op(Opcode::RET);
-            // Save args
-            if compiler.needs_args {
-                compiler.program.ops[start] = ((Opcode::SARG as u32) << 24)
-                    + ((arg_num as u32 & 255) << 16);
-                compiler.needs_args = false;
-            }
-            // Fill jump
-            compiler.fill_jmp(pos, 0, None);
-            compiler.functi = old_functi;
+            return compile_functi(compiler, filename, node, false);
         },
         ReturnStmt(ret) => {
             if let CallExpr(expr, args) = *ret.clone() {
@@ -948,7 +962,7 @@ fn compile_stmt(
         },
         ImportStmt => {
             compiler.program.file_table.push((
-                compiler.inc_start, compiler.program.ops.len() as u32, args.name.clone()
+                compiler.inc_start, compiler.program.ops.len() as u32, filename.clone().unwrap()
             ));
             compiler.inc_start = compiler.program.ops.len() as u32;
         },
@@ -990,7 +1004,7 @@ fn compile_stmt(
 }
 
 pub fn compile(
-    ast: &mut AST, args: &mut Arguments, compiler: &mut Compiler
+    ast: &mut AST, filename: &Option<String>, compiler: &mut Compiler, repl: bool
 ) -> bool {
     if ast.nodes.is_empty() {
         return true;
@@ -1006,7 +1020,7 @@ pub fn compile(
     compiler.inc_start = compiler.program.ops.len() as u32;
     // Compile
     for node in &ast.nodes[..ast.nodes.len()-1] {
-        if compile_stmt(compiler, args, node, false).is_none() {
+        if compile_stmt(compiler, filename, node, false).is_none() {
             compiler.ast = null_mut();
             return false;
         }
@@ -1014,7 +1028,7 @@ pub fn compile(
     // If repl, compile the last value without cleaning up
     // Else just compile normally
     let last = ast.nodes.last().unwrap();
-    if compile_stmt(compiler, args, last, args.is_repl).is_none() {
+    if compile_stmt(compiler, filename, last, repl).is_none() {
         compiler.ast = null_mut();
         return false;
     }
@@ -1022,7 +1036,7 @@ pub fn compile(
     compiler.add_op(Opcode::NOP);
     // End file
     compiler.program.file_table.push((
-        compiler.inc_start, compiler.program.ops.len() as u32, args.name.clone()
+        compiler.inc_start, compiler.program.ops.len() as u32, filename.clone().unwrap()
     ));
     compiler.program.line_table.push((
         compiler.line_start, compiler.program.ops.len() as u32, last.line

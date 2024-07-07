@@ -19,6 +19,7 @@ functi testSummary() {
     if testBad == 0 {
         print("ALL TESTS PASSED!");
     }
+    print("You may now delete tmp-filename-for-tests");
 }
 
 # Math ops tests
@@ -310,6 +311,20 @@ test("pattern * 2", [2, 3] * 2, [2, 3, 2, 3]);
 list = [e: 5, 4];
 list["e"] = none;
 test("ex-SL * 2", list * 2, [4, 4]);
+# Methods
+let anonfn_list = [
+    5,
+    functi add(a, b) {
+        return a + b;
+    },
+    functi sub(a, b) {
+        return a - b;
+    },
+    next: 9
+];
+test("method call 1", anonfn_list["add"](1, 2), 3);
+test("method call 2", anonfn_list:sub(7, 3), 4);
+test("method call 3", anonfn_list[1]("4", 7), "47");
 
 # If tests
 print("*** If Tests ***");

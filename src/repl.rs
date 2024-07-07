@@ -262,7 +262,7 @@ pub fn repl(args: &mut Arguments) {
                 println!("Ast: {:?}", ast);
             }
             // Compile
-            if !compile(&mut ast, args, &mut compiler) {
+            if !compile(&mut ast, &Some(args.name.clone()), &mut compiler, true) {
                 continue;
             }
             // Reset file name (imports mess it up during compiling)
