@@ -2,7 +2,7 @@ use std::fs::read_to_string;
 use std::mem::swap;
 
 use crate::{Arguments, to_ast};
-use crate::common::{err, ErrType, IMPOSSIBLE_STATE, get_builtins};
+use crate::common::{err, ErrType, IMPOSSIBLE_STATE, _get_builtins};
 use crate::lexer::{Token, TokenType};
 use TokenType::*;
 
@@ -265,8 +265,7 @@ fn get_sym(parser: &mut Parser, name: &str, arg_num: i32) -> SymLookupRes {
         return SymLookupRes::TakenByFuncti;
     }
     // Check builtins
-    let extended = parser.args.extensions.contains(&"burlap-extensions".to_string());
-    if get_builtins(extended).iter()
+    if _get_builtins(false).iter()
         .any(|(n, a)| n == name && (arg_num == -1 || arg_num == *a))
     {
         return SymLookupRes::TakenByBuiltin;
@@ -348,10 +347,9 @@ fn check_call(parser: &mut Parser, name: &str, arg_num: i32) {
         }
     }
     // Builtins
-    let extended = parser.args.extensions.contains(&"burlap-extensions".to_string());
-    for (n, a) in get_builtins(extended) {
+    for (n, a) in _get_builtins(false) {
         if n == name {
-            if *a == arg_num {
+            if a == arg_num {
                 // A correct call was found
                 return;
             }

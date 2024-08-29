@@ -4,21 +4,13 @@ use std::rc::Rc;
 use std::fs::OpenOptions;
 use std::io::{Write, Read, Seek, SeekFrom};
 use std::io;
-#[cfg(feature = "cffi")]
-use std::path::PathBuf;
 
 use crate::Arguments;
 use crate::common::IMPOSSIBLE_STATE;
 use crate::backend::compiler::Program;
-use crate::backend::vm::dis::dis_single;
 use crate::backend::vm::value::{FileInfo, Value};
-#[cfg(feature = "cffi")]
-use crate::backend::vm::cffi::{load_functi, load_library};
-#[cfg(feature = "cffi")]
-use crate::backend::vm::cffi::call as ffi_call;
 
 use rustc_hash::FxHashMap;
-use rand::Rng;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -187,17 +179,12 @@ impl Vm {
         functies.insert("len".to_string(), sk_len as Functie);
         functies.insert("count".to_string(), sk_count as Functie);
         functies.insert("range".to_string(), sk_range as Functie);
-        functies.insert("rand".to_string(), sk_rand as Functie);
-        // File IO
-        #[cfg(not(target_family = "wasm"))]
-        {
-            functies.insert("open".to_string(), sk_open as Functie);
-            functies.insert("close".to_string(), sk_close as Functie);
-            functies.insert("read".to_string(), sk_read as Functie);
-            functies.insert("write".to_string(), sk_write as Functie);
-            functies.insert("seek".to_string(), sk_seek as Functie);
-            functies.insert("flush".to_string(), sk_flush as Functie);
-        }
+        functies.insert("open".to_string(), sk_open as Functie);
+        functies.insert("close".to_string(), sk_close as Functie);
+        functies.insert("read".to_string(), sk_read as Functie);
+        functies.insert("write".to_string(), sk_write as Functie);
+        functies.insert("seek".to_string(), sk_seek as Functie);
+        functies.insert("flush".to_string(), sk_flush as Functie);
         // Casts
         functies.insert("int".to_string(), sk_int as Functie);
         functies.insert("float".to_string(), sk_float as Functie);
@@ -205,40 +192,6 @@ impl Vm {
         functies.insert("byte".to_string(), sk_byte as Functie);
         // Non-togglable internals
         functies.insert("__burlap_range".to_string(), sk_fastrange as Functie);
-        // Burlap internal functies
-        if args.extensions.contains(&"burlap-extensions".to_string()) {
-            functies.insert(
-                "__burlap_typed_eq".to_string(), sk_typed_eq as Functie
-            );
-            functies.insert(
-                "__burlap_print".to_string(), sk_real_print as Functie
-            );
-            functies.insert(
-                "__burlap_throw".to_string(), sk_throw as Functie
-            );
-            functies.insert(
-                "__burlap_set_var".to_string(), sk_set_var as Functie
-            );
-            functies.insert(
-                "__burlap_load_var".to_string(), sk_load_var as Functie
-            );
-            #[cfg(feature = "cffi")]
-            functies.insert(
-                "__burlap_load_lib".to_string(), sk_libload as Functie
-            );
-            #[cfg(feature = "cffi")]
-            functies.insert(
-                "__burlap_load_functi".to_string(), sk_functiload as Functie
-            );
-            #[cfg(feature = "cffi")]
-            functies.insert(
-                "__burlap_ffi_call".to_string(), sk_call_c as Functie
-            );
-            #[cfg(feature = "cffi")]
-            functies.insert(
-                "__burlap_ptr".to_string(), sk_ptr as Functie
-            );
-        }
         const NONE: Value = Value::None;
         Vm {
             stack: vec![], call_frames: vec![], jump: false,
@@ -253,35 +206,6 @@ impl Vm {
     #[allow(dead_code)]
     fn unmangle(name: &str) -> String {
         name.split("::").last().unwrap().to_string()
-    }
-
-    // Get a vec of all symbol names
-    #[cfg(feature = "fancyrepl")]
-    pub fn get_symbols(&self, add_keywords: bool) -> Vec<String> {
-        let mut ret: Vec<String> = vec![];
-        /*
-        // Globals
-        ret.extend(self.globals.iter().map(|x| Self::unmangle(x))
-            .collect::<Vec<String>>());
-        // Locals
-        ret.extend(self.var_names.iter().map(|x| Self::unmangle(x))
-            .collect::<Vec<String>>());
-        */
-        // Functions
-        ret.extend(
-            self.program.functis.iter().map(|i| i.0.clone())
-            .collect::<Vec<String>>()
-        );
-        // Functies
-        ret.extend(self.functies.keys().cloned().collect::<Vec<String>>());
-        // Keywords
-        if add_keywords {
-            ret.extend(vec![
-                "true", "false", "none", "functi", "let", "return", "in",
-                "if", "else", "loop", "while", "import",
-            ].iter().map(|i| i.to_string()).collect::<Vec<String>>());
-        }
-        return ret;
     }
 
     // Getting/setting vars
@@ -564,19 +488,6 @@ fn sk_range(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     return Ok(Value::FastList(Rc::new(ret)));
 }
 
-// Rand
-fn sk_rand(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if args.len() != 2 {
-        // Invalid args
-        vm.bad_args("rand", args.len(), 2)?;
-    }
-    let (mut min, mut max) = (args[0].to_int(), args[1].to_int());
-    if min > max {
-        std::mem::swap(&mut min, &mut max);
-    }
-    return Ok(Value::Int(rand::thread_rng().gen_range(min..max+1)));
-}
-
 // File IO
 fn sk_open(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     if args.len() != 2 {
@@ -798,115 +709,6 @@ fn sk_byte(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
         // Anything else
         e => return Err(format!("cannot convert {} to byte", e.get_type())),
     })
-}
-
-// Pointer
-#[cfg(feature = "cffi")]
-fn sk_ptr(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if args.len() != 1 {
-        // Invalid args
-        vm.bad_args("__burlap_ptr", args.len(), 1)?;
-    }
-    if let Value::Ptr(_) = args[0].clone() {
-        return Ok(args[0].clone());
-    }
-    let num = args[0].to_int();
-    if num < 0 {
-        return Err("Pointers can't be negative".to_string());
-    }
-    return Ok(Value::Ptr(num as usize));
-}
-
-// Internal functies
-fn sk_typed_eq(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if args.len() != 2 {
-        // Invalid args
-        vm.bad_args("__burlap_typed_eq", args.len(), 2)?;
-    }
-    return Ok(Value::Bool(args[0] == args[1]));
-}
-
-fn sk_real_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if args.len() != 1 {
-        // Invalid args
-        vm.bad_args("__burlap_print", args.len(), 1)?;
-    }
-    println!("{:?}", args[0]);
-    return Ok(Value::None);
-}
-
-fn sk_throw(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if args.len() != 1 {
-        vm.bad_args("__burlap_throw", args.len(), 1)?;
-    }
-    Err(args[0].to_string()?)
-}
-
-fn sk_set_var(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if args.len() != 2 {
-        vm.bad_args("__burlap_set_var", args.len(), 2)?;
-    }
-    let Value::RefType(offset, global) = args[0] else {
-        return Err("__burlap_set_var requires a __burlap_reftype".to_string());
-    };
-    (if global { &mut vm.globals } else { &mut vm.locals })[offset as usize] = args[1].clone();
-    return Ok(Value::None);
-}
-
-fn sk_load_var(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if args.len() != 1 {
-        vm.bad_args("__burlap_load_var", args.len(), 1)?;
-    }
-    let Value::RefType(offset, global) = args[0] else {
-        return Err("__burlap_set_var requires a __burlap_reftype".to_string());
-    };
-    return Ok((if global { &vm.globals } else { &vm.locals })[offset as usize].clone());
-}
-
-#[cfg(feature = "cffi")]
-fn sk_libload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if args.len() != 1 {
-        vm.bad_args("__burlap_load_library", args.len(), 1)?;
-    }
-    let (_, file) = vm.program.get_info(vm.at as u32);
-    let mut path = PathBuf::from("./".to_owned() + &file);
-    path.pop();
-    path.push(args[0].to_string()?);
-    return Ok(Value::Ptr(load_library(path.to_str().unwrap().to_string())?))
-}
-
-#[cfg(feature = "cffi")]
-fn sk_functiload(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if args.len() != 2 {
-        vm.bad_args("__burlap_load_functi", args.len(), 2)?;
-    }
-    // First arg must be library handle
-    let Value::Ptr(handle) = args[0] else {
-        return Err("First argument must be library handle".to_string());
-    };
-    return Ok(Value::Ptr(load_functi(handle, args[1].to_string()?)?));
-}
-
-#[cfg(feature = "cffi")]
-fn sk_call_c(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if args.len() != 3 {
-        vm.bad_args("__burlap_ffi_call", args.len(), 3)?;
-    }
-    // First arg must be function pointer
-    let Value::Ptr(func) = args[0] else {
-        return Err("First argument must be function pointer".to_string());
-    };
-    // Second arg must be list
-    let Some(c_args) = args[1].values() else {
-        return Err("Second argument must be list".to_string());
-    };
-    // Third arg must be return value
-    let Value::Str(ret_type) = args[2].clone() else {
-        return Err(
-            "Third argument must be string (try using `type()`?)".to_string()
-        );
-    };
-    return ffi_call(func, c_args, (*ret_type).clone());
 }
 
 fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
@@ -1309,12 +1111,6 @@ pub fn run(vm: &mut Vm) -> bool {
         println!("Ops: {:?}", vm.program.ops);
     }*/
     loop {
-        if vm.args.is_debug {
-            // Print debugging info
-            let (line, filename) = vm.program.get_info(vm.at as u32);
-            let op = dis_single(&vm.program, vm.at);
-            println!("{filename}:{line}: {op}");
-        }
         // Run
         if let Err(s) = exec_next(vm) {
             let (line, filename) = vm.program.get_info(vm.at as u32);
@@ -1346,7 +1142,7 @@ pub fn run(vm: &mut Vm) -> bool {
                 // print the stack at the end
                 println!("FINAL: {:?}", vm.stack);
             }
-            if vm.args.is_repl && !vm.stack.is_empty() {
+            if !vm.stack.is_empty() {
                 // Print the result
                 if vm.stack[0] != Value::None {
                     print!("{}", vm.stack[0].to_string()

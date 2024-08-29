@@ -12,26 +12,16 @@ home = {version = "0.5.4", optional = true}
 impl_ops = "0.1.1"
 # For speed
 rustc-hash = "1.1.0"
-# For REPL
-rustyline = {version = "11.0.0", optional = true}
 # For lexing
 logos = "0.13.0"
-# For C ffi
-libc = {version = "0.2.142", optional = true}
-libffi = {version = "3.2.0", optional = true}
-# For wasm
-wasm-bindgen = {version = "0.2", optional = true}
-console_error_panic_hook = {version = "0.1.7", optional = true}
-# For rand(min, max)
-rand = "0.8.5"
 
 [features]
-default = ["fancyrepl"]
-repl = ["rustyline", "home"]
-fancyrepl = ["repl", "rustyline/custom-bindings", "rustyline/derive"]
-cffi = ["libc", "libffi"]
-wasm = ["wasm-bindgen", "console_error_panic_hook"]
+default = []
 
 [lib]
 path = "src/main.rs"
 crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = "z"
+lto = true

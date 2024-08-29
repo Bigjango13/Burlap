@@ -35,10 +35,6 @@ pub enum Value {
     // FastList (used for lists with only ordered number keys)
     FastList(Rc<Vec<Value>>),
 
-    // Ptr, used for ffi
-    #[cfg(feature = "cffi")]
-    Ptr(usize),
-
     // Iterator (used for iter based loops)
     Iter(Rc<(Vec<Value>, i32)>),
     // RangeType (used for optimized ranges)
@@ -57,8 +53,6 @@ impl Value {
             Value::Float(f) => *f as i32,
             Value::Bool(b) => if *b { 1 } else { 0 },
             Value::Byte(b) => *b as i32,
-            #[cfg(feature = "cffi")]
-            Value::Ptr(ptr) => *ptr as i32,
             Value::RefType(offset, _) => *offset as i32,
             _ => 0,
         };
@@ -138,8 +132,6 @@ impl Value {
             Value::Bool(b) => *b,
             Value::List(l) => !l.is_empty(),
             Value::FastList(l) => !l.is_empty(),
-            #[cfg(feature = "cffi")]
-            Value::Ptr(ptr) => *ptr != 0,
             _ => false,
         };
     }
@@ -157,8 +149,6 @@ impl Value {
             Value::File(..) => "File",
             Value::Functi(..) => "Functi",
             // Internal types
-            #[cfg(feature = "cffi")]
-            Value::Ptr(_) => "__burlap_ptr",
             Value::Iter(..) => "__burlap_iter",
             Value::RangeType(..) => "__burlap_rangetype",
             Value::RefType(..) => "__burlap_reftype",
@@ -345,15 +335,6 @@ impl Value {
             Value::Functi(n) => {
                 if let Value::Functi(n_right) = right {
                     **n == **n_right
-                } else {
-                    false
-                }
-            },
-            // Pointers
-            #[cfg(feature = "cffi")]
-            Value::Ptr(p) => {
-                if let Value::Ptr(p_right) = right {
-                    *p == *p_right
                 } else {
                     false
                 }
