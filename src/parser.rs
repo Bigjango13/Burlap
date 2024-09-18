@@ -4,6 +4,7 @@ use std::mem::swap;
 use crate::{Arguments, to_ast};
 use crate::common::{err, ErrType, IMPOSSIBLE_STATE, get_builtins};
 use crate::lexer::{Token, TokenType};
+use crate::folding::fold_expr;
 use TokenType::*;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -79,7 +80,7 @@ impl std::fmt::Debug for Variable {
 }
 
 #[derive(PartialEq, Clone)]
-struct ExprNode {
+pub struct ExprNode {
     pub node: ASTNode,
     //pub can_fold: bool,
     pub lvalue: bool,
@@ -505,15 +506,21 @@ fn parse_binop_logic(parser: &mut Parser) -> Option<ExprNode> {
     ], &parse_binop_cmp, true)
 }
 
-// Simply a wrapper to the highest expression parser
+// Simply a wrapper to the highest expression parser and fold
 fn parse_expr(parser: &mut Parser) -> Option<ExprNode> {
-    parse_binop_logic(parser)
+    let ret = parse_binop_logic(parser)?;
+    Some(if let Some(folded) = fold_expr(&ret) {
+        //println!("Folded {:?} into {:?}!", ret, folded);
+        folded
+    } else {
+        ret
+    })
 }
 
 // Special non-nesting binop
 fn parse_binop_set(parser: &mut Parser) -> Option<ASTNode> {
     // Setter binops, =, +=, -=, *=, /=
-    let ret = parse_binop_logic(parser)?;
+    let ret = parse_expr(parser)?;
     let (Equals | PlusEquals | MinusEquals
         | TimesEquals | DivEquals | ModEquals) = parser.current()
     else {
@@ -526,7 +533,7 @@ fn parse_binop_set(parser: &mut Parser) -> Option<ASTNode> {
         parser.next();
         Some(ASTNode::BinopExpr(
             Box::new(ret.node), op,
-            Box::new(parse_binop_logic(parser)?.node)
+            Box::new(parse_expr(parser)?.node)
         ))
     } else {
         error!(parser, "expected lvalue on left hand side of setter");

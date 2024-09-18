@@ -115,6 +115,8 @@ For profiling, I use [flamegraph-rs](https://github.com/flamegraph-rs/flamegraph
 
 Burlap started because I wanted to learn how to create a programming language. I knew about Sack and thought it would be a perfect way to dive in (and it was!). Anyway, here's the change log:
 
+- 1.2.7 (in progress)
+    - Add folding for expression
 - 1.2.6
     - Make variables use indexes instead of names (this resulted in a 50% speed up for some things!)
     - Add `__burlap_reftype`, `__burlap_set_var`, and `__burlap_load_var`.

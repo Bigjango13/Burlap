@@ -3,6 +3,7 @@
 pub mod backend;
 pub mod lexer;
 pub mod parser;
+pub mod folding;
 
 #[macro_use]
 extern crate impl_ops;
