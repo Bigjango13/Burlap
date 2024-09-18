@@ -109,10 +109,10 @@ pub fn fold_binop(lhs: &ASTNode, op: TokenType, rhs: &ASTNode) -> Option<ASTNode
             ASTNode::BoolExpr(lv.to_float() > rv.to_float())
         },
         TokenType::LtEquals => {
-            ASTNode::BoolExpr(!(lv.to_float() < rv.to_float()))
+            ASTNode::BoolExpr(!(lv.to_float() > rv.to_float()))
         },
         TokenType::GtEquals => {
-            ASTNode::BoolExpr(!(lv.to_float() > rv.to_float()))
+            ASTNode::BoolExpr(!(lv.to_float() < rv.to_float()))
         },
         // binop_logic
         TokenType::And => {

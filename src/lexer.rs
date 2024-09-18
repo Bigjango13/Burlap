@@ -129,9 +129,9 @@ pub enum TokenType {
     Lt,
     #[token(">")]
     Gt,
-    #[token(">=")]
-    LtEquals,
     #[token("<=")]
+    LtEquals,
+    #[token(">=")]
     GtEquals
 }
 

@@ -479,11 +479,11 @@ fn compile_binop<'a>(
             compiler.add_op_args(Opcode::NOT, rreg, rreg, 0);
         },
         TokenType::LtEquals => {
-            compiler.add_op_args(Opcode::LT, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::GT, lreg, rreg, rreg);
             compiler.add_op_args(Opcode::NOT, rreg, rreg, 0);
         },
         TokenType::GtEquals => {
-            compiler.add_op_args(Opcode::GT, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::LT, lreg, rreg, rreg);
             compiler.add_op_args(Opcode::NOT, rreg, rreg, 0);
         },
         TokenType::Colon => {
