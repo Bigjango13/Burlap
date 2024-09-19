@@ -2,7 +2,7 @@ use crate::backend::vm::vm::{run, Vm};
 #[cfg(feature = "fancyrepl")]
 use crate::lexer::{lex, TokenType};
 use crate::parser::{parse, AST};
-use crate::backend::compiler::{compile, Compiler, Program};
+use crate::backend::vm::compiler::{compile, Compiler, Program};
 use crate::common::{print_err, ErrType};
 use crate::backend::vm::dis::dis;
 use crate::Arguments;
@@ -200,7 +200,7 @@ pub fn repl(args: &mut Arguments) {
         rl.set_helper(Some(FancyRepl{
             brackets: MatchingBracketValidator::new(),
             name: args.name.clone(),
-            color: args.extensions.contains(&"color".to_string()),
+            color: args.extension_color,
             symbols: vm.get_symbols(true)
         }));
         rl
@@ -218,7 +218,7 @@ pub fn repl(args: &mut Arguments) {
 
     // Load history
     if !hist_file.is_empty() && rl.load_history(&hist_file).is_err() {
-        let color = args.extensions.contains(&"color".to_string());
+        let color = args.extension_color;
         print_err("failed to open history file", ErrType::Warn, color);
         print_err(
             "create `~/.burlap_history` if you want history to save.",
@@ -246,7 +246,7 @@ pub fn repl(args: &mut Arguments) {
             // Lex
             let Some(tokens) = lex(
                 &args.source, args.name.clone(), true,
-                args.extensions.contains(&"color".to_string()),
+                args.extension_color,
             ) else {
                 continue;
             };
@@ -293,7 +293,7 @@ pub fn repl(args: &mut Arguments) {
     if !hist_file.is_empty() && rl.save_history(&hist_file).is_err() {
         print_err(
             "failed to save history", ErrType::Warn,
-            args.extensions.contains(&"color".to_string())
+            args.extension_color
         );
     }
 }

@@ -1,4 +1,4 @@
-// This is Burlap's bytecode compiler, it does not compile to C or a native instruction set
+// This is Burlap's bytecode compiler, it does *not* compile to C or a native instruction set
 use std::rc::Rc;
 use std::cmp::Ordering;
 use std::path::PathBuf;
@@ -7,7 +7,7 @@ use std::ptr::null_mut;
 use crate::common::IMPOSSIBLE_STATE;
 use crate::lexer::TokenType;
 use crate::parser::{ASTNode, ASTNode::*, StmtNode, AST, FunctiData, FunctiNode};
-use crate::backend::vm::value::Value;
+use crate::backend::value::Value;
 use crate::backend::vm::vm::Opcode;
 
 #[derive(Debug)]

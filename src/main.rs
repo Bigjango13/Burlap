@@ -42,7 +42,7 @@ use cfg_mod::*;
 
 use crate::lexer::lex;
 use crate::parser::{parse, AST};
-use crate::backend::compiler::{compile, Compiler};
+use crate::backend::vm::compiler::{compile, Compiler};
 use crate::backend::vm::vm::{run, Vm};
 
 #[derive(Clone, Default)]
@@ -54,7 +54,12 @@ pub struct Arguments {
     is_repl: bool,
     backtrace: bool,
     dis: bool,
-    extensions: Vec<String>,
+    // Extensions
+    extension_color: bool,
+    extension_auto_none: bool,
+    extension_functies: bool,
+    extension_va_print: bool,
+    // Arguments to the program itself
     program_args: Vec<String>
 }
 
@@ -62,9 +67,14 @@ impl Arguments {
     pub fn new() -> Arguments {
         Arguments {
             source: "".to_string(), is_debug: false, dis: false,
-            is_repl: true, extensions: vec!["color".to_string()],
-            name: "<stdin>".to_string(), backtrace: false,
-            program_args: vec![], path: PathBuf::from("."),
+            is_repl: true, name: "<stdin>".to_string(),
+            backtrace: false, program_args: vec![],
+            path: PathBuf::from("."),
+            // Extensions
+            extension_color: true,
+            extension_auto_none: false,
+            extension_functies: false,
+            extension_va_print: false,
         }
     }
 }
@@ -73,7 +83,7 @@ pub fn to_ast(args: &mut Arguments) -> Option<AST> {
     // Lex
     let tokens = lex(
         &args.source, args.name.clone(), true,
-        args.extensions.contains(&"color".to_string()),
+        args.extension_color,
     )?;
     args.source = "".to_string();
     // Parse
@@ -99,15 +109,23 @@ fn get_args() -> Result<Arguments, bool> {
             // Extensions
             let extension = extension.to_string();
             if extension == "all" {
-                // Push all extensions
-                args.extensions.push("auto-none".to_string());
-                args.extensions.push("burlap-extensions".to_string());
-            } else {
-                args.extensions.push(extension);
+                // Set all extensions
+                args.extension_color = true;
+                args.extension_auto_none = true;
+                args.extension_functies = true;
+                args.extension_va_print = true;
+            } else if extension == "color" {
+                args.extension_color = true;
+            } else if extension == "auto-none" {
+                args.extension_auto_none = true;
+            } else if extension == "burlap-extensions" {
+                args.extension_functies = true;
+            } else if extension == "va-print" {
+                args.extension_va_print = true;
             }
         } else if arg == "--no-color" {
             // Color is always the first argument
-            args.extensions.remove(0);
+            args.extension_color = true;
         } else if arg == "-d" || arg == "--debug" {
             // Debug
             args.is_debug = true;
@@ -125,18 +143,18 @@ fn get_args() -> Result<Arguments, bool> {
             println!("burlap <args> <file> <args for file>");
             println!();
             println!("Args:");
-            println!("\t-h --help\tprints help");
-            println!("\t--no-color\tdisables color");
-            println!("\t--use-X\tenables X feature");
-            println!("\t--use-all\tenables all features");
-            println!("\t- [command]\truns [command]");
-            println!("\t-d --debug\truns in debug mode");
-            println!("\t-b --backtrace\tprints backtrace on runtime errors");
-            println!("\t-a --disassemble\tprints disassembly instead of running");
+            println!("    -h --help         prints this help");
+            println!("    --no-color        disables color");
+            println!("    --use-X           enables X feature");
+            println!("    --use-all         enables all features");
+            println!("    - [command]       runs [command]");
+            println!("    -d --debug        runs in debug mode");
+            println!("    -b --backtrace    prints backtrace on runtime errors");
+            println!("    -a --disassemble  prints disassembly instead of running");
             println!();
             println!(
-                "Thank you for using burlap! {}{}",
-                "If there are any issues please report them at ",
+                "Thank you for using Burlap! {}{}",
+                "If there are any issues please report them to: ",
                 env!("CARGO_PKG_REPOSITORY")
             );
             return Err(true);
@@ -147,7 +165,7 @@ fn get_args() -> Result<Arguments, bool> {
             let Some(src) = cli_args.next() else {
                 print_err(
                     "'-' is missing option source", ErrType::Err,
-                    args.extensions.contains(&"color".to_string())
+                    args.extension_color
                 );
                 return Err(false);
             };
@@ -158,7 +176,7 @@ fn get_args() -> Result<Arguments, bool> {
             // Anything else
             print_err(
                 format!("unknown argument: {}", arg).as_str(), ErrType::Warn,
-                args.extensions.contains(&"color".to_string())
+                args.extension_color
             );
         }
     }
@@ -180,7 +198,7 @@ fn get_args() -> Result<Arguments, bool> {
             // Report error
             print_err(
                 format!("failed to open file: {}", err).as_str(), ErrType::Err,
-                args.extensions.contains(&"color".to_string())
+                args.extension_color
             );
             return Err(false);
         }

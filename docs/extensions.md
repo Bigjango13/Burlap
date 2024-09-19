@@ -8,9 +8,17 @@ This is a list of extensions that burlap has, "extensions" is any flag, function
 
 Enables all extension flags.
 
+### `--use-color`
+
+Enables ANSI color codes color in output. Enabled by default. To disable, use `--no-color`.
+
 ### `--use-auto-none`
 
 Make `return;` expand to `return none;` and `let x;` to `let x = none;`
+
+### `--use-va-print`
+
+Allows `print` to take any number of arguments, for example `print(1, 2, 3)` will output `"1 2 3\n"`.
 
 ### `--use-burlap-extensions`
 

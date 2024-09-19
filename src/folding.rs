@@ -1,5 +1,5 @@
 use crate::lexer::TokenType;
-use crate::backend::vm::value::Value;
+use crate::backend::value::Value;
 use crate::parser::{ASTNode, ExprNode};
 use crate::parser::ASTNode::*;
 

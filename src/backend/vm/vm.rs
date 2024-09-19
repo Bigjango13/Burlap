@@ -9,9 +9,9 @@ use std::path::PathBuf;
 
 use crate::Arguments;
 use crate::common::IMPOSSIBLE_STATE;
-use crate::backend::compiler::Program;
+use crate::backend::vm::compiler::Program;
 use crate::backend::vm::dis::dis_single;
-use crate::backend::vm::value::{FileInfo, Value};
+use crate::backend::value::{FileInfo, Value};
 #[cfg(feature = "cffi")]
 use crate::backend::vm::cffi::{load_functi, load_library};
 #[cfg(feature = "cffi")]
@@ -206,7 +206,7 @@ impl Vm {
         // Non-togglable internals
         functies.insert("__burlap_range".to_string(), sk_fastrange as Functie);
         // Burlap internal functies
-        if args.extensions.contains(&"burlap-extensions".to_string()) {
+        if args.extension_functies {
             functies.insert(
                 "__burlap_typed_eq".to_string(), sk_typed_eq as Functie
             );
@@ -447,7 +447,7 @@ impl Vm {
 // Builtin Functions (prefixed with 'sk_')
 // Print
 fn sk_print(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
-    if vm.args.extensions.contains(&"va-print".to_string()) {
+    if vm.args.extension_va_print {
         // VA print extension
         for i in args {
             print!("{} ", i.to_string()?);

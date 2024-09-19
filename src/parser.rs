@@ -213,14 +213,14 @@ macro_rules! error {
         $parser.has_err = true;
         err(
             &$parser.tokens[$parser.at].stream, $msg, ErrType::Err,
-            $parser.args.extensions.contains(&"color".to_string())
+            $parser.args.extension_color
         );
     );
     // DO NOT USE WITH ErrType::Err
     ($parser:expr, $msg:expr, $err_type:expr) => (
         err(
             &$parser.tokens[$parser.at].stream, $msg, $err_type,
-            $parser.args.extensions.contains(&"color".to_string())
+            $parser.args.extension_color
         );
     )
 }
@@ -266,7 +266,7 @@ fn get_sym(parser: &mut Parser, name: &str, arg_num: i32) -> SymLookupRes {
         return SymLookupRes::TakenByFuncti;
     }
     // Check builtins
-    let extended = parser.args.extensions.contains(&"burlap-extensions".to_string());
+    let extended = parser.args.extension_functies;
     if get_builtins(extended).iter()
         .any(|(n, a)| n == name && (arg_num == -1 || arg_num == *a))
     {
@@ -349,7 +349,7 @@ fn check_call(parser: &mut Parser, name: &str, arg_num: i32) {
         }
     }
     // Builtins
-    let extended = parser.args.extensions.contains(&"burlap-extensions".to_string());
+    let extended = parser.args.extension_functies;
     for (n, a) in get_builtins(extended) {
         if n == name {
             if *a == arg_num {
@@ -1007,7 +1007,7 @@ fn _parse_let(parser: &mut Parser) -> Option<(String, ASTNode)> {
             // Var is now valid
             parser.ast.add_var(var.clone());
         }
-        if parser.args.extensions.contains(&"auto-none".to_string()) {
+        if parser.args.extension_auto_none {
             return Some((name, ASTNode::NoneExpr));
         } else {
             error!(parser, "let must have value");
@@ -1045,7 +1045,7 @@ fn parse_return(parser: &mut Parser) -> Option<ASTNode> {
     // Return without value (non-standard)
     if let Semicolon = parser.current() {
         parser.next();
-        if parser.args.extensions.contains(&"auto-none".to_string()) {
+        if parser.args.extension_auto_none {
             return Some(ASTNode::ReturnStmt(Box::new(ASTNode::NoneExpr)));
         } else {
             error!(parser, "return must have value");
@@ -1129,7 +1129,7 @@ fn parse_functi(parser: &mut Parser, anon: bool) -> Option<(ASTNode, String)> {
         err(
             &parser.tokens[parser.at].stream,
             "forward declaration isn't supported", ErrType::Hint,
-            parser.args.extensions.contains(&"color".to_string())
+            parser.args.extension_color
         );
         return Option::None;
     }
