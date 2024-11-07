@@ -163,8 +163,13 @@ impl Compiler {
             // No available registers, fallback to stack
             return Reg::Stack;
         };
-        self.regs[reg] = false;
-        return to_reg(reg as u8);
+        let reg = to_reg(reg as u8);
+        self.use_reg(reg);
+        return reg;
+    }
+
+    fn use_reg(&mut self, reg: Reg) {
+        self.regs[reg as usize] = false;
     }
 
     #[inline]
@@ -196,7 +201,7 @@ impl Compiler {
         );
     }
 
-    fn push(&mut self, val: Value) -> Reg {
+    fn push_to(&mut self, val: Value, reg: Option<Reg>) -> Reg {
         // Get the index, or append
         let index = self.program.consts.iter().position(|i| i.clone() == val)
             .unwrap_or_else(|| {
@@ -214,10 +219,15 @@ impl Compiler {
                 ((index >> 8) & 255) as u8,
                 (index & 255) as u8
             );
-            return Reg::Stack;
+            if let Some(reg) = reg {
+                self.move_(Reg::Stack, reg);
+                return reg;
+            } else {
+                return Reg::Stack;
+            }
         } else {
             // Get a register and push
-            let reg = self.alloc_reg();
+            let reg = reg.unwrap_or_else(|| self.alloc_reg());
             self.add_op_args(
                 Opcode::LD,
                 ((index >> 8) & 255) as u8,
@@ -226,6 +236,10 @@ impl Compiler {
             );
             return reg;
         }
+    }
+
+    fn push(&mut self, val: Value) -> Reg {
+        self.push_to(val, None)
     }
 
     fn fill_jmp(&mut self, pos: usize, mut i: usize, reg: Option<Reg>) {
@@ -288,15 +302,11 @@ impl Compiler {
         if self._var(var, reg, op).is_none() {
             // It's a function
             let name = var.clone().split("::").nth(1).unwrap_or(var).to_string();
-            let rname = if name == "__burlap_debug_blackbox" {
-                self.push(Value::None)
+            if name == "__burlap_debug_blackbox" {
+                self.push_to(Value::None, Some(reg));
             } else {
-                self.push(Value::Functi(Rc::new(name.clone())))
+                self.push_to(Value::Functi(Rc::new(name.clone())), Some(reg));
             };
-            if rname != reg {
-                self.move_(rname, reg);
-            }
-            self.free_reg(rname);
         }
     }
 
