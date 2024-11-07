@@ -239,6 +239,14 @@ impl Vm {
                 "__burlap_ptr".to_string(), sk_ptr as Functie
             );
         }
+        if args.extension_debugging_functies {
+            functies.insert(
+                "__burlap_debug_on".to_string(), sk_debug_on as Functie
+            );
+            functies.insert(
+                "__burlap_debug_off".to_string(), sk_debug_off as Functie
+            );
+        }
         const NONE: Value = Value::None;
         Vm {
             stack: vec![], call_frames: vec![], jump: false,
@@ -919,6 +927,16 @@ fn sk_fastrange(vm: &mut Vm, args: Vec<Value>) -> Result<Value, String> {
     return Ok(Value::RangeType(at, max, step));
 }
 
+// Debugging functies
+fn sk_debug_on(vm: &mut Vm, _args: Vec<Value>) -> Result<Value, String> {
+    vm.args.is_debug = true;
+    Ok(Value::None)
+}
+fn sk_debug_off(vm: &mut Vm, _args: Vec<Value>) -> Result<Value, String> {
+    vm.args.is_debug = false;
+    Ok(Value::None)
+}
+
 // Sets a key in a list and returns it
 fn set_key(
     vlist: &mut Value, key: Value, val: Value
@@ -1331,7 +1349,7 @@ pub fn run(vm: &mut Vm) -> bool {
             vm.at = vm.program.ops.len() - 1;
             return false;
         }
-        //println!("Stk: {:?}", vm.stack);
+        //println!("Stk: {:?}, regs: {:?}", vm.stack, vm.regs);
 
         // Move forward
         if vm.jump {

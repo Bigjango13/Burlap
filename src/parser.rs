@@ -266,8 +266,7 @@ fn get_sym(parser: &mut Parser, name: &str, arg_num: i32) -> SymLookupRes {
         return SymLookupRes::TakenByFuncti;
     }
     // Check builtins
-    let extended = parser.args.extension_functies;
-    if get_builtins(extended).iter()
+    if get_builtins(&parser.args).iter()
         .any(|(n, a)| n == name && (arg_num == -1 || arg_num == *a))
     {
         return SymLookupRes::TakenByBuiltin;
@@ -349,8 +348,7 @@ fn check_call(parser: &mut Parser, name: &str, arg_num: i32) {
         }
     }
     // Builtins
-    let extended = parser.args.extension_functies;
-    for (n, a) in get_builtins(extended) {
+    for (n, a) in get_builtins(&parser.args) {
         if n == name {
             if *a == arg_num {
                 // A correct call was found

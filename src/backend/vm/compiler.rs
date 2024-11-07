@@ -170,6 +170,7 @@ impl Compiler {
     #[inline]
     fn free_reg(&mut self, reg: Reg) {
         if 16 <= reg as u8 {
+            // Why is this commented out?
             //self.add_op(Opcode::POP);
             return;
         }
@@ -289,7 +290,7 @@ impl Compiler {
             let name = var.clone().split("::").nth(1).unwrap_or(var).to_string();
             let rname = self.push(Value::Functi(Rc::new(name.clone())));
             if rname != reg {
-                self.copy(rname, reg);
+                self.move_(rname, reg);
             }
             self.free_reg(rname);
         }

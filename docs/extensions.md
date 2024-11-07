@@ -20,9 +20,13 @@ Make `return;` expand to `return none;` and `let x;` to `let x = none;`
 
 Allows `print` to take any number of arguments, for example `print(1, 2, 3)` will output `"1 2 3\n"`.
 
+### `--use-more-debug`
+
+Enables using `__burlap_debug_on` and `__burlap_debug_off` to toggle debugging on and off, enabled by default when using the `--debug` flag.
+
 ### `--use-burlap-extensions`
 
-Enables using internal burlap functions, see below.
+Enables using internal burlap functions (see below). It does not enable debugging functions (see above).
 
 ## Functions
 

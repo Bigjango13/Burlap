@@ -13,6 +13,8 @@ use cfg_mod::*;
 #[cfg(target_family = "wasm")]
 use crate::THE_SOURCE;
 
+use crate::Arguments;
+
 // Stream
 #[derive(Debug, Clone)]
 pub struct Stream {
@@ -137,7 +139,7 @@ pub fn err(stream: &Stream, msg: &str, errtype: ErrType, color: bool) {
     }
 }
 
-fn _get_builtins(extended: bool) -> Vec<(String, i32)> {
+fn _get_builtins(args: &Arguments) -> Vec<(String, i32)> {
     let mut ret: Vec<(String, i32)> = vec![
         ("print", 1),
         ("input", 1),
@@ -167,7 +169,7 @@ fn _get_builtins(extended: bool) -> Vec<(String, i32)> {
         ret.append(&mut tmp);
     }
     // Extensions
-    if extended {
+    if args.extension_functies {
         let mut tmp = vec![
             ("__burlap_typed_eq", 2),
             ("__burlap_print", 1),
@@ -187,16 +189,20 @@ fn _get_builtins(extended: bool) -> Vec<(String, i32)> {
             ret.append(&mut tmp);
         }
     }
+    if args.extension_debugging_functies {
+        ret.push(("__burlap_debug_on".to_string(), 0));
+        ret.push(("__burlap_debug_off".to_string(), 0));
+    }
     return ret;
 }
 
-pub fn get_builtins(extended: bool) -> &'static Vec<(String, i32)> {
+pub fn get_builtins(args: &Arguments) -> &'static Vec<(String, i32)> {
     unsafe {
         static mut BUILTINS: Option<Vec<(String, i32)>> = None;
         static mut EXTENDED: bool = false;
-        if BUILTINS.is_none() || EXTENDED != extended {
-            EXTENDED = extended;
-            BUILTINS = Some(_get_builtins(extended));
+        if BUILTINS.is_none() || EXTENDED != args.extension_functies {
+            EXTENDED = args.extension_functies;
+            BUILTINS = Some(_get_builtins(args));
         }
         return BUILTINS.as_mut().unwrap();
     }

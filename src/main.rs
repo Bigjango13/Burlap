@@ -59,6 +59,7 @@ pub struct Arguments {
     extension_auto_none: bool,
     extension_functies: bool,
     extension_va_print: bool,
+    extension_debugging_functies: bool,
     // Arguments to the program itself
     program_args: Vec<String>
 }
@@ -75,6 +76,7 @@ impl Arguments {
             extension_auto_none: false,
             extension_functies: false,
             extension_va_print: false,
+            extension_debugging_functies: false,
         }
     }
 }
@@ -114,6 +116,7 @@ fn get_args() -> Result<Arguments, bool> {
                 args.extension_auto_none = true;
                 args.extension_functies = true;
                 args.extension_va_print = true;
+                args.extension_debugging_functies = true;
             } else if extension == "color" {
                 args.extension_color = true;
             } else if extension == "auto-none" {
@@ -122,6 +125,14 @@ fn get_args() -> Result<Arguments, bool> {
                 args.extension_functies = true;
             } else if extension == "va-print" {
                 args.extension_va_print = true;
+            } else if extension == "more-debug" {
+                args.extension_debugging_functies = true;
+            } else {
+                print_err(
+                    format!("unknown extension: {}", arg).as_str(),
+                    ErrType::Warn,
+                    args.extension_color
+                );
             }
         } else if arg == "--no-color" {
             // Color is always the first argument
@@ -129,6 +140,7 @@ fn get_args() -> Result<Arguments, bool> {
         } else if arg == "-d" || arg == "--debug" {
             // Debug
             args.is_debug = true;
+            args.extension_debugging_functies = true;
         } else if arg == "-a" || arg == "--disassemble" {
             // Disassemble
             args.dis = true;
