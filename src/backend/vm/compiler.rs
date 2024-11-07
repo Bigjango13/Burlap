@@ -288,7 +288,11 @@ impl Compiler {
         if self._var(var, reg, op).is_none() {
             // It's a function
             let name = var.clone().split("::").nth(1).unwrap_or(var).to_string();
-            let rname = self.push(Value::Functi(Rc::new(name.clone())));
+            let rname = if name == "__burlap_debug_blackbox" {
+                self.push(Value::None)
+            } else {
+                self.push(Value::Functi(Rc::new(name.clone())))
+            };
             if rname != reg {
                 self.move_(rname, reg);
             }
@@ -540,6 +544,8 @@ fn compile_call(compiler: &mut Compiler, expr: &ASTNode, args: &Vec<ASTNode>) ->
                 );
                 return Some(reg);
             }
+        } else if n == "__burlap_debug_blackbox" {
+            return compile_expr(compiler, &args[0]);
         }
     }
     // Push the args onto the stack

@@ -192,6 +192,7 @@ fn _get_builtins(args: &Arguments) -> Vec<(String, i32)> {
     if args.extension_debugging_functies {
         ret.push(("__burlap_debug_on".to_string(), 0));
         ret.push(("__burlap_debug_off".to_string(), 0));
+        ret.push(("__burlap_debug_blackbox".to_string(), 1));
     }
     return ret;
 }

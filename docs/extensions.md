@@ -22,7 +22,13 @@ Allows `print` to take any number of arguments, for example `print(1, 2, 3)` wil
 
 ### `--use-more-debug`
 
-Enables using `__burlap_debug_on` and `__burlap_debug_off` to toggle debugging on and off, enabled by default when using the `--debug` flag.
+Enables using a few debugging functions, enabled by default when using the `--debug` flag.
+The functions are:
+
+- `__burlap_debug_on`: Turns the debug printings on
+- `__burlap_debug_off`: Turns the debug printings off
+- `__burlap_debug_blackbox`: Disable folding on the expression and surrounding expression (ie, both `__burlap_debug_blackbox(1) + 2` and `__burlap_debug_blackbox(1 + 2)` work)
+  - `__burlap_debug_blackbox` CANNOT be used as a value, ie `let bb = __burlap_debug_blackbox;` will set `bb` to none.
 
 ### `--use-burlap-extensions`
 
