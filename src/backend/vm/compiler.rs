@@ -323,16 +323,20 @@ impl Compiler {
         self._var(&var, reg, op).unwrap();
     }
 
-    fn load_var(&mut self, var: &String, reg: Reg) {
+    fn load_var(&mut self, var: &String) -> Reg {
+        let reg = self.alloc_reg();
         let op = if self.functi.is_none() { Opcode::LV_G } else { Opcode::LV_L };
         if self._var(var, reg, op).is_none() {
             // It's a function
+            self.free_reg(reg);
             let name = var.clone().split("::").nth(1).unwrap_or(var).to_string();
             if name == "__burlap_debug_blackbox" {
-                self.push_to(Value::None, Some(reg));
+                self.push(Value::None)
             } else {
-                self.push_to(Value::Functi(Rc::new(name.clone())), Some(reg));
-            };
+                self.push(Value::Functi(Rc::new(name.clone())))
+            }
+        } else {
+            reg
         }
     }
 
@@ -659,9 +663,7 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
     Some(match node {
         // Values
         VarExpr(val) => {
-            let reg = compiler.alloc_reg();
-            compiler.load_var(val, reg);
-            reg
+            compiler.load_var(val)
         },
         StringExpr(val) => {
             compiler.push(Value::Str(Rc::new(val.clone())))
@@ -740,9 +742,7 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
         // Anonymous functions
         FunctiStmt(node) => {
             compile_functi(compiler, &None, node, false)?;
-            let reg = compiler.alloc_reg();
-            compiler.load_var(&node.name, reg);
-            reg
+            compiler.load_var(&node.name)
         },
         // Non-exprs that snuck in
         _ => {
