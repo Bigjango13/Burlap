@@ -407,31 +407,67 @@ impl Vm {
     // Registers
     #[inline]
     pub fn set_reg(&mut self, reg: u8, value: Value) {
-        if reg >= 16 {
-            // Regs over 16 just act as stack
+        if reg < 16 {
+            // [0..15] are normal
+            self.regs[reg as usize] = value;
+        } else if reg == 16 {
+            // 16 is the stack stack
             self.stack.push(value);
         } else {
-            self.regs[reg as usize] = value;
+            panic!("Attempt to mutate a non-mutable register!");
         }
     }
 
     #[inline]
     pub fn get_reg_mut(&mut self, reg: u8) -> &mut Value {
-        if reg >= 16 {
-            // Regs over 16 just act as stack
+        if reg < 16 {
+            // [0..15] are normal
+            &mut self.regs[reg as usize]
+        } else if reg == 16 {
+            // 16 is the stack stack
             self.stack.last_mut().expect("Overpopped stack!")
         } else {
-            &mut self.regs[reg as usize]
+            panic!("Attempt to mutate a non-mutable register!");
+        }
+    }
+
+    #[inline]
+    pub fn get_reg_ref(&self, reg: u8) -> &Value {
+        if reg < 16 {
+            // [0..15] are normal
+            &self.regs[reg as usize]
+        } else if reg == 16 {
+            // 16 is the stack stack
+            self.stack.last().expect("Overpopped stack!")
+        } else if 17 <= reg && reg <= 115 {
+            // [17..117] is consts
+            &self.program.consts[reg as usize - 17]
+        } else if 116 <= reg && reg <= 186 {
+            // [116..186] is locals
+            &self.locals[reg as usize - 116]
+        } else {
+            // [187..255] is globals
+            &self.globals[reg as usize - 187]
         }
     }
 
     #[inline]
     pub fn get_reg(&mut self, reg: u8) -> Value {
-        if reg >= 16 {
-            // Regs over 16 just act as stack
-            self.stack.pop().expect("Overpopped stack!")
-        } else {
+        if reg < 16 {
+            // [0..15] are normal
             self.regs[reg as usize].clone()
+        } else if reg == 16 {
+            // 16 is the stack stack
+            self.stack.pop().expect("Overpopped stack!")
+        } else if 17 <= reg && reg <= 115 {
+            // [17..117] is consts
+            self.program.consts[reg as usize - 17].clone()
+        } else if 116 <= reg && reg <= 186 {
+            // [116..186] is locals
+            self.locals[reg as usize - 116].clone()
+        } else {
+            // [187..255] is globals
+            self.globals[reg as usize - 187].clone()
         }
     }
 
@@ -1051,7 +1087,8 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
             vm.set_reg(16, val);
         },
         Opcode::CP => {
-            let val = vm.get_reg_mut(a).clone();
+            // Not using `.get_reg` as it pops the stack, and CP needs to be used for dup
+            let val = vm.get_reg_ref(a).clone();
             vm.set_reg(b, val);
         },
         Opcode::POP => {
@@ -1241,7 +1278,7 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
         },
         Opcode::IN => {
             let rhs = vm.get_reg(b);
-            let lhs = vm.get_reg_mut(a);
+            let lhs = vm.get_reg_ref(a);
             let contains = lhs.contains(&rhs);
             // Side effects
             let ltype = lhs.get_type();
@@ -1349,7 +1386,9 @@ pub fn run(vm: &mut Vm) -> bool {
             vm.at = vm.program.ops.len() - 1;
             return false;
         }
-        //println!("Stk: {:?}, regs: {:?}", vm.stack, vm.regs);
+        if vm.args.is_debug {
+            println!("Stk: {:?}, regs: {:?}", vm.stack, vm.regs);
+        }
 
         // Move forward
         if vm.jump {

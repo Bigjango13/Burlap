@@ -59,19 +59,8 @@ impl Program {
     }
 }
 
-#[allow(unused)]
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-enum Reg {
-    R0 = 0, R1 = 1, R2 = 2, R3 = 3, R4 = 4,
-    R5 = 5, R6 = 6, R7 = 7, R8 = 8, R9 = 9,
-    R10 = 10, R11 = 11, R12 = 12, R13 = 13,
-    R14 = 14, R15 = 15, Stack = 16
-}
-
-#[inline]
-fn to_reg(i: u8) -> Reg {
-    unsafe { std::mem::transmute(i) }
-}
+type Reg = u8;
+static STACK: Reg = 16;
 
 pub struct Compiler {
     pub program: Program,
@@ -134,11 +123,14 @@ impl Compiler {
     }
 
     fn move_(&mut self, src: Reg, dst: Reg) {
+        if dst > 16 {
+            panic!("Attempt to mutate a non-mutable register");
+        }
         if src == dst {
             return;
         }
         self.copy(src, dst);
-        if src == Reg::Stack {
+        if src == STACK {
             self.add_op(Opcode::POP);
         }
     }
@@ -150,20 +142,20 @@ impl Compiler {
 
     #[inline]
     fn dup(&mut self) {
-        self.add_op_args(Opcode::CP, Reg::Stack as u8, Reg::Stack as u8, 0);
+        self.add_op_args(Opcode::CP, STACK as u8, STACK as u8, 0);
     }
 
     // Register allocation
     fn alloc_reg(&mut self) -> Reg {
         if self.on_stack_only {
             // Only stack allowed
-            return Reg::Stack;
+            return STACK;
         }
         let Some(reg) = self.regs.iter().position(|i| *i) else {
             // No available registers, fallback to stack
-            return Reg::Stack;
+            return STACK;
         };
-        let reg = to_reg(reg as u8);
+        let reg = reg as u8;
         self.use_reg(reg);
         return reg;
     }
@@ -174,12 +166,40 @@ impl Compiler {
 
     #[inline]
     fn free_reg(&mut self, reg: Reg) {
-        if 16 <= reg as u8 {
+        if reg == 16 {
             // Why is this commented out?
             //self.add_op(Opcode::POP);
             return;
+        } else if reg < 16 {
+            self.regs[reg as usize] = true;
         }
-        self.regs[reg as usize] = true;
+    }
+
+    #[inline]
+    fn to_mut_reg(&mut self, reg: Reg) -> Reg {
+        let new_reg = self.get_mut_reg(reg);
+        if reg != new_reg {
+            self.move_(reg, new_reg);
+        }
+        new_reg
+    }
+
+    #[inline]
+    fn get_mut_reg(&mut self, reg: Reg) -> Reg {
+        if !(17 <= reg && reg <= 115) {
+            reg
+        } else {
+            self.alloc_reg()
+        }
+    }
+
+    #[inline]
+    fn get_sole_reg(&mut self, reg: Reg) -> Reg {
+        if reg <= 16 {
+            reg
+        } else {
+            self.alloc_reg()
+        }
     }
 
     fn push_to_stack(&mut self, val: Value) {
@@ -220,14 +240,20 @@ impl Compiler {
                 (index & 255) as u8
             );
             if let Some(reg) = reg {
-                self.move_(Reg::Stack, reg);
+                self.move_(STACK, reg);
                 return reg;
             } else {
-                return Reg::Stack;
+                return STACK;
             }
         } else {
             // Get a register and push
-            let reg = reg.unwrap_or_else(|| self.alloc_reg());
+            let reg = if let Some(r) = reg {
+                r
+            } else if index < 98 {
+                return index as u8 + 17;
+            } else {
+                self.alloc_reg()
+            };
             self.add_op_args(
                 Opcode::LD,
                 ((index >> 8) & 255) as u8,
@@ -325,43 +351,47 @@ fn compile_unary(
         TokenType::Minus => {
             let tmp = compiler.push(Value::Int(0));
             let ret = compile_expr(compiler, val)?;
-            compiler.add_op_args(Opcode::SUB, tmp as u8, ret as u8, ret as u8);
+            let res = compiler.get_sole_reg(ret);
+            compiler.add_op_args(Opcode::SUB, tmp as u8, ret as u8, res as u8);
             compiler.free_reg(tmp);
-            ret
+            res
         },
         TokenType::Not => {
             let ret = compile_expr(compiler, val)?;
-            compiler.add_op_args(Opcode::NOT, ret as u8, ret as u8, 0);
-            ret
+            let res = compiler.get_sole_reg(ret);
+            compiler.add_op_args(Opcode::NOT, ret as u8, res as u8, 0);
+            res
         },
         // ++/--
         TokenType::PlusPlus => {
             let ret = compile_expr(compiler, val)?;
             let tmp = compiler.push(Value::Int(1));
-            compiler.add_op_args(Opcode::ADD, ret as u8, tmp as u8, ret as u8);
-            if ret == Reg::Stack {
+            let res = compiler.get_mut_reg(ret);
+            compiler.add_op_args(Opcode::ADD, ret as u8, tmp as u8, res as u8);
+            if ret == STACK {
                 compiler.dup();
             }
             compiler.free_reg(tmp);
             let VarExpr(ref s) = *val else {
                 panic!("++ needs a var, how did you do this?");
             };
-            compiler.set_var(s, ret);
+            compiler.set_var(s, res);
             ret
         },
         TokenType::MinusMinus => {
             let ret = compile_expr(compiler, val)?;
             let tmp = compiler.push(Value::Int(1));
-            compiler.add_op_args(Opcode::SUB, ret as u8, tmp as u8, ret as u8);
-            if ret == Reg::Stack {
+            let res = compiler.get_mut_reg(ret);
+            compiler.add_op_args(Opcode::SUB, ret as u8, tmp as u8, res as u8);
+            if ret == STACK {
                 compiler.dup();
             }
             compiler.free_reg(tmp);
             let VarExpr(ref s) = *val else {
                 panic!("-- needs a var, how did you do this?");
             };
-            compiler.set_var(s, ret);
-            ret
+            compiler.set_var(s, res);
+            res
         },
         _ => panic!("{}", IMPOSSIBLE_STATE),
     })
@@ -397,7 +427,7 @@ fn compile_short_binop(
     // Turn `a() || b()` into `r = a(); if !r { r = b() }; r`
     let lhs = compile_expr(compiler, lhs)?;
     let dup_tmp = compiler.alloc_reg();
-    if lhs == Reg::Stack {
+    if lhs == STACK {
         compiler.dup();
     }
     compiler.add_op_args(Opcode::NOT, lhs as u8, dup_tmp as u8, 0);
@@ -410,7 +440,7 @@ fn compile_short_binop(
     let pos = compiler.program.ops.len();
     compiler.free_reg(dup_tmp);
     // It's 'b' (the left)
-    if lhs == Reg::Stack {
+    if lhs == STACK {
         compiler.add_op(Opcode::POP);
     }
     let rhs = compile_expr(compiler, rhs)?;
@@ -419,7 +449,7 @@ fn compile_short_binop(
     // End the jump
     compiler.fill_jmp(pos, 0, Some(dup_tmp));
     if clean {
-        if lhs == Reg::Stack {
+        if lhs == STACK {
             compiler.add_op(Opcode::POP);
         }
         compiler.free_reg(lhs);
@@ -449,83 +479,92 @@ fn compile_binop<'a>(
         47
     };
     let rreg = compile_expr(compiler, rhs)? as u8;
+    let resreg = compiler.get_sole_reg(rreg);
     // Compile op
     match op {
         // Simple single instructions
         TokenType::Plus | TokenType::PlusEquals => {
-            compiler.add_op_args(Opcode::ADD, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::ADD, lreg, rreg, resreg);
         },
         TokenType::Minus | TokenType::MinusEquals => {
-            compiler.add_op_args(Opcode::SUB, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::SUB, lreg, rreg, resreg);
         },
         TokenType::Times | TokenType::TimesEquals => {
-            compiler.add_op_args(Opcode::MUL, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::MUL, lreg, rreg, resreg);
         },
         TokenType::Div | TokenType::DivEquals => {
-            compiler.add_op_args(Opcode::DIV, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::DIV, lreg, rreg, resreg);
         },
         TokenType::Modulo | TokenType::ModEquals => {
-            compiler.add_op_args(Opcode::MOD, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::MOD, lreg, rreg, resreg);
         },
         TokenType::And => {
-            compiler.add_op_args(Opcode::AND, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::AND, lreg, rreg, resreg);
         },
         TokenType::Or => {
-            compiler.add_op_args(Opcode::OR, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::OR, lreg, rreg, resreg);
         },
         TokenType::Xor => {
-            compiler.add_op_args(Opcode::XOR, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::XOR, lreg, rreg, resreg);
         },
         TokenType::Gt => {
-            compiler.add_op_args(Opcode::GT, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::GT, lreg, rreg, resreg);
         },
         TokenType::Lt => {
-            compiler.add_op_args(Opcode::LT, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::LT, lreg, rreg, resreg);
         },
         TokenType::EqualsEquals => {
-            compiler.add_op_args(Opcode::EQ, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::EQ, lreg, rreg, resreg);
         },
         TokenType::In => {
-            compiler.add_op_args(Opcode::IN, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::IN, lreg, rreg, resreg);
         },
         // Harder ones that don't have a single instruction
         TokenType::NotEquals => {
-            compiler.add_op_args(Opcode::EQ, lreg, rreg, rreg);
-            compiler.add_op_args(Opcode::NOT, rreg, rreg, 0);
+            compiler.add_op_args(Opcode::EQ, lreg, rreg, resreg);
+            compiler.add_op_args(Opcode::NOT, resreg, resreg, 0);
         },
         TokenType::LtEquals => {
-            compiler.add_op_args(Opcode::GT, lreg, rreg, rreg);
-            compiler.add_op_args(Opcode::NOT, rreg, rreg, 0);
+            compiler.add_op_args(Opcode::GT, lreg, rreg, resreg);
+            compiler.add_op_args(Opcode::NOT, resreg, resreg, 0);
         },
         TokenType::GtEquals => {
-            compiler.add_op_args(Opcode::LT, lreg, rreg, rreg);
-            compiler.add_op_args(Opcode::NOT, rreg, rreg, 0);
+            compiler.add_op_args(Opcode::LT, lreg, rreg, resreg);
+            compiler.add_op_args(Opcode::NOT, resreg, resreg, 0);
         },
         TokenType::Colon => {
-            compiler.add_op_args(Opcode::INX, lreg, rreg, rreg);
+            compiler.add_op_args(Opcode::INX, lreg, rreg, resreg);
         },
         // Handled later
         TokenType::Equals => {},
         _ => panic!("That operator isn't implemented!"),
     };
+    // Note to self: rreg does not need to be freed! It's either the same as resreg or not a freeable index
     // Set the variable
     if let TokenType::PlusEquals | TokenType::MinusEquals
         | TokenType::TimesEquals | TokenType::DivEquals
         | TokenType::ModEquals | TokenType::Equals = op.clone()
     {
-        compile_set(compiler, lhs, to_reg(rreg))?;
-        return Some(Reg::Stack);
+        let resreg = if *op == TokenType::Equals {
+            compiler.free_reg(resreg);
+            rreg
+        } else {
+            compiler.to_mut_reg(resreg)
+        };
+        compile_set(compiler, lhs, resreg)?;
+        return Some(resreg);
     } else if clean {
         // Clean up the stack
-        if lreg == Reg::Stack as u8 {
+        if lreg == STACK as u8 {
             compiler.add_op(Opcode::POP);
         }
-        compiler.free_reg(to_reg(rreg));
-        compiler.free_reg(to_reg(lreg));
-        return Some(Reg::Stack);
+        compiler.free_reg(rreg);
+        compiler.free_reg(lreg);
+        return Some(resreg);
     }
-    compiler.free_reg(to_reg(lreg));
-    return Some(to_reg(rreg));
+    compiler.free_reg(lreg);
+    compiler.free_reg(rreg);
+    return Some(resreg);
 }
 
 fn compile_call(compiler: &mut Compiler, expr: &ASTNode, args: &Vec<ASTNode>) -> Option<Reg> {
@@ -560,9 +599,13 @@ fn compile_call(compiler: &mut Compiler, expr: &ASTNode, args: &Vec<ASTNode>) ->
     }
     // Push the args onto the stack
     let old_on_stack = compiler.on_stack_only;
+    // TODO: Instead of on_stack_only, use a target reg
     compiler.on_stack_only = true;
     for arg in args.iter() {
-        compile_expr(compiler, arg)?;
+        let reg = compile_expr(compiler, arg)?;
+        if reg != STACK {
+            compiler.move_(reg, STACK);
+        }
     }
     compiler.on_stack_only = old_on_stack;
     // Get address
@@ -599,7 +642,7 @@ fn compile_call(compiler: &mut Compiler, expr: &ASTNode, args: &Vec<ASTNode>) ->
         };
         compiler.add_op_args(Opcode::VCALL, expr as u8, args.len() as u8, 0);
         compiler.free_reg(expr);
-        return Some(Reg::Stack);
+        return Some(STACK);
     }
 
     // Normal static call
@@ -609,7 +652,7 @@ fn compile_call(compiler: &mut Compiler, expr: &ASTNode, args: &Vec<ASTNode>) ->
         ((address >> 8) & 255) as u8,
         (address & 255) as u8
     );
-    Some(Reg::Stack)
+    Some(STACK)
 }
 
 fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
@@ -655,7 +698,11 @@ fn compile_expr(compiler: &mut Compiler, node: &ASTNode) -> Option<Reg> {
             let old_on_stack = compiler.on_stack_only;
             compiler.on_stack_only = true;
             for at in 0..values.len() {
-                compile_expr(compiler, &values[at])?;
+                let reg = compile_expr(compiler, &values[at])?;
+                if reg != STACK {
+                    compiler.move_(reg, STACK);
+                    compiler.free_reg(reg);
+                }
                 if !*fast {
                     compiler.push_to_stack(Value::Str(Rc::new(keys[at].clone())));
                 }
@@ -896,7 +943,7 @@ fn compile_stmt(
             // Clean up the iter
             compiler.fill_jmp(jmp_pos, 0, None);
             compiler.free_reg(iter);
-            if iter == Reg::Stack {
+            if iter == STACK {
                 compiler.add_op(Opcode::POP);
             }
             compiler.free_reg(item);
@@ -956,7 +1003,11 @@ fn compile_stmt(
                     let old_on_stack = compiler.on_stack_only;
                     compiler.on_stack_only = true;
                     for arg in &args {
-                        compile_expr(compiler, arg)?;
+                        let reg = compile_expr(compiler, arg)?;
+                        if reg != STACK {
+                            compiler.move_(reg, STACK);
+                            compiler.free_reg(reg);
+                        }
                     }
                     compiler.on_stack_only = old_on_stack;
                     // Jump
@@ -972,7 +1023,11 @@ fn compile_stmt(
             // Compile return value
             let old_on_stack = compiler.on_stack_only;
             compiler.on_stack_only = true;
-            compile_expr(compiler, ret)?;
+            let reg = compile_expr(compiler, ret)?;
+            if reg != STACK {
+                compiler.move_(reg, STACK);
+                compiler.free_reg(reg);
+            }
             compiler.on_stack_only = old_on_stack;
             // Return return value
             compiler.add_op(Opcode::RET);
@@ -997,9 +1052,9 @@ fn compile_stmt(
         // Binops don't always return, so let them manage cleaning the stack
         BinopExpr(lhs, op, rhs) => {
             let reg = compile_binop(compiler, lhs, op, rhs, !dirty)?;
-            if dirty && reg != Reg::Stack {
+            if dirty && reg != STACK {
                 // Copy to stack
-                compiler.move_(reg, Reg::Stack);
+                compiler.move_(reg, STACK);
                 compiler.free_reg(reg);
             }
         },
@@ -1007,12 +1062,12 @@ fn compile_stmt(
             let reg = compile_expr(compiler, &node.node)?;
             if !dirty {
                 // Remove unused values from the stack
-                if reg == Reg::Stack {
+                if reg == STACK {
                     compiler.add_op(Opcode::POP);
                 }
-            } else if reg != Reg::Stack {
+            } else if reg != STACK {
                 // Move the result to the stack
-                compiler.move_(reg, Reg::Stack);
+                compiler.move_(reg, STACK);
             }
             compiler.free_reg(reg);
         }
