@@ -20,6 +20,8 @@ use crate::backend::vm::cffi::call as ffi_call;
 use rustyline::DefaultEditor;
 
 use rustc_hash::FxHashMap;
+#[cfg(feature = "debugger")]
+use rustc_hash::FxHashSet;
 use rand::Rng;
 
 #[repr(u8)]
@@ -173,6 +175,10 @@ pub struct Vm {
     // Misc
     pub jump: bool,
     pub at: usize,
+
+    // Breakpoints
+    #[cfg(feature = "debugger")]
+    pub breakpoints: FxHashSet<usize>,
 }
 
 impl Vm {
@@ -180,7 +186,7 @@ impl Vm {
     pub fn new(args: Arguments, program: Program) -> Vm {
         // Builtin functions
         let mut functies = FxHashMap::with_capacity_and_hasher(
-            16, Default::default()
+            32, Default::default()
         );
         // Builtins
         functies.insert("print".to_string(), sk_print as Functie);
@@ -259,6 +265,10 @@ impl Vm {
             at: 0, filename: "".to_string(), locals: vec![],
             args, has_err: false, in_func: false, functies,
             globals: vec![], regs: [NONE; 16], program,
+            #[cfg(feature = "debugger")]
+            breakpoints: FxHashSet::with_capacity_and_hasher(
+                16, Default::default()
+            ),
         }
     }
 
@@ -1379,28 +1389,96 @@ pub fn vm_set_stop_requested(new_state: bool) {
     }
 }
 
-
 #[cfg(feature = "debugger")]
 fn print_debug_help() {
-    println!("h / help / ?\t\tHelp");
-    println!("c / continue\t\tContinue program");
-    println!("e / exit / kill\t\tEnd program");
-    println!("bt / backtrace\t\t Print backtrace");
-    println!("p / print\t[pc]\t Print current position");
-    println!("ctx / context\t[pc] [s]\t Prints context around a position");
-    println!("s / stack\t\t Print stack (WIP)");
-    println!("r / register\t\t Print registers (WIP)");
+    println!("h / help / ?\t\t\tHelp");
+    println!("b / breakpoint\t[pc]\t\tSets/unset breakpoint");
+    println!("bl | brklist\t\t\tLists breakpoints");
+    println!("c / continue\t\t\tContinue program");
+    println!("e / exit / kill\t\t\tEnd program");
+    println!("bt / backtrace\t\t\tPrint backtrace");
+    println!("ctx / context\t[pc] [s]\tPrints context around a position");
+    println!("p / print\t[pc]\t\tPrint current position");
+    println!("s / stack\t\t\tPrint stack (WIP)");
+    println!("r / register\t\t\tPrint registers (WIP)");
 }
 
 #[cfg(feature = "debugger")]
-fn start_debug(vm: &mut Vm) -> bool {
-    let mut rl = DefaultEditor::new().unwrap();
+fn get_pc_from_string(vm: &mut Vm, location: &str) -> Option<usize> {
+    if location == "~" {
+        return Some(vm.at);
+    }
+    if let Ok(ret) = location.parse() {
+        return Some(std::cmp::min(ret, vm.program.ops.len() - 1));
+    }
+    // Lookup file:line number
+    if location.contains(':') {
+        let parts: Vec<&str> = location.split(':').collect();
+        let mut filename = parts[0].to_string();
+        if filename == "" {
+            filename = vm.program.get_info(vm.at as u32).1;
+        }
+        let Ok(linenum) = parts.get(1)?.parse::<usize>() else {
+            println!("Invalid line number");
+            return None;
+        };
+
+        // Find the location
+        let mut addr: Option<usize> = None;
+        for (start, end, line) in &vm.program.line_table {
+            if line != &linenum { continue; }
+            for (fn_start, fn_end, file) in &vm.program.file_table {
+                if fn_start <= start && end <= fn_end && file == &filename {
+                    addr = Some(*start as usize);
+                    break;
+                }
+            }
+            if !addr.is_none() {
+                break;
+            }
+        }
+        if addr.is_none() {
+            println!("Could not find {location}");
+        }
+        return addr;
+    }
+    // Try to lookup the function
+    if location.contains('@') {
+        let parts: Vec<&str> = location.split('@').collect();
+        let Ok(arglen) = parts.get(1)?.parse::<i32>() else {
+            println!("Invalid argument number");
+            return None;
+        };
+        if let Some(addr) = vm.program.functis.iter().find_map(
+            |i| if i.0 == parts[0] && i.2 == arglen { Some(i.1) } else { None }
+        ) {
+            return Some(addr);
+        };
+    } else {
+        if let Some(addr) = vm.program.functis.iter().find_map(
+            |i| if i.0 == location { Some(i.1) } else { None }
+        ) {
+            return Some(addr);
+        };
+    }
+    println!("Unknown location: {location}");
+    return None;
+}
+
+#[cfg(feature = "debugger")]
+fn start_debug(vm: &mut Vm, rl: &mut DefaultEditor) -> bool {
+    let (line, filename) = vm.program.get_info(vm.at as u32);
+    let op = dis_single(&vm.program, vm.at);
+    if vm.at != 0 {
+        println!("{0}: {filename}:{line}: {op}", vm.at);
+    }
     loop {
         // Get input
         let readline = rl.readline("DEBUG >> ");
         let Ok(readline) = readline else {
             return true;
         };
+        rl.add_history_entry(readline.clone()).expect("failed to add line to debugger history");
         let commands: Vec<&str> = readline.split(' ').collect();
         match commands[0] {
             "" => {}
@@ -1410,23 +1488,52 @@ fn start_debug(vm: &mut Vm) -> bool {
             "bt" | "backtrace" => {
                 // Print backtrace
                 let (line, filename) = vm.program.get_info(vm.at as u32);
-                println!("At {}:{}", filename, line);
+                println!("At {}:{} ({})", filename, line, vm.at);
                 for i in vm.call_frames.iter().rev() {
                     let (line, filename) = vm.program.get_info(i.return_addr as u32 + 1);
-                    println!("Called by {}:{}", filename, line);
+                    println!("Called by {}:{} ({})", filename, line, i.return_addr);
+                }
+            },
+            "b" | "breakpoint" => {
+                let Some(pc) = (if commands.len() < 2 { Some(vm.at) } else { get_pc_from_string(vm, commands[1]) }) else {
+                    continue;
+                };
+
+                if vm.breakpoints.contains(&pc) {
+                    vm.breakpoints.remove(&pc);
+                    if commands.len() < 2 {
+                        println!("Removed breakpoint at {pc}");
+                    } else {
+                        println!("Removed breakpoint at {} ({})", commands[1], pc);
+                    }
+                } else {
+                    vm.breakpoints.insert(pc);
+                    if commands.len() < 2 {
+                        println!("Set breakpoint at {pc}");
+                    } else {
+                        println!("Set breakpoint at {} ({})", commands[1], pc);
+                    }
+                }
+            },
+            "bl" | "brklist" => {
+                for breakpoint in &vm.breakpoints {
+                    println!("Breakpoint: {breakpoint}");
+                }
+                if vm.breakpoints.is_empty() {
+                    println!("No breakpoints");
                 }
             },
             "p" | "print" => {
-                let pc = if commands.len() < 2 { vm.at } else {
-                    std::cmp::min(commands[1].parse().unwrap_or(vm.at), vm.program.ops.len() - 1)
+                let Some(pc) = (if commands.len() < 2 { Some(vm.at) } else { get_pc_from_string(vm, commands[1]) }) else {
+                    continue;
                 };
                 let (line, filename) = vm.program.get_info(pc as u32);
                 let op = dis_single(&vm.program, pc);
                 println!("{pc}: {filename}:{line}: {op}");
             },
             "ctx" | "context" => {
-                let mid = if commands.len() < 2 { vm.at } else {
-                    std::cmp::min(commands[1].parse().unwrap_or(vm.at), vm.program.ops.len() - 1)
+                let Some(mid) = (if commands.len() < 2 { Some(vm.at) } else { get_pc_from_string(vm, commands[1]) }) else {
+                    continue;
                 };
                 let size = if commands.len() < 3 { 10 } else {
                     commands[2].parse().unwrap_or(10)
@@ -1467,17 +1574,26 @@ pub fn run(vm: &mut Vm) -> bool {
         println!("Consts: {:?}", vm.program.consts);
         println!("Ops: {:?}", vm.program.ops);
     }*/
+    #[cfg(feature = "debugger")]
+    let mut rl = DefaultEditor::new().unwrap();
     loop {
         #[cfg(feature = "debugger")]
         {
-            if vm_has_stop_requested() {
+            if vm_has_stop_requested() || vm.breakpoints.contains(&vm.at) {
                 vm_set_stop_requested(false);
-                if !start_debug(vm) {
+                if vm.breakpoints.contains(&vm.at) {
+                    println!("Breakpoint at {} reached", vm.at);
+                } else if vm.at != 0 {
+                    println!("Execution paused");
+                }
+                if !start_debug(vm, &mut rl) {
+                    println!("Exiting");
                     // Exit
                     vm.at = vm.program.ops.len() - 1;
                     return true;
                 }
                 // Continue
+                println!("Continuing");
             }
         }
         if vm.args.is_debug {

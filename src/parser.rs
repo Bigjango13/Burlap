@@ -1,6 +1,8 @@
 use std::fs::read_to_string;
 use std::mem::swap;
 
+use rustc_hash::FxHashSet;
+
 use crate::{Arguments, to_ast};
 use crate::common::{err, ErrType, IMPOSSIBLE_STATE, get_builtins};
 use crate::lexer::{Token, TokenType};
@@ -148,6 +150,7 @@ pub struct AST {
     pub nodes: Vec<StmtNode>,
     pub cur_vars: Vec<Variable>,
     pub all_vars: Vec<Variable>,
+    pub imported: FxHashSet<String>,
 }
 
 impl AST {
@@ -156,7 +159,11 @@ impl AST {
             functis: vec![],
             cur_vars: vec![],
             all_vars: vec![],
-            nodes: vec![]
+            nodes: vec![],
+            // Imported
+            imported: FxHashSet::with_capacity_and_hasher(
+                8, Default::default()
+            ),            
         }
     }
 
@@ -191,7 +198,7 @@ struct Parser {
     has_err: bool,
     name: String,
     ast: AST,
-    functi_locals: Vec<Variable>
+    functi_locals: Vec<Variable>,
 }
 
 impl Parser {
@@ -931,6 +938,15 @@ fn parse_import(parser: &mut Parser) -> Option<(String, Vec<StmtNode>)> {
     // The closing parens
     eat!(parser, Rparan, "missing ')' in import")?;
 
+    // Check if it has been imported before
+    if parser.ast.imported.contains(&file) {
+        //println!("Not reimporting {file}");
+        eat_semicolon!(parser)?;
+        return Some((file, Vec::new()));
+    } else {
+        parser.ast.imported.insert(file.clone());
+    }
+
     // Everything parsed well, now for the tricky part; importing
     let old_name = parser.args.name.clone();
     let old_path = parser.args.path.clone();
@@ -956,10 +972,11 @@ fn parse_import(parser: &mut Parser) -> Option<(String, Vec<StmtNode>)> {
     }
 
     // Return
-    let mut new_ast = to_ast(&mut parser.args)?;
-    parser.ast.functis.append(&mut new_ast.functis);
+    let mut new_ast = to_ast(&mut parser.args, Some(&parser.ast))?;
+    parser.ast.functis = new_ast.functis;
     parser.ast.cur_vars.append(&mut new_ast.cur_vars);
     parser.ast.all_vars.append(&mut new_ast.all_vars);
+    parser.ast.imported.extend(new_ast.imported);
     let name = parser.args.name.clone();
     parser.args.name = old_name;
     parser.args.path = old_path;
@@ -1148,7 +1165,7 @@ fn parse_functi(parser: &mut Parser, anon: bool) -> Option<(ASTNode, String)> {
 }
 
 // Main parsing
-pub fn parse(ast: AST, tokens: Vec<Token>, args: &Arguments) -> Option<AST> {
+pub fn parse(ast: AST, tokens: Vec<Token>, args: &mut Arguments) -> Option<AST> {
     if tokens.is_empty() {
         return Some(ast);
     }
@@ -1178,7 +1195,7 @@ pub fn parse(ast: AST, tokens: Vec<Token>, args: &Arguments) -> Option<AST> {
             parser.ast.nodes.push(stmt);
             continue;
         };
-        // Skip along until EOF/;/{ so the errors don't go crazy
+        // Skip along until EOF/;/{ to try and reduce stacking errors
         loop {
             if let Eof | Semicolon | Lbrace = parser.current() {
                 break;

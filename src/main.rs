@@ -63,7 +63,7 @@ pub struct Arguments {
     extension_va_print: bool,
     extension_debugging_functies: bool,
     // Arguments to the program itself
-    program_args: Vec<String>
+    program_args: Vec<String>,
 }
 
 impl Arguments {
@@ -83,7 +83,7 @@ impl Arguments {
     }
 }
 
-pub fn to_ast(args: &mut Arguments) -> Option<AST> {
+pub fn to_ast(args: &mut Arguments, imported: Option<&AST>) -> Option<AST> {
     // Lex
     let tokens = lex(
         &args.source, args.name.clone(), true,
@@ -91,7 +91,12 @@ pub fn to_ast(args: &mut Arguments) -> Option<AST> {
     )?;
     args.source = "".to_string();
     // Parse
-    return parse(AST::new(), tokens, args);
+    let mut ast = AST::new();
+    if let Some(old_ast) = imported {
+        ast.functis = old_ast.functis.clone();
+        ast.imported = old_ast.imported.clone();
+    };
+    return parse(ast, tokens, args);
 }
 
 #[cfg(not(target_family = "wasm"))]
@@ -141,7 +146,9 @@ fn get_args() -> Result<Arguments, bool> {
             args.extension_color = true;
         } else if arg == "-d" || arg == "--debug" {
             // Debug
-            args.is_debug = true;
+            #[cfg(feature = "debugger")] 
+            vm_set_stop_requested(true);
+            //args.is_debug = true;
             args.extension_debugging_functies = true;
         } else if arg == "-a" || arg == "--disassemble" {
             // Disassemble
@@ -229,7 +236,6 @@ fn main() {
         vm_set_stop_requested(true);
     }).expect("Error setting interrupt handler!");
 
-
     // Parse args
     let mut args = match get_args() {
         Ok(x) => x,
@@ -237,20 +243,21 @@ fn main() {
     };
     // Run
     if args.is_repl {
-        #[cfg(feature = "repl")]
-        {
-            // Repl
-            repl(&mut args);
-        }
         #[cfg(not(feature = "repl"))]
         {
             println!("You don't have the REPL enabled!");
             exit(1);
         }
+
+        #[cfg(feature = "debugger")]
+        vm_set_stop_requested(false);
+        // Repl
+        #[cfg(feature = "repl")]
+        repl(&mut args);
     } else {
         args.path = PathBuf::from(args.name.clone());
         // Execute file
-        let Some(mut ast) = to_ast(&mut args) else {
+        let Some(mut ast) = to_ast(&mut args, None) else {
             exit(1);
         };
         let mut compiler = Compiler::new();
@@ -291,7 +298,7 @@ pub fn burlap_run(src: &str) -> bool {
         THE_SOURCE = Some(src.to_string());
         args.source = THE_SOURCE.as_ref().unwrap().clone();
     }
-    let Some(mut ast) = to_ast(&mut args) else {
+    let Some(mut ast) = to_ast(&mut args, None) else {
         return false;
     };
     let mut vm = Vm::new(args.clone());

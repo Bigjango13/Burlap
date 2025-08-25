@@ -55,6 +55,10 @@ Burlap is a interpreter for the [Sack](https://github.com/RandomSoup/sack) progr
 - [x] Extra features
   - [x] C FFI (see the [Building with C FFI](#building-with-c-ffi) section)
   - [x] Web Assembly support (see the [Building for WASM](#building-for-wasm) section)
+  - [ ] Basic debugging
+    - [x] Help, exit, and continue
+    - [x] Breakpoints
+    - [ ] Interaction with variables
   - [x] And [more](docs/extensions.md)!
 
 ## Building
@@ -117,7 +121,10 @@ Burlap started because I wanted to learn how to create a programming language. I
 
 - 1.2.7 (in progress)
     - Add folding for expression
-    - Add `__burlap_debug_breakpoint` and start working on a debugger
+    - Added basic debugger
+      - Help, exit, and continue commands
+      - Breakpoints and context for instructions, functions, and line numbers
+    - Add `__burlap_debug_breakpoint`
 - 1.2.6
     - Make variables use indexes instead of names (this resulted in a 50% speed up for some things!)
     - Add `__burlap_reftype`, `__burlap_set_var`, and `__burlap_load_var`.
@@ -188,24 +195,24 @@ Burlap started because I wanted to learn how to create a programming language. I
     - Read, write, open, and flush
 - 1.1.0: VM update
     - Rewrite tree walking interpreter into a stack based VM
-- 1.0.0: Rusty updaye
+- 1.0.0: Rusty update
     - Decide to RIIR
-    - Lists, while loops, input, imports, and more!
+    - Lists, while loops, input, imports, and lots more. I lost track, but major upgrade from 0.0.1
 - 0.0.1: C++ version works for Sack v0.0.5
-- Beta: I tried to make a Sack to Python transpiler in Python using regexes
+- Beta: I tried to make a Sack to Python transpiler in Python using regexes, I knew nothing of langdev so this turned out very, very badly
 
 ## Extensions
 
 Burlap has some extra features that aren't part of the sack language, there is a list in them [docs](docs/extensions.md).
 
 ## Goals/roadmap
-- Autoformatter
-- Debugger
-- Transpiling to another programming language
+
+- Sack formatter
+- Transpiling to another programming language or IR
 
 ## Alternatives
 
-- [Skcore](https://github.com/Luminoso-256/scriptinglang) an older sack interpreteter
+- [Skcore](https://github.com/Luminoso-256/scriptinglang) an older sack interpreteter, not recommended
 
 ## Limits
 
@@ -217,7 +224,7 @@ Theses are some of the documented limits, there are some undocumented ones curre
 - Largest unconditional jump possible: 16777215 (u24 limit)
 - Largest conditional jump possible: 65535 (u16 limit)
 
-[^1]: merging the offset of locals on diffrent branches can makes this limit even harder to hit, so far Burlap doesn't do that, but it will (TODO)
+[^1]: merging the offset of locals on different branches can makes this limit even harder to hit, so far Burlap doesn't do that, but it will (TODO)
 
 Here are some stats that aren't limits (and some are even just impl details), they are here for fun:
 - Number of registers in the VM: 16[^2] (u4 limit, artificial)

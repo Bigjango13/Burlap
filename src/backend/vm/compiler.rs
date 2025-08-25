@@ -22,8 +22,8 @@ pub struct Program {
     pub path: PathBuf,
 
     // Side tables
-    line_table: Vec<(u32, u32, usize)>,
-    file_table: Vec<(u32, u32, String)>,
+    pub line_table: Vec<(u32, u32, usize)>,
+    pub file_table: Vec<(u32, u32, String)>,
 }
 
 impl Program {
@@ -50,7 +50,7 @@ impl Program {
         ).map(|x| table[x].2.clone()).ok()
     }
 
-    pub fn get_info(&mut self, index: u32) -> (usize, String) {
+    pub fn get_info(&self, index: u32) -> (usize, String) {
         let file = Self::bin_range(index, &self.file_table)
             .unwrap_or("Unknown File".to_string());
         let line = Self::bin_range(index, &self.line_table)
