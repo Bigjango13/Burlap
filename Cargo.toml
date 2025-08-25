@@ -6,29 +6,37 @@ description = "A powerful and user-friendly Sack interpreter"
 repository = "https://github.com/Bigjango13/Burlap"
 
 [dependencies]
-# For history file
-home = {version = "0.5.4", optional = true}
-# For values
-impl_ops = "0.1.1"
-# For speed
-rustc-hash = "1.1.0"
-# For REPL
-rustyline = {version = "11.0.0", optional = true}
+# Required deps
 # For lexing
 logos = "0.13.0"
+# For values
+impl_ops = "0.1.1"
+# For FxHashMap speed in the VM
+rustc-hash = "1.1.0"
+# For the sk_rand functi
+rand = "0.8.5"
+
+# For REPL
+rustyline = {version = "11.0.0", optional = true}
+# For REPL history file
+home = {version = "0.5.4", optional = true}
+
 # For C ffi
 libc = {version = "0.2.142", optional = true}
 libffi = {version = "3.2.0", optional = true}
+
 # For wasm
 wasm-bindgen = {version = "0.2", optional = true}
 console_error_panic_hook = {version = "0.1.7", optional = true}
-# For rand(min, max)
-rand = "0.8.5"
+
+# For debugging
+ctrlc = {version = "3.4", optional = true}
 
 [features]
-default = ["fancyrepl"]
+default = ["fancyrepl", "debugger"]
 repl = ["rustyline", "home"]
 fancyrepl = ["repl", "rustyline/custom-bindings", "rustyline/derive"]
+debugger = ["repl", "ctrlc"]
 cffi = ["libc", "libffi"]
 wasm = ["wasm-bindgen", "console_error_panic_hook"]
 

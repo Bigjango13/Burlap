@@ -16,6 +16,8 @@ use crate::backend::value::{FileInfo, Value};
 use crate::backend::vm::cffi::{load_functi, load_library};
 #[cfg(feature = "cffi")]
 use crate::backend::vm::cffi::call as ffi_call;
+#[cfg(feature = "debugger")]
+use rustyline::DefaultEditor;
 
 use rustc_hash::FxHashMap;
 use rand::Rng;
@@ -245,6 +247,10 @@ impl Vm {
             );
             functies.insert(
                 "__burlap_debug_off".to_string(), sk_debug_off as Functie
+            );
+            #[cfg(feature = "debugger")]
+            functies.insert(
+                "__burlap_debug_breakpoint".to_string(), sk_breakpoint as Functie
             );
         }
         const NONE: Value = Value::None;
@@ -972,6 +978,11 @@ fn sk_debug_off(vm: &mut Vm, _args: Vec<Value>) -> Result<Value, String> {
     vm.args.is_debug = false;
     Ok(Value::None)
 }
+#[cfg(feature = "debugger")]
+fn sk_breakpoint(_vm: &mut Vm, _args: Vec<Value>) -> Result<Value, String> {
+    vm_set_stop_requested(true);
+    Ok(Value::None)
+}
 
 // Sets a key in a list and returns it
 fn set_key(
@@ -1353,6 +1364,99 @@ fn exec_next(vm: &mut Vm) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(feature = "debugger")]
+pub static mut VM_STOP_REQUESTED: bool = false;
+#[cfg(feature = "debugger")]
+pub fn vm_has_stop_requested() -> bool {
+    unsafe {
+        return VM_STOP_REQUESTED;
+    }
+}
+#[cfg(feature = "debugger")]
+pub fn vm_set_stop_requested(new_state: bool) {
+    unsafe {
+        VM_STOP_REQUESTED = new_state;
+    }
+}
+
+
+#[cfg(feature = "debugger")]
+fn print_debug_help() {
+    println!("h / help / ?\t\tHelp");
+    println!("c / continue\t\tContinue program");
+    println!("e / exit / kill\t\tEnd program");
+    println!("bt / backtrace\t\t Print backtrace");
+    println!("p / print\t[pc]\t Print current position");
+    println!("ctx / context\t[pc] [s]\t Prints context around a position");
+    println!("s / stack\t\t Print stack (WIP)");
+    println!("r / register\t\t Print registers (WIP)");
+}
+
+#[cfg(feature = "debugger")]
+fn start_debug(vm: &mut Vm) -> bool {
+    let mut rl = DefaultEditor::new().unwrap();
+    loop {
+        // Get input
+        let readline = rl.readline("DEBUG >> ");
+        let Ok(readline) = readline else {
+            return true;
+        };
+        let commands: Vec<&str> = readline.split(' ').collect();
+        match commands[0] {
+            "" => {}
+            "h" | "help" | "?" => print_debug_help(),
+            "c" | "continue" => return true,
+            "e" | "exit" | "kill" => return false,
+            "bt" | "backtrace" => {
+                // Print backtrace
+                let (line, filename) = vm.program.get_info(vm.at as u32);
+                println!("At {}:{}", filename, line);
+                for i in vm.call_frames.iter().rev() {
+                    let (line, filename) = vm.program.get_info(i.return_addr as u32 + 1);
+                    println!("Called by {}:{}", filename, line);
+                }
+            },
+            "p" | "print" => {
+                let pc = if commands.len() < 2 { vm.at } else {
+                    std::cmp::min(commands[1].parse().unwrap_or(vm.at), vm.program.ops.len() - 1)
+                };
+                let (line, filename) = vm.program.get_info(pc as u32);
+                let op = dis_single(&vm.program, pc);
+                println!("{pc}: {filename}:{line}: {op}");
+            },
+            "ctx" | "context" => {
+                let mid = if commands.len() < 2 { vm.at } else {
+                    std::cmp::min(commands[1].parse().unwrap_or(vm.at), vm.program.ops.len() - 1)
+                };
+                let size = if commands.len() < 3 { 10 } else {
+                    commands[2].parse().unwrap_or(10)
+                };
+                let min = mid.checked_sub(size).unwrap_or(0);
+                let max = std::cmp::min(mid.checked_add(size).unwrap_or(vm.program.ops.len()), vm.program.ops.len());
+                for pc in min..max {
+                    let (line, filename) = vm.program.get_info(pc as u32);
+                    let op = dis_single(&vm.program, pc);
+                    print!("{pc}: {filename}:{line}: {op}");
+                    if pc == mid {
+                        println!("\t<<<");
+                    } else  {
+                        println!("");
+                    }
+                }
+            },
+            "s" | "stack" => {
+                // WIP
+                println!("Stk: {:?}", vm.stack);
+            },
+            "r" | "register" => {
+                // WIP
+                println!("Regs: {:?}", vm.regs);
+            },
+            other => println!("Unknown command: '{other}'")
+        }
+    }
+}
+
 pub fn run(vm: &mut Vm) -> bool {
     if vm.program.ops.is_empty() {
         return true;
@@ -1364,6 +1468,18 @@ pub fn run(vm: &mut Vm) -> bool {
         println!("Ops: {:?}", vm.program.ops);
     }*/
     loop {
+        #[cfg(feature = "debugger")]
+        {
+            if vm_has_stop_requested() {
+                vm_set_stop_requested(false);
+                if !start_debug(vm) {
+                    // Exit
+                    vm.at = vm.program.ops.len() - 1;
+                    return true;
+                }
+                // Continue
+            }
+        }
         if vm.args.is_debug {
             // Print debugging info
             let (line, filename) = vm.program.get_info(vm.at as u32);

@@ -29,6 +29,7 @@ The functions are:
 - `__burlap_debug_off`: Turns the debug printings off
 - `__burlap_debug_blackbox`: Disable folding an expression into other (ie, `__burlap_debug_blackbox(1) + 2` won't fold, but `__burlap_debug_blackbox(1 + 2)` will)
   - `__burlap_debug_blackbox` CANNOT be used as a value, ie `let bb = __burlap_debug_blackbox;` will set `bb` to none.
+- `__burlap_debug_breakpoint`: Starts the debugger manually
 
 ### `--use-burlap-extensions`
 

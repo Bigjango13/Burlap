@@ -44,6 +44,8 @@ use crate::lexer::lex;
 use crate::parser::{parse, AST};
 use crate::backend::vm::compiler::{compile, Compiler};
 use crate::backend::vm::vm::{run, Vm};
+#[cfg(feature = "debugger")]
+use crate::backend::vm::vm::vm_set_stop_requested;
 
 #[derive(Clone, Default)]
 pub struct Arguments {
@@ -221,6 +223,13 @@ fn get_args() -> Result<Arguments, bool> {
 #[cfg(not(target_family = "wasm"))]
 #[allow(dead_code)]
 fn main() {
+    // Setup debugging
+    #[cfg(feature = "debugger")] 
+    ctrlc::set_handler(move || {
+        vm_set_stop_requested(true);
+    }).expect("Error setting interrupt handler!");
+
+
     // Parse args
     let mut args = match get_args() {
         Ok(x) => x,
